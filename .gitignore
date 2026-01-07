@@ -1,0 +1,47 @@
+# PlatformIO
+.pio/
+.pioenvs/
+.piolibdeps/
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+desktop.ini
+
+# Build outputs
+build/
+*.bin
+*.elf
+*.hex
+
+# IDE
+.idea/
+*.xcworkspace/
+*.xcodeproj/xcuserdata/
+
+# Swift/iOS
+DerivedData/
+*.pbxuser
+*.perspectivev3
+xcuserdata/
+*.xccheckout
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+Pods/
+
+# Secrets
+.env
+*.pem
+credentials.json
+
+# Claude Code local settings
+.claude/
