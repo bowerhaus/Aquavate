@@ -70,6 +70,23 @@ A smart water bottle that measures daily water intake using a weight-based senso
 
 ---
 
+### 6. Real-Time Clock (RTC) Options
+
+For standalone operation (tracking water intake without phone sync), an external RTC is required. The ESP32's internal RTC drifts ~5-10% (30-60 minutes/week), which is unacceptable for accurate daily tracking.
+
+| Option | Accuracy | Power | Backup Battery | Cost |
+|--------|----------|-------|----------------|------|
+| **DS3231 (Recommended)** | ±2ppm (~1 min/year) | 2-3μA | Built-in CR1220 | ~£11.50 |
+| **RV-8803** | ±3ppm | 0.24μA (lowest) | External needed | ~£12 |
+| **PCF8523** | ±20ppm (~10 min/year) | 0.1μA | Built-in CR1220 | ~£5-6 |
+| **DS1307** | ±20ppm | Higher | CR2032 | ~£3-5 |
+
+**Recommendation:** DS3231 STEMMA QT/Qwiic for both ecosystems. Best accuracy, built-in battery backup, excellent Arduino RTClib support.
+
+**Why not use internal RTC?** After 1 week, ESP32 internal RTC can drift 30-60 minutes, causing daily totals to reset at the wrong time.
+
+---
+
 ## Preliminary Hardware Recommendations
 
 ### For Prototyping:
@@ -114,10 +131,13 @@ Based on your requirements, here is the recommended hardware stack:
 | **Load Cell ADC** | **HX711 Module** | ~$2-3 | 24-bit ADC, simple interface, extensive Arduino libraries |
 | **E-Paper Display** | **Waveshare 1.54" B/W** | ~$10-12 | 200×200 resolution, SPI interface, good Arduino support |
 | **Accelerometer** | **LIS3DH or MPU6050** | ~$2-4 | Wake-on-motion interrupt for power saving |
+| **Real-Time Clock** | **DS3231 STEMMA QT** | ~$12-15 | ±2ppm accuracy, battery backup, enables standalone operation |
 | **Battery Charger** | **TP4056 Module** | ~$1-2 | USB-C input, simple for prototype |
 | **Battery** | **3.7V 1000mAh LiPo** | ~$5-8 | Sufficient for 1-2 week runtime with sleep strategy |
 
-**Estimated Prototype BOM: ~$25-35**
+**Estimated Prototype BOM: ~$40-50**
+
+**Standalone Operation:** With the DS3231 RTC, the bottle can track water intake accurately over multiple days without requiring phone sync. Time is preserved during deep sleep and even if the main battery is depleted (RTC has backup coin cell).
 
 ### Why ESP32-C3 Over Alternatives
 
@@ -146,10 +166,16 @@ The XIAO nRF52840 has good Arduino support and is pin-compatible with XIAO ESP32
 
 | State | Current | Duration | Notes |
 |-------|---------|----------|-------|
-| Deep Sleep | ~5μA | 99% of time | RTC + accelerometer interrupt active |
-| Wake + Measure | ~30mA | ~500ms | Load cell reading + processing |
+| Deep Sleep | ~5μA | 99% of time | Internal RTC + accelerometer interrupt active |
+| Wake + Measure | ~30mA | ~500ms | Load cell reading + RTC query + processing |
 | BLE Sync | ~100mA | ~1-2s | When phone app requests data |
 | E-Paper Refresh | ~20mA | ~2s | Only when display changes |
+
+**External RTC (DS3231) Power:**
+- The DS3231 has its own backup coin cell battery (CR1220)
+- During normal operation, it draws ~2-3μA from the I2C bus
+- During deep sleep, it runs from its own battery (0μA from main system)
+- Backup battery lasts years, preserving time even if main battery is depleted
 
 ### Battery Life Estimate (1000mAh)
 
@@ -161,6 +187,8 @@ With wake-on-tilt (assuming 20 drink events/day):
 - **Total: ~0.5mAh/day → ~2000 days theoretical**
 
 Reality will be higher due to inefficiencies, but **1-2 weeks is very achievable**.
+
+**Note:** The DS3231 RTC adds negligible power draw (<5% impact on battery life) while enabling standalone time tracking.
 
 ---
 
@@ -206,11 +234,12 @@ Two plug-and-play ecosystems are recommended. Both use I2C connectors (STEMMA QT
 | **E-Paper Display** | 2.13" Mono FeatherWing (250x122) | ~$22 | [Adafruit 4195](https://www.adafruit.com/product/4195) |
 | **Load Cell ADC** | NAU7802 24-bit ADC STEMMA QT | ~$10 | [Adafruit 4538](https://www.adafruit.com/product/4538) |
 | **Accelerometer** | LIS3DH Triple-Axis STEMMA QT | ~$5 | [Adafruit 2809](https://www.adafruit.com/product/2809) |
+| **Real-Time Clock** | DS3231 Precision RTC STEMMA QT | ~$14 | [Adafruit 5188](https://www.adafruit.com/product/5188) |
 | **Load Cell** | Strain Gauge Load Cell (1-5kg) | ~$8 | [Adafruit 4540](https://www.adafruit.com/product/4540) |
 | **Battery** | 3.7V 1200mAh LiPo | ~$10 | [Adafruit 258](https://www.adafruit.com/product/258) |
 | **Cables** | STEMMA QT cables (100mm, 5-pack) | ~$4 | [Adafruit 4399](https://www.adafruit.com/product/4399) |
 
-**Total: ~$79**
+**Total: ~$93**
 
 **Wiring Diagram:**
 ```
@@ -220,8 +249,9 @@ Two plug-and-play ecosystems are recommended. Both use I2C connectors (STEMMA QT
 │  │   2.13" E-Paper FeatherWing     │    │◄── Stacks on top (NO WIRES!)
 │  └─────────────────────────────────┘    │
 │                                         │
-│  STEMMA QT ──┬── LIS3DH ────────────────│◄── 1 cable (can daisy-chain)
-│              └── NAU7802 ◄── Load Cell  │◄── 1 cable + 4 wires to cell
+│  STEMMA QT ──┬── LIS3DH ────────────────│◄── Qwiic cable (daisy-chain)
+│              ├── NAU7802 ◄── Load Cell  │◄── Qwiic cable + 4 wires to cell
+│              └── DS3231 RTC ────────────│◄── Qwiic cable (daisy-chain)
 │                                         │
 │  JST Battery ◄── 1200mAh LiPo           │◄── Plug in (built-in charging)
 └─────────────────────────────────────────┘
@@ -254,20 +284,22 @@ Manual wiring: 4 wires (load cell to NAU7802 terminal block)
 | **E-Paper Display** | Waveshare 1.54" or 2.13" B/W | ~$12 | [Waveshare](https://www.waveshare.com/1.54inch-e-paper-module.htm) |
 | **Load Cell ADC** | SparkFun Qwiic Scale NAU7802 | ~$17 | [SparkFun 15242](https://www.sparkfun.com/products/15242) |
 | **Accelerometer** | SparkFun LIS3DH Qwiic Mini | ~$10 | [SparkFun 18403](https://www.sparkfun.com/products/18403) |
+| **Real-Time Clock** | DS3231 Precision RTC STEMMA QT | ~$14 | [Adafruit 5188](https://www.adafruit.com/product/5188) |
 | **Load Cell** | Mini Load Cell (5kg) | ~$10 | [SparkFun 14728](https://www.sparkfun.com/products/14728) |
 | **Battery Charger** | TP4056 USB-C Module | ~$2 | Amazon/AliExpress |
 | **Battery** | 3.7V 1000mAh LiPo | ~$6 | Various |
 | **Qwiic Cables** | 100mm cables (5-pack) | ~$2 | [SparkFun 17259](https://www.sparkfun.com/products/17259) |
 
-**Total: ~$77**
+**Total: ~$91**
 
 **Wiring Diagram:**
 ```
 ┌─────────────────────────────────────────┐
 │      SparkFun ESP32-C6 Qwiic Pocket     │
 │                                         │
-│  Qwiic ──┬── LIS3DH (INT → GPIO wake)   │◄── 1 Qwiic cable + 1 INT wire
-│          └── NAU7802 ◄── Load Cell      │◄── Daisy-chain + 4 wires to cell
+│  Qwiic ──┬── LIS3DH (INT → GPIO wake)   │◄── Qwiic cable + 1 INT wire
+│          ├── NAU7802 ◄── Load Cell      │◄── Daisy-chain + 4 wires to cell
+│          └── DS3231 RTC ────────────────│◄── Daisy-chain (Qwiic compatible)
 │                                         │
 │  SPI Pins ── Waveshare E-Paper          │◄── 6 wires (MOSI,CLK,CS,DC,RST,BUSY)
 │                                         │
@@ -275,6 +307,7 @@ Manual wiring: 4 wires (load cell to NAU7802 terminal block)
 └─────────────────────────────────────────┘
 
 Manual wiring: ~12 wires total (e-paper SPI + power + INT)
+Note: STEMMA QT and Qwiic use the same connector - fully compatible.
 ```
 
 **Pros:**
@@ -296,12 +329,14 @@ Manual wiring: ~12 wires total (e-paper SPI + power + INT)
 
 | Factor | Adafruit Feather | SparkFun Qwiic |
 |--------|------------------|----------------|
-| **Total Cost** | ~$79 | ~$77 |
+| **Total Cost** | ~$93 | ~$91 |
 | **Wiring Complexity** | **Lowest** (~4 wires) | Medium (~12 wires) |
 | **E-Paper Setup** | **Stacks on top** | Manual SPI |
 | **Battery Charging** | **Built-in** | External TP4056 |
 | **MCU** | ESP32 (dual-core) | ESP32-C6 (RISC-V) |
 | **Form Factor** | Medium | Smaller |
+| **RTC** | DS3231 STEMMA QT | DS3231 STEMMA QT (Qwiic compatible) |
+| **Standalone Operation** | ✅ Yes | ✅ Yes |
 | **Best For** | Fastest prototype | Smaller final product |
 
 ---
@@ -328,6 +363,7 @@ lib_deps =
     adafruit/Adafruit NAU7802@^1.0.0
     adafruit/Adafruit LIS3DH@^1.2.0
     adafruit/Adafruit EPD@^4.5.0
+    adafruit/RTClib@^2.1.0
     h2zero/NimBLE-Arduino@^1.4.0
 ```
 
@@ -343,6 +379,7 @@ lib_deps =
     sparkfun/SparkFun Qwiic Scale NAU7802@^1.0.0
     sparkfun/SparkFun LIS3DH@^1.0.0
     zinggjm/GxEPD2@^1.5.0
+    adafruit/RTClib@^2.1.0
     h2zero/NimBLE-Arduino@^1.4.0
 ```
 
@@ -354,6 +391,7 @@ lib_deps =
 | **E-Paper** | GxEPD2 or Adafruit EPD | Waveshare / Adafruit displays |
 | **Load Cell** | SparkFun NAU7802 | Works with both ecosystems |
 | **Accelerometer** | Adafruit LIS3DH | I2C, interrupt support |
+| **Real-Time Clock** | Adafruit RTClib | DS3231 support, time management |
 | **Deep Sleep** | ESP32 built-in | `esp_deep_sleep_start()` |
 
 ### Development Workflow

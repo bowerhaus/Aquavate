@@ -3,7 +3,8 @@
 ## Adafruit Feather Ecosystem (UK Split Order)
 
 **Created:** 2026-01-07
-**Total Cost:** £70.80 (including shipping)
+**Updated:** 2026-01-07 - Added DS3231 RTC for standalone operation
+**Total Cost:** £82.30 (including shipping)
 
 ---
 
@@ -18,12 +19,13 @@
 | 1 | Load Cell ADC | Adafruit NAU7802 24-Bit ADC - STEMMA QT / Qwiic | £4.75 | [Shop](https://shop.pimoroni.com/products/adafruit-nau7802-24-bit-adc-stemma-qt-qwiic) |
 | 1 | Accelerometer | Adafruit LIS3DH Triple-Axis Accelerometer (STEMMA QT) | £4.25 | [Shop](https://shop.pimoroni.com/products/adafruit-lis3dh-triple-axis-accelerometer-2g-4g-8g-16g) |
 | 1 | Battery | LiPo Battery Pack 1200mAh 3.7V (JST-PH connector) | £8.25 | [Shop](https://shop.pimoroni.com/products/lipo-battery-pack) |
+| 1 | Real-Time Clock | Adafruit DS3231 Precision RTC - STEMMA QT | £11.50 | [Shop](https://shop.pimoroni.com/products/adafruit-ds3231-precision-rtc-stemma-qt) |
 
 | | |
 |---|---|
-| **Subtotal** | £33.50 |
+| **Subtotal** | £45.00 |
 | **Shipping** | £3.90 |
-| **Order Total** | **£37.40** |
+| **Order Total** | **£48.90** |
 
 ---
 
@@ -51,9 +53,9 @@
 
 | | |
 |---|---|
-| Pimoroni Order | £37.40 |
+| Pimoroni Order | £48.90 |
 | The Pi Hut Order | £33.40 |
-| **Grand Total** | **£70.80** |
+| **Grand Total** | **£82.30** |
 
 ---
 
@@ -80,8 +82,9 @@
 │  │   2.13" E-Paper FeatherWing     │    │◄── Stacks on top (via stacking headers)
 │  └─────────────────────────────────┘    │
 │                                         │
-│  STEMMA QT ──┬── LIS3DH (INT1 → GPIO)   │◄── 1 cable + optional INT wire
-│              └── NAU7802 ◄── Load Cell  │◄── 1 cable + 4 wires to load cell
+│  STEMMA QT ──┬── LIS3DH (INT1 → GPIO)   │◄── Qwiic cable + optional INT wire
+│              ├── NAU7802 ◄── Load Cell  │◄── Qwiic cable + 4 wires to load cell
+│              └── DS3231 RTC             │◄── Qwiic cable (daisy-chain)
 │                                         │
 │  JST Battery ◄── 1200mAh LiPo           │◄── Plug in (built-in charging via USB-C)
 └─────────────────────────────────────────┘
@@ -91,6 +94,8 @@ Load Cell Wiring (to NAU7802 terminal block):
   Black  → E-
   White  → A-
   Green  → A+
+
+Note: All I2C devices daisy-chain via STEMMA QT cables (each board has 2 connectors)
 ```
 
 ### I2C Addresses
@@ -98,6 +103,7 @@ Load Cell Wiring (to NAU7802 terminal block):
 |--------|---------|
 | NAU7802 | 0x2A |
 | LIS3DH | 0x18 (default) or 0x19 |
+| DS3231 | 0x68 |
 
 ---
 
@@ -144,6 +150,16 @@ Load Cell Wiring (to NAU7802 terminal block):
 - JST-PH 2mm connector
 - Built-in protection circuit
 
+### DS3231 Precision RTC
+- Accuracy: ±2ppm (~1 minute/year drift)
+- Temperature-compensated crystal oscillator (TCXO)
+- I2C interface (STEMMA QT connector)
+- Backup battery: CR1220 coin cell holder
+- Alarm outputs for scheduled wake-up
+- Operating temperature: -40°C to +85°C
+
+**Why RTC is needed:** The ESP32's internal RTC drifts ~5-10% (30-60 min/week), making it unsuitable for accurate daily tracking in standalone mode. The DS3231 ensures accurate midnight resets and timestamping without requiring phone sync.
+
 ---
 
 ## Revision History
@@ -151,3 +167,4 @@ Load Cell Wiring (to NAU7802 terminal block):
 | Date | Version | Changes |
 |------|---------|---------|
 | 2026-01-07 | 1.0 | Initial BOM - UK split order (Pimoroni + The Pi Hut) |
+| 2026-01-07 | 1.1 | Added DS3231 RTC for standalone time tracking |

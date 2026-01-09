@@ -3,7 +3,8 @@
 ## SparkFun Qwiic Ecosystem (UK Split Order)
 
 **Created:** 2026-01-07
-**Total Cost:** £75.00 (including shipping)
+**Updated:** 2026-01-07 - Added DS3231 RTC for standalone operation
+**Total Cost:** £86.50 (including shipping)
 
 ---
 
@@ -39,12 +40,13 @@
 | 1 | E-Paper Display | Waveshare E-Ink Display Module SPI - 1.54" (200x200) | £9.60 | [Shop](https://thepihut.com/products/eink-display-module-spi-1-54-200x200) |
 | 1 | Load Cell | Strain Gauge Load Cell - 4 Wires - 5Kg | £3.80 | [Shop](https://thepihut.com/products/strain-gauge-load-cell-4-wires-5kg) |
 | 3 | Cables | STEMMA QT / Qwiic JST SH 4-pin Cable - 100mm | £3.00 | [Shop](https://thepihut.com/products/stemma-qt-qwiic-jst-sh-4-pin-cable-100mm-long) |
+| 1 | Real-Time Clock | Adafruit DS3231 Precision RTC - STEMMA QT | £11.50 | [Shop](https://thepihut.com/products/adafruit-ds3231-precision-rtc-stemma-qt) |
 
 | | |
 |---|---|
-| **Subtotal** | £54.70 |
+| **Subtotal** | £66.20 |
 | **Shipping** | £3.90 |
-| **Order Total** | **£58.60** |
+| **Order Total** | **£70.10** |
 
 ---
 
@@ -53,8 +55,8 @@
 | | |
 |---|---|
 | Pimoroni Order | £16.40 |
-| The Pi Hut Order | £58.60 |
-| **Grand Total** | **£75.00** |
+| The Pi Hut Order | £70.10 |
+| **Grand Total** | **£86.50** |
 
 ---
 
@@ -77,13 +79,14 @@
 
 | Feature | SparkFun Qwiic | Adafruit Feather |
 |---------|----------------|------------------|
-| **Total Cost** | £75.00 | £70.80 |
+| **Total Cost** | £86.50 | £82.30 |
 | **MCU** | ESP32-C6 (RISC-V, WiFi 6) | ESP32 (Xtensa, WiFi 4) |
 | **Form Factor** | 1" × 1" Qwiic standard | Feather format |
 | **E-Paper** | Requires SPI wiring (6 wires) | Stacks on top (no wires) |
 | **Battery Charging** | Built-in (213mA) | Built-in (500mA) |
 | **Deep Sleep** | ~14μA | ~5μA |
 | **Soldering** | Load cell wires only | Stacking headers + load cell |
+| **RTC** | DS3231 STEMMA QT (Qwiic compatible) | DS3231 STEMMA QT |
 
 ---
 
@@ -97,13 +100,16 @@ Unlike the Adafruit Feather option, the SparkFun Qwiic setup requires manual wir
 ┌─────────────────────────────────────────────────────────────┐
 │      SparkFun ESP32-C6 Qwiic Pocket                         │
 │                                                             │
-│  Qwiic ──┬── LIS3DH (INT1 → GPIO for wake)                  │◄── 1 Qwiic cable
-│          └── NAU7802 ◄── Load Cell                          │◄── Daisy-chain + 4 wires
+│  Qwiic ──┬── LIS3DH (INT1 → GPIO for wake)                  │◄── Qwiic cable
+│          ├── NAU7802 ◄── Load Cell                          │◄── Daisy-chain + 4 wires
+│          └── DS3231 RTC                                     │◄── Daisy-chain (Qwiic compatible)
 │                                                             │
 │  GPIO Pins ── Waveshare 1.54" E-Paper (SPI)                 │◄── 7 wires (see below)
 │                                                             │
 │  JST Battery ◄── 1200mAh LiPo                               │◄── Plug in (built-in charging)
 └─────────────────────────────────────────────────────────────┘
+
+Note: STEMMA QT and Qwiic use the same JST-SH 4-pin connector - fully compatible.
 ```
 
 ### E-Paper SPI Wiring (ESP32-C6 to Waveshare 1.54")
@@ -134,6 +140,7 @@ Unlike the Adafruit Feather option, the SparkFun Qwiic setup requires manual wir
 |--------|---------|
 | NAU7802 | 0x2A |
 | LIS3DH | 0x18 (default) or 0x19 |
+| DS3231 | 0x68 |
 
 ---
 
@@ -186,6 +193,16 @@ Unlike the Adafruit Feather option, the SparkFun Qwiic setup requires manual wir
 - JST-PH 2mm connector
 - Built-in protection circuit
 
+### DS3231 Precision RTC
+- Accuracy: ±2ppm (~1 minute/year drift)
+- Temperature-compensated crystal oscillator (TCXO)
+- I2C interface (STEMMA QT connector - Qwiic compatible)
+- Backup battery: CR1220 coin cell holder
+- Alarm outputs for scheduled wake-up
+- Operating temperature: -40°C to +85°C
+
+**Why RTC is needed:** The ESP32-C6's internal RTC drifts ~5-10% (30-60 min/week), making it unsuitable for accurate daily tracking in standalone mode. The DS3231 ensures accurate midnight resets and timestamping without requiring phone sync.
+
 ---
 
 ## PlatformIO Configuration
@@ -202,6 +219,7 @@ lib_deps =
     adafruit/Adafruit LIS3DH@^1.2.0
     zinggjm/GxEPD2@^1.5.0
     h2zero/NimBLE-Arduino@^1.4.0
+    adafruit/RTClib@^2.1.0
 ```
 
 ---
@@ -210,9 +228,9 @@ lib_deps =
 
 | | Single (Pi Hut only) | Split Order |
 |---|---|---|
-| Components | £67.50 | £67.20 |
+| Components | £79.00 | £78.70 |
 | Shipping | £9.99 (DHL required for LiPo) | £7.80 (Royal Mail both) |
-| **Total** | **£77.49** | **£75.00** |
+| **Total** | **£88.99** | **£86.50** |
 | Delivery | Next working day | 1-2 days each |
 
 Split order saves **£2.49** and allows Royal Mail for both orders.
@@ -224,3 +242,4 @@ Split order saves **£2.49** and allows Royal Mail for both orders.
 | Date | Version | Changes |
 |------|---------|---------|
 | 2026-01-07 | 1.0 | Initial BOM - UK split order (Pimoroni + The Pi Hut) |
+| 2026-01-07 | 1.1 | Added DS3231 RTC for standalone time tracking |
