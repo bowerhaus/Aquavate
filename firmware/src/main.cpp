@@ -5,10 +5,16 @@
 
 #include <Arduino.h>
 #include <Wire.h>
-#include <Adafruit_NAU7802.h>
 #include <Adafruit_LIS3DH.h>
 #include "aquavate.h"
 #include "config.h"
+
+// Calibration system includes
+#include "gestures.h"
+#include "weight.h"
+#include "storage.h"
+#include "calibration.h"
+#include "ui_calibration.h"
 
 Adafruit_NAU7802 nau;
 Adafruit_LIS3DH lis = Adafruit_LIS3DH();
@@ -16,6 +22,11 @@ bool nauReady = false;
 bool lisReady = false;
 
 unsigned long wakeTime = 0;
+
+// Calibration state
+CalibrationData g_calibration;
+bool g_calibrated = false;
+CalibrationState g_last_cal_state = CAL_IDLE;
 
 #if defined(BOARD_ADAFRUIT_FEATHER)
 #include "Adafruit_ThinkInk.h"
@@ -137,6 +148,92 @@ void blinkLED(int durationSeconds) {
     Serial.println("LED blink complete!");
 }
 
+#if defined(BOARD_ADAFRUIT_FEATHER)
+void drawMainScreen() {
+    Serial.println("Drawing main screen...");
+    display.clearBuffer();
+    display.setTextColor(EPD_BLACK);
+
+    // Calculate current water level in ml
+    float water_ml = 0.0f;
+    if (g_calibrated && nauReady) {
+        if (nau.available()) {
+            int32_t current_adc = nau.read();
+            water_ml = calibrationGetWaterWeight(current_adc, g_calibration);
+
+            Serial.print("Main Screen: ADC=");
+            Serial.print(current_adc);
+            Serial.print(" Water=");
+            Serial.print(water_ml, 1);
+            Serial.print("ml (Scale factor=");
+            Serial.print(g_calibration.scale_factor, 2);
+            Serial.println(")");
+
+            // Clamp to 0-830ml range
+            if (water_ml < 0) water_ml = 0;
+            if (water_ml > 830) water_ml = 830;
+        }
+    } else {
+        // Not calibrated - show 830ml as placeholder
+        water_ml = 830.0f;
+        Serial.println("Main Screen: Not calibrated - showing 830ml");
+    }
+
+    // Draw vertical bottle graphic on left side
+    int bottle_x = 10;  // Left side of screen
+    int bottle_y = 20;   // Top margin
+    int bottle_width = 40;
+    int bottle_height = 90;
+    int bottle_body_height = 70;  // Main body height
+    int neck_height = 10;
+    int cap_height = 10;
+
+    // Calculate fill level (0-100%)
+    float fill_percent = water_ml / 830.0f;
+    int fill_height = (int)(bottle_body_height * fill_percent);
+
+    // Draw bottle body (vertical cylinder)
+    display.fillRoundRect(bottle_x, bottle_y + cap_height + neck_height,
+                         bottle_width, bottle_body_height, 8, EPD_BLACK);
+    display.fillRoundRect(bottle_x + 2, bottle_y + cap_height + neck_height + 2,
+                         bottle_width - 4, bottle_body_height - 4, 6, EPD_WHITE);
+
+    // Draw neck (narrower at top)
+    int neck_width = bottle_width - 12;
+    int neck_x = bottle_x + 6;
+    display.fillRect(neck_x, bottle_y + cap_height, neck_width, neck_height, EPD_BLACK);
+    display.fillRect(neck_x + 2, bottle_y + cap_height + 2, neck_width - 4, neck_height - 4, EPD_WHITE);
+
+    // Draw cap
+    int cap_width = neck_width - 4;
+    int cap_x = neck_x + 2;
+    display.fillRect(cap_x, bottle_y, cap_width, cap_height, EPD_BLACK);
+
+    // Draw water level inside bottle (fill from bottom)
+    if (fill_height > 0) {
+        int water_y = bottle_y + cap_height + neck_height + bottle_body_height - fill_height;
+        display.fillRoundRect(bottle_x + 4, water_y,
+                             bottle_width - 8, fill_height - 2, 4, EPD_BLACK);
+    }
+
+    // Draw large text showing milliliters (right side)
+    display.setTextSize(3);
+    char ml_text[16];
+    snprintf(ml_text, sizeof(ml_text), "%dml", (int)water_ml);
+
+    // Position text on right side (x=80, centered vertically)
+    display.setCursor(80, 50);
+    display.print(ml_text);
+
+    // Draw battery status in top-right corner
+    float batteryV = getBatteryVoltage();
+    int batteryPct = getBatteryPercent(batteryV);
+    drawBatteryIcon(200, 5, batteryPct);
+
+    display.display();
+}
+#endif
+
 void setup() {
     Serial.begin(115200);
     delay(1000);
@@ -186,48 +283,19 @@ void setup() {
     Serial.println("Initializing E-Paper display...");
     display.begin();
     display.setRotation(2);  // Rotate 180 degrees
-    display.clearBuffer();
-    display.setTextColor(EPD_BLACK);
-    display.setTextSize(2);
 
-    // Centre "Hello Sally" (11 chars * 12px = 132px, display width 250px)
-    display.setCursor((250 - 132) / 2, 30);
-    display.print("Hello Sally");
+    // Draw main screen
+    drawMainScreen();
 
-    // Centre "Your bottle is full" (19 chars * 12px = 228px)
-    display.setCursor((250 - 228) / 2, 60);
-    display.print("Your bottle is full");
-
-    // Draw bottle on its side (centered below text)
-    int bx = 85;   // bottle start x
-    int by = 90;   // bottle y position
-
-    // Bottle body (horizontal rectangle)
-    display.fillRoundRect(bx, by, 60, 24, 4, EPD_BLACK);
-    display.fillRoundRect(bx + 2, by + 2, 56, 20, 3, EPD_WHITE);
-
-    // Bottle neck (smaller rectangle on the right)
-    display.fillRect(bx + 60, by + 6, 15, 12, EPD_BLACK);
-    display.fillRect(bx + 62, by + 8, 11, 8, EPD_WHITE);
-
-    // Cap
-    display.fillRect(bx + 75, by + 4, 6, 16, EPD_BLACK);
-
-    // Water inside (filled portion)
-    display.fillRoundRect(bx + 4, by + 4, 50, 16, 2, EPD_BLACK);
-
-    // Draw battery status in top-right corner
+    // Print battery info
     float batteryV = getBatteryVoltage();
     int batteryPct = getBatteryPercent(batteryV);
-    drawBatteryIcon(200, 5, batteryPct);
-
     Serial.print("Battery: ");
     Serial.print(batteryV);
     Serial.print("V (");
     Serial.print(batteryPct);
     Serial.println("%)");
 
-    display.display();
     Serial.println("E-Paper display initialized!");
 #endif
 
@@ -260,6 +328,71 @@ void setup() {
         Serial.println("LIS3DH not found!");
     }
 
+    // Initialize calibration system
+    Serial.println("Initializing calibration system...");
+
+    // Initialize storage (NVS)
+    if (storageInit()) {
+        Serial.println("Storage initialized");
+
+        // Load calibration from NVS
+        g_calibrated = storageLoadCalibration(g_calibration);
+
+        if (g_calibrated) {
+            Serial.println("Calibration loaded from NVS:");
+            Serial.print("  Scale factor: ");
+            Serial.print(g_calibration.scale_factor);
+            Serial.println(" ADC/g");
+            Serial.print("  Empty ADC: ");
+            Serial.println(g_calibration.empty_bottle_adc);
+            Serial.print("  Full ADC: ");
+            Serial.println(g_calibration.full_bottle_adc);
+        } else {
+            Serial.println("No valid calibration found - calibration required");
+        }
+    } else {
+        Serial.println("Storage initialization failed");
+    }
+
+    // Initialize gesture detection
+    if (lisReady) {
+        gesturesInit(lis);
+        Serial.println("Gesture detection initialized");
+    }
+
+    // Initialize weight measurement
+    if (nauReady) {
+        weightInit(nau);
+        Serial.println("Weight measurement initialized");
+    }
+
+    // Initialize calibration state machine
+    calibrationInit();
+    Serial.println("Calibration state machine initialized");
+
+    // Initialize calibration UI
+#if defined(BOARD_ADAFRUIT_FEATHER)
+    uiCalibrationInit(display);
+    Serial.println("Calibration UI initialized");
+
+    // Show calibration status on display if not calibrated
+    if (!g_calibrated) {
+        display.clearBuffer();
+        display.setTextSize(2);
+        display.setTextColor(EPD_BLACK);
+        display.setCursor(20, 30);
+        display.print("Calibration");
+        display.setCursor(40, 55);
+        display.print("Required");
+        display.setTextSize(1);
+        display.setCursor(10, 85);
+        display.print("Hold bottle inverted");
+        display.setCursor(10, 100);
+        display.print("for 5 seconds");
+        display.display();
+    }
+#endif
+
     Serial.println("Setup complete!");
     Serial.print("Will sleep in ");
     Serial.print(AWAKE_DURATION_MS / 1000);
@@ -267,7 +400,161 @@ void setup() {
 }
 
 void loop() {
+    // Update gesture detection
+    GestureType gesture = GESTURE_NONE;
+    if (lisReady) {
+        gesture = gesturesUpdate();
+    }
+
+    // Get current load cell reading
+    int32_t current_adc = 0;
+    if (nauReady && nau.available()) {
+        current_adc = nau.read();
+    }
+
+    // Check calibration state
+    CalibrationState cal_state = calibrationGetState();
+
+    // If not in calibration mode, check for calibration trigger
+    if (cal_state == CAL_IDLE) {
+        // Check for calibration trigger gesture (hold inverted for 5s)
+        if (gesture == GESTURE_INVERTED_HOLD) {
+            Serial.println("Main: Calibration triggered!");
+            calibrationStart();
+            cal_state = calibrationGetState();
+        }
+
+        // If calibrated, show water level
+        if (g_calibrated && nauReady) {
+            float water_ml = calibrationGetWaterWeight(current_adc, g_calibration);
+            Serial.print("Water level: ");
+            Serial.print(water_ml);
+            Serial.println(" ml");
+        }
+    }
+
+    // If in calibration mode, update state machine
+    if (calibrationIsActive()) {
+        CalibrationState new_state = calibrationUpdate(gesture, current_adc);
+
+        // Update UI when state changes
+        if (new_state != g_last_cal_state) {
+            Serial.print("Main: Calibration state changed: ");
+            Serial.print(calibrationGetStateName(g_last_cal_state));
+            Serial.print(" -> ");
+            Serial.println(calibrationGetStateName(new_state));
+
+            // Update display for new state
+#if defined(BOARD_ADAFRUIT_FEATHER)
+            int32_t display_adc = 0;
+            if (new_state == CAL_CONFIRM_EMPTY) {
+                CalibrationResult result = calibrationGetResult();
+                display_adc = result.data.empty_bottle_adc;
+            } else if (new_state == CAL_CONFIRM_FULL) {
+                CalibrationResult result = calibrationGetResult();
+                display_adc = result.data.full_bottle_adc;
+            }
+
+            CalibrationResult result = calibrationGetResult();
+            uiCalibrationUpdateForState(new_state, display_adc, result.data.scale_factor);
+#endif
+
+            g_last_cal_state = new_state;
+        }
+
+        // Check if calibration completed
+        if (new_state == CAL_COMPLETE && g_last_cal_state != CAL_COMPLETE) {
+            CalibrationResult result = calibrationGetResult();
+            if (result.success) {
+                Serial.println("Main: Calibration completed successfully!");
+                g_calibration = result.data;
+                g_calibrated = true;
+
+                // Show complete screen for 5 seconds
+                delay(5000);
+
+                // Return to IDLE and redraw main screen
+                calibrationCancel();
+                g_last_cal_state = CAL_IDLE;
+                Serial.println("Main: Returning to main screen");
+                drawMainScreen();
+            }
+        }
+
+        // Check for calibration error
+        if (new_state == CAL_ERROR && g_last_cal_state != CAL_ERROR) {
+            CalibrationResult result = calibrationGetResult();
+            Serial.print("Main: Calibration error: ");
+            Serial.println(result.error_message);
+
+            // Show error screen for 5 seconds
+            delay(5000);
+
+            // Return to IDLE and redraw main screen
+            calibrationCancel();
+            g_last_cal_state = CAL_IDLE;
+            Serial.println("Main: Returning to main screen after error");
+            drawMainScreen();
+        }
+    }
+
+    // Update main screen when bottle is picked up and placed back down
+    // Track gesture state to detect tilt → upright stable transitions
+    static GestureType last_gesture = GESTURE_NONE;
+    static bool bottle_was_tilted = false;
+
+    if (cal_state == CAL_IDLE && g_calibrated) {
+        // Detect when bottle is tilted (picked up)
+        if (gesture != GESTURE_UPRIGHT_STABLE && gesture != GESTURE_NONE) {
+            bottle_was_tilted = true;
+        }
+
+        // Detect when bottle returns to upright stable after being tilted
+        if (bottle_was_tilted && gesture == GESTURE_UPRIGHT_STABLE && last_gesture != GESTURE_UPRIGHT_STABLE) {
+#if defined(BOARD_ADAFRUIT_FEATHER)
+            Serial.println("Main: Bottle placed down - updating water level display");
+            drawMainScreen();
+#endif
+            bottle_was_tilted = false;
+        }
+    }
+
+    last_gesture = gesture;
+
+    // Debug output (only print periodically to reduce serial spam)
+    static unsigned long last_debug_print = 0;
+    if (lisReady && (millis() - last_debug_print >= 1000)) {
+        last_debug_print = millis();
+
+        float x, y, z;
+        gesturesGetAccel(x, y, z);
+        Serial.print("Accel X: ");
+        Serial.print(x, 2);
+        Serial.print("g  Y: ");
+        Serial.print(y, 2);
+        Serial.print("g  Z: ");
+        Serial.print(z, 2);
+        Serial.print("g  Gesture: ");
+
+        switch (gesture) {
+            case GESTURE_INVERTED_HOLD: Serial.print("INVERTED_HOLD"); break;
+            case GESTURE_UPRIGHT_STABLE: Serial.print("UPRIGHT_STABLE"); break;
+            case GESTURE_SIDEWAYS_TILT: Serial.print("SIDEWAYS_TILT"); break;
+            default: Serial.print("NONE"); break;
+        }
+
+        Serial.print("  Cal State: ");
+        Serial.print(calibrationGetStateName(cal_state));
+
+        unsigned long remaining = (AWAKE_DURATION_MS - (millis() - wakeTime)) / 1000;
+        Serial.print("  (sleep in ");
+        Serial.print(remaining);
+        Serial.println("s)");
+    }
+
     // Check if it's time to sleep
+    // DISABLED FOR CALIBRATION TESTING
+    /*
     if (millis() - wakeTime >= AWAKE_DURATION_MS) {
         if (lisReady) {
             // Clear any pending interrupt before sleep
@@ -278,32 +565,8 @@ void loop() {
         }
         enterDeepSleep();
     }
+    */
 
-    // Read and print load cell value
-    if (nauReady && nau.available()) {
-        int32_t reading = nau.read();
-        Serial.print("Load cell: ");
-        Serial.println(reading);
-    }
-
-    // Read and print accelerometer values
-    if (lisReady) {
-        lis.read();
-        Serial.print("Accel X: ");
-        Serial.print(lis.x);
-        Serial.print("  Y: ");
-        Serial.print(lis.y);
-        Serial.print("  Z: ");
-        Serial.print(lis.z);
-
-        // Show time remaining and INT pin state
-        unsigned long remaining = (AWAKE_DURATION_MS - (millis() - wakeTime)) / 1000;
-        Serial.print("  INT:");
-        Serial.print(digitalRead(LIS3DH_INT_PIN));
-        Serial.print(" (sleep in ");
-        Serial.print(remaining);
-        Serial.println("s)");
-    }
-
-    delay(500);
+    // Reduced delay for more responsive gesture detection
+    delay(200);
 }

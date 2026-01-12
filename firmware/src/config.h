@@ -9,7 +9,7 @@
 // ==================== Power Management ====================
 
 // How long to stay awake after waking from deep sleep (milliseconds)
-#define AWAKE_DURATION_MS   15000   // 15 seconds
+#define AWAKE_DURATION_MS   30000   // 30 seconds
 
 // ==================== LIS3DH Accelerometer ====================
 
@@ -53,5 +53,36 @@
     #define SRAM_CS     32
     #define EPD_RESET   -1
 #endif
+
+// ==================== Calibration ====================
+
+// Gesture detection thresholds (in g units)
+// When bottle is upright: Z ≈ +1.0g
+// When bottle is inverted (upside down): Z ≈ -1.0g
+// When bottle is horizontal (on its side): Z ≈ 0.0g
+#define GESTURE_INVERTED_Z_THRESHOLD    -0.7f   // Z-axis threshold for inverted detection (less strict)
+#define GESTURE_UPRIGHT_Z_THRESHOLD      0.8f   // Z-axis threshold for upright detection (less strict)
+#define GESTURE_SIDEWAYS_THRESHOLD       0.5f   // X/Y axis threshold for sideways tilt
+
+// Gesture timing (milliseconds)
+#define GESTURE_INVERTED_HOLD_DURATION  5000    // 5 seconds to trigger calibration
+#define GESTURE_STABILITY_DURATION      1000    // 1 second for stable detection
+
+// Gesture stability
+#define GESTURE_STABILITY_VARIANCE      0.01f   // Max variance (g^2) for stable detection
+#define GESTURE_SAMPLE_WINDOW_SIZE      10      // Number of samples for variance calculation
+
+// Weight measurement
+#define WEIGHT_MEASUREMENT_DURATION     10      // Measurement duration in seconds
+#define WEIGHT_VARIANCE_THRESHOLD       6000.0f // Stable if variance < this (ADC units squared)
+#define WEIGHT_MIN_SAMPLES              8       // Minimum samples required for valid measurement
+#define WEIGHT_OUTLIER_STD_DEVS         2.0f    // Outlier threshold in standard deviations
+
+// Calibration parameters
+#define CALIBRATION_BOTTLE_VOLUME_ML    830.0f  // Full bottle volume (ml)
+#define CALIBRATION_WATER_DENSITY       1.0f    // Water density (g/ml)
+
+// NVS Storage
+#define NVS_NAMESPACE                   "aquavate"  // NVS namespace for calibration data
 
 #endif // CONFIG_H

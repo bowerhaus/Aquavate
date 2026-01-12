@@ -72,10 +72,10 @@ Two prototype configurations are being evaluated:
 ### Build Commands
 ```bash
 cd firmware
-pio run                    # Build for Adafruit Feather (default)
-pio run -e sparkfun_qwiic  # Build for SparkFun Qwiic
-pio run -t upload          # Upload to connected board
-pio device monitor         # Serial monitor
+~/.platformio/penv/bin/platformio run                    # Build for Adafruit Feather (default)
+~/.platformio/penv/bin/platformio run -e sparkfun_qwiic  # Build for SparkFun Qwiic
+~/.platformio/penv/bin/platformio run -t upload          # Upload to connected board
+~/.platformio/penv/bin/platformio device monitor         # Serial monitor
 ```
 
 ## Reference Documentation
