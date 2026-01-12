@@ -97,6 +97,17 @@ Implementing standalone calibration mode with gesture-based two-point calibratio
 - ✅ Added weight stability tracking with countdown feedback
 - ✅ 5-second timeout after completion/error, then auto-return to main screen
 - ✅ UI updated: "Fill Bottle" screen now says "Fill to 830ml / Then place / upright"
+
+**Main Screen Display Updates (2026-01-12 latest):**
+- ✅ Redesigned main screen with bottle graphic on left, milliliter text on right
+- ✅ Welcome screen on boot showing "Aquavate" branding and version
+- ✅ Smart display refresh: checks water level every 5 seconds when bottle upright stable
+- ✅ Only refreshes e-paper if water level changed by ≥5ml (minimizes flashing)
+- ✅ Configurable thresholds in config.h:
+  - DISPLAY_UPDATE_INTERVAL_MS (5000ms)
+  - DISPLAY_UPDATE_THRESHOLD_ML (5ml)
+- ✅ Fixed NAU7802 availability checking with retry logic
+- ✅ Real-time water level calculation and display
 - ✅ Firmware builds successfully (RAM: 6.8%, Flash: 31.8%)
 
 **Testing Status:**

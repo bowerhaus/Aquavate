@@ -82,6 +82,10 @@
 #define CALIBRATION_BOTTLE_VOLUME_ML    830.0f  // Full bottle volume (ml)
 #define CALIBRATION_WATER_DENSITY       1.0f    // Water density (g/ml)
 
+// Display update parameters
+#define DISPLAY_UPDATE_INTERVAL_MS      5000    // Check for water level changes every 5 seconds
+#define DISPLAY_UPDATE_THRESHOLD_ML     5.0f    // Only refresh display if water level changed by >5ml
+
 // NVS Storage
 #define NVS_NAMESPACE                   "aquavate"  // NVS namespace for calibration data
 

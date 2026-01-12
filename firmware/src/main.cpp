@@ -23,10 +23,81 @@ bool lisReady = false;
 
 unsigned long wakeTime = 0;
 
+// Water drop icon bitmap (60x60 pixels)
+// Created to match SF Symbols "drop.fill" style
+const unsigned char PROGMEM water_drop_bitmap[] = {
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x7C, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x7C, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0xFE, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0xFE, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x01, 0xFF, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x01, 0xFF, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x03, 0xFF, 0x80, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x03, 0xFF, 0x80, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x07, 0xFF, 0xC0, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x07, 0xFF, 0xC0, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x0F, 0xFF, 0xE0, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x0F, 0xFF, 0xE0, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x1F, 0xFF, 0xF0, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x1F, 0xFF, 0xF0, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x3F, 0xFF, 0xF8, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x7F, 0xFF, 0xFC, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x7F, 0xFF, 0xFC, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0xFF, 0xFF, 0xFE, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0xFF, 0xFF, 0xFE, 0x00, 0x00, 0x00,
+    0x00, 0x01, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00,
+    0x00, 0x01, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00,
+    0x00, 0x03, 0xFF, 0xFF, 0xFF, 0x80, 0x00, 0x00,
+    0x00, 0x03, 0xFF, 0xFF, 0xFF, 0x80, 0x00, 0x00,
+    0x00, 0x07, 0xFF, 0xFF, 0xFF, 0xC0, 0x00, 0x00,
+    0x00, 0x07, 0xFF, 0xFF, 0xFF, 0xC0, 0x00, 0x00,
+    0x00, 0x0F, 0xFF, 0xFF, 0xFF, 0xE0, 0x00, 0x00,
+    0x00, 0x0F, 0xFF, 0xFF, 0xFF, 0xE0, 0x00, 0x00,
+    0x00, 0x0F, 0xFF, 0xFF, 0xFF, 0xE0, 0x00, 0x00,
+    0x00, 0x1F, 0xFF, 0xFF, 0xFF, 0xF0, 0x00, 0x00,
+    0x00, 0x1F, 0xFF, 0xFF, 0xFF, 0xF0, 0x00, 0x00,
+    0x00, 0x1F, 0xFF, 0xFF, 0xFF, 0xF0, 0x00, 0x00,
+    0x00, 0x1F, 0xFF, 0xFF, 0xFF, 0xF0, 0x00, 0x00,
+    0x00, 0x1F, 0xFF, 0xFF, 0xFF, 0xF0, 0x00, 0x00,
+    0x00, 0x1F, 0xFF, 0xFF, 0xFF, 0xF0, 0x00, 0x00,
+    0x00, 0x1F, 0xFF, 0xFF, 0xFF, 0xF0, 0x00, 0x00,
+    0x00, 0x1F, 0xFF, 0xFF, 0xFF, 0xF0, 0x00, 0x00,
+    0x00, 0x1F, 0xFF, 0xFF, 0xFF, 0xF0, 0x00, 0x00,
+    0x00, 0x1F, 0xFF, 0xFF, 0xFF, 0xF0, 0x00, 0x00,
+    0x00, 0x1F, 0xFF, 0xFF, 0xFF, 0xF0, 0x00, 0x00,
+    0x00, 0x0F, 0xFF, 0xFF, 0xFF, 0xE0, 0x00, 0x00,
+    0x00, 0x0F, 0xFF, 0xFF, 0xFF, 0xE0, 0x00, 0x00,
+    0x00, 0x0F, 0xFF, 0xFF, 0xFF, 0xE0, 0x00, 0x00,
+    0x00, 0x0F, 0xFF, 0xFF, 0xFF, 0xE0, 0x00, 0x00,
+    0x00, 0x07, 0xFF, 0xFF, 0xFF, 0xC0, 0x00, 0x00,
+    0x00, 0x07, 0xFF, 0xFF, 0xFF, 0xC0, 0x00, 0x00,
+    0x00, 0x03, 0xFF, 0xFF, 0xFF, 0x80, 0x00, 0x00,
+    0x00, 0x03, 0xFF, 0xFF, 0xFF, 0x80, 0x00, 0x00,
+    0x00, 0x01, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00,
+    0x00, 0x01, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0xFF, 0xFF, 0xFE, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0xFF, 0xFF, 0xFE, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x7F, 0xFF, 0xFC, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x3F, 0xFF, 0xF8, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x1F, 0xFF, 0xF0, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x0F, 0xFF, 0xE0, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x07, 0xFF, 0xC0, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x01, 0xFF, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x7C, 0x00, 0x00, 0x00, 0x00
+};
+
+#define WATER_DROP_WIDTH 60
+#define WATER_DROP_HEIGHT 60
+
 // Calibration state
 CalibrationData g_calibration;
 bool g_calibrated = false;
 CalibrationState g_last_cal_state = CAL_IDLE;
+
+// Display update tracking
+float g_last_displayed_water_ml = -1.0f;  // -1 means not yet displayed
 
 #if defined(BOARD_ADAFRUIT_FEATHER)
 #include "Adafruit_ThinkInk.h"
@@ -149,6 +220,26 @@ void blinkLED(int durationSeconds) {
 }
 
 #if defined(BOARD_ADAFRUIT_FEATHER)
+void drawWelcomeScreen() {
+    Serial.println("Drawing welcome screen...");
+    display.clearBuffer();
+    display.setTextColor(EPD_BLACK);
+
+    // Show Aquavate branding (left side)
+    display.setTextSize(3);
+    display.setCursor(20, 50);
+    display.print("Aquavate");
+
+    // Draw water drop bitmap to the right (50x60 pixels)
+    // Position: right side of screen, vertically centered
+    int drop_x = 180;
+    int drop_y = 30;
+    display.drawBitmap(drop_x, drop_y, water_drop_bitmap,
+                      WATER_DROP_WIDTH, WATER_DROP_HEIGHT, EPD_BLACK);
+
+    display.display();
+}
+
 void drawMainScreen() {
     Serial.println("Drawing main screen...");
     display.clearBuffer();
@@ -157,6 +248,13 @@ void drawMainScreen() {
     // Calculate current water level in ml
     float water_ml = 0.0f;
     if (g_calibrated && nauReady) {
+        // Wait for NAU7802 to have data available (may take a moment)
+        int retry_count = 0;
+        while (!nau.available() && retry_count < 10) {
+            delay(10);
+            retry_count++;
+        }
+
         if (nau.available()) {
             int32_t current_adc = nau.read();
             water_ml = calibrationGetWaterWeight(current_adc, g_calibration);
@@ -172,6 +270,10 @@ void drawMainScreen() {
             // Clamp to 0-830ml range
             if (water_ml < 0) water_ml = 0;
             if (water_ml > 830) water_ml = 830;
+        } else {
+            // NAU7802 not ready - show error
+            Serial.println("Main Screen: ERROR - NAU7802 not available!");
+            water_ml = 0.0f;
         }
     } else {
         // Not calibrated - show 830ml as placeholder
@@ -228,7 +330,7 @@ void drawMainScreen() {
     // Draw battery status in top-right corner
     float batteryV = getBatteryVoltage();
     int batteryPct = getBatteryPercent(batteryV);
-    drawBatteryIcon(200, 5, batteryPct);
+    drawBatteryIcon(220, 5, batteryPct);
 
     display.display();
 }
@@ -284,8 +386,8 @@ void setup() {
     display.begin();
     display.setRotation(2);  // Rotate 180 degrees
 
-    // Draw main screen
-    drawMainScreen();
+    // Draw welcome screen on first boot
+    drawWelcomeScreen();
 
     // Print battery info
     float batteryV = getBatteryVoltage();
@@ -476,6 +578,7 @@ void loop() {
                 // Return to IDLE and redraw main screen
                 calibrationCancel();
                 g_last_cal_state = CAL_IDLE;
+                g_last_displayed_water_ml = -1.0f;  // Reset so first check will update display
                 Serial.println("Main: Returning to main screen");
                 drawMainScreen();
             }
@@ -498,28 +601,54 @@ void loop() {
         }
     }
 
-    // Update main screen when bottle is picked up and placed back down
-    // Track gesture state to detect tilt → upright stable transitions
-    static GestureType last_gesture = GESTURE_NONE;
-    static bool bottle_was_tilted = false;
+    // Periodically check water level and update display if changed significantly
+    // Only refresh e-paper display if water level changed by >5ml to minimize flashing
+    static unsigned long last_level_check = 0;
 
-    if (cal_state == CAL_IDLE && g_calibrated) {
-        // Detect when bottle is tilted (picked up)
-        if (gesture != GESTURE_UPRIGHT_STABLE && gesture != GESTURE_NONE) {
-            bottle_was_tilted = true;
-        }
+    if (cal_state == CAL_IDLE && g_calibrated && gesture == GESTURE_UPRIGHT_STABLE) {
+        // Check water level every DISPLAY_UPDATE_INTERVAL_MS when bottle is upright stable
+        if (millis() - last_level_check >= DISPLAY_UPDATE_INTERVAL_MS) {
+            last_level_check = millis();
 
-        // Detect when bottle returns to upright stable after being tilted
-        if (bottle_was_tilted && gesture == GESTURE_UPRIGHT_STABLE && last_gesture != GESTURE_UPRIGHT_STABLE) {
 #if defined(BOARD_ADAFRUIT_FEATHER)
-            Serial.println("Main: Bottle placed down - updating water level display");
-            drawMainScreen();
+            if (nauReady) {
+                // Wait for NAU7802 to have data available
+                int retry_count = 0;
+                while (!nau.available() && retry_count < 10) {
+                    delay(10);
+                    retry_count++;
+                }
+
+                if (nau.available()) {
+                    int32_t current_adc = nau.read();
+                    float current_water_ml = calibrationGetWaterWeight(current_adc, g_calibration);
+
+                    // Clamp to valid range
+                    if (current_water_ml < 0) current_water_ml = 0;
+                    if (current_water_ml > 830) current_water_ml = 830;
+
+                    // Only refresh display if water level changed by more than threshold
+                    if (g_last_displayed_water_ml < 0 ||
+                        fabs(current_water_ml - g_last_displayed_water_ml) >= DISPLAY_UPDATE_THRESHOLD_ML) {
+
+                        Serial.print("Main: Water level changed from ");
+                        Serial.print(g_last_displayed_water_ml, 1);
+                        Serial.print("ml to ");
+                        Serial.print(current_water_ml, 1);
+                        Serial.println("ml - refreshing display");
+
+                        drawMainScreen();
+                        g_last_displayed_water_ml = current_water_ml;
+                    } else {
+                        Serial.print("Main: Water level unchanged (");
+                        Serial.print(current_water_ml, 1);
+                        Serial.println("ml) - no display refresh");
+                    }
+                }
+            }
 #endif
-            bottle_was_tilted = false;
         }
     }
-
-    last_gesture = gesture;
 
     // Debug output (only print periodically to reduce serial spam)
     static unsigned long last_debug_print = 0;
