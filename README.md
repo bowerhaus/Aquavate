@@ -62,19 +62,46 @@ The firmware uses PlatformIO environments to support both hardware configuration
 
 Pin definitions are automatically selected based on these flags.
 
-## Features (Planned)
+## Features
 
-- Weight-based water tracking via NAU7802 load cell ADC
-- Wake-on-tilt using LIS3DH accelerometer interrupt
-- E-paper display showing current level and daily total
-- BLE communication with iOS app
-- Deep sleep for 1-2 week battery life
-- DS3231 RTC for standalone daily tracking
+### Implemented
+- ✅ Weight-based water tracking via NAU7802 load cell ADC
+- ✅ Wake-on-tilt using LIS3DH accelerometer interrupt (80° threshold)
+- ✅ E-paper display with battery status and graphics
+- ✅ Deep sleep with EXT0 wake-up for 1-2 week battery life
+- ✅ Battery voltage monitoring and percentage display
+
+### In Development
+- 🚧 Load cell calibration and tare system
+- 🚧 Vertical orientation and stability detection
+- 🚧 Drink detection algorithm
+
+### Planned
+- 📋 BLE communication with iOS app
+- 📋 Drink history storage in NVS (7-day buffer)
+- 📋 DS3231 RTC for standalone daily tracking
+- 📋 Empty gesture detection (invert + shake)
 
 ## Documentation
 
+### Active Development
+- [PROGRESS.md](PROGRESS.md) - Current work tracker and active tasks
+
+### Product & Design
+- [PRD.md](docs/PRD.md) - Full product requirements document
+- [Sensor Puck Design](Plans/004-sensor-puck-design.md) - Mechanical design v3.0 for 3D printing
 - [Hardware Research](Plans/001-hardware-research.md) - Component selection and analysis
-- [Sensor Puck Design](Plans/004-sensor-puck-design.md) - Mechanical design for 3D printing
+
+### Configuration
+- [CLAUDE.md](CLAUDE.md) - Guidance for Claude Code when working on this project
+
+## Current Status
+
+**Branch:** `Calibration`
+**Phase:** Firmware Phase 1 (Foundation) - Near complete
+**Next:** Implementing calibration and measurement logic
+
+See [PROGRESS.md](PROGRESS.md) for detailed status and next steps.
 
 ## License
 

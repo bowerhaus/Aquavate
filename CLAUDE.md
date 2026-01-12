@@ -6,7 +6,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Aquavate is a smart water bottle project that measures daily water intake using a weight-based sensor system. The device communicates with an iOS app via Bluetooth Low Energy (BLE) and displays status on an e-paper display.
 
-**Current Status:** Hardware planning phase - no firmware or app code yet.
+**Current Status:**
+- Hardware design complete (v3.0 sensor puck)
+- Firmware foundation implemented (sensors, display, deep sleep)
+- iOS app skeleton created
+- Currently working on calibration and measurement logic (branch: `Calibration`)
 
 ## Hardware Options
 
@@ -25,18 +29,23 @@ Two prototype configurations are being evaluated:
 - SparkFun Qwiic Scale NAU7802
 - UK BOM: Plans/003-bom-sparkfun-qwiic.md
 
-## Planned Technology Stack
+## Technology Stack
 
-### Firmware (ESP32)
-- **Framework:** PlatformIO + Arduino
+### Firmware (ESP32) - In Progress
+- **Framework:** PlatformIO + Arduino ✅
 - **Language:** C++
-- **Key Libraries:** NimBLE-Arduino, Adafruit EPD/GxEPD2, NAU7802, LIS3DH
+- **Libraries Integrated:**
+  - Adafruit EPD (ThinkInk) - 2.13" e-paper display ✅
+  - Adafruit NAU7802 - Load cell ADC ✅
+  - Adafruit LIS3DH - Accelerometer with wake interrupt ✅
+  - RTClib - DS3231 RTC (planned)
+  - NimBLE-Arduino - BLE communication (planned)
 
-### iOS App
-- **UI:** SwiftUI
-- **BLE:** CoreBluetooth (native)
-- **Storage:** CoreData
-- **Architecture:** MVVM + ObservableObject
+### iOS App - Skeleton Created
+- **UI:** SwiftUI ✅
+- **BLE:** CoreBluetooth (planned)
+- **Storage:** CoreData (planned)
+- **Architecture:** MVVM + ObservableObject (planned)
 
 ## Key Design Decisions
 
@@ -49,5 +58,36 @@ Two prototype configurations are being evaluated:
 
 - Battery life: 1-2 weeks between charges
 - Accuracy: ±15ml
-- Display: Current level + daily total
-- Deep sleep with wake-on-tilt power strategy
+- Display: Daily total + battery status (landscape e-paper in side bump)
+- Deep sleep with wake-on-tilt power strategy ✅
+
+## Important Implementation Notes
+
+### Firmware Structure
+- `firmware/src/main.cpp` - Main entry point, sensor initialization, wake/sleep logic
+- `firmware/include/config.h` - Pin definitions, calibration constants
+- `firmware/include/aquavate.h` - Version info and shared declarations
+- `firmware/platformio.ini` - Dual environment config (Adafruit Feather / SparkFun Qwiic)
+
+### Build Commands
+```bash
+cd firmware
+pio run                    # Build for Adafruit Feather (default)
+pio run -e sparkfun_qwiic  # Build for SparkFun Qwiic
+pio run -t upload          # Upload to connected board
+pio device monitor         # Serial monitor
+```
+
+## Reference Documentation
+
+Read these documents for progressive disclosure - CLAUDE.md keeps context light, these provide depth:
+
+| Document | Purpose | When to Consult |
+|----------|---------|-----------------|
+| [PROGRESS.md](PROGRESS.md) | Current tasks and status updates | **Always check first** - Start of session, after context resume/reset, before making changes |
+| [AGENTS.md](AGENTS.md) | Extended development workflow and patterns | Before making changes, understanding code style, common tasks, hardware testing |
+| [docs/PRD.md](docs/PRD.md) | Complete product specification | Understanding features, BLE protocol, calibration logic, implementation phases - authoritative source for requirements |
+| [Plans/004-sensor-puck-design.md](Plans/004-sensor-puck-design.md) | Mechanical design v3.0 | Hardware questions, physical constraints, assembly, dimensions - physical design affects firmware |
+| [Plans/001-hardware-research.md](Plans/001-hardware-research.md) | Component selection rationale | Understanding hardware limitations or evaluating alternatives |
+| [Plans/002-bom-adafruit-feather.md](Plans/002-bom-adafruit-feather.md) | UK parts list (Adafruit) | Bill of materials for Feather configuration |
+| [Plans/003-bom-sparkfun-qwiic.md](Plans/003-bom-sparkfun-qwiic.md) | UK parts list (SparkFun) | Bill of materials for Qwiic configuration |
