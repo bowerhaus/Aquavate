@@ -16,6 +16,11 @@
 #include "calibration.h"
 #include "ui_calibration.h"
 
+// Serial commands for time setting
+#include "serial_commands.h"
+#include <sys/time.h>
+#include <time.h>
+
 Adafruit_NAU7802 nau;
 Adafruit_LIS3DH lis = Adafruit_LIS3DH();
 bool nauReady = false;
@@ -99,6 +104,10 @@ CalibrationState g_last_cal_state = CAL_IDLE;
 // Display update tracking
 float g_last_displayed_water_ml = -1.0f;  // -1 means not yet displayed
 
+// Time state
+int8_t g_timezone_offset = 0;  // UTC offset in hours
+bool g_time_valid = false;     // Has time been set?
+
 #if defined(BOARD_ADAFRUIT_FEATHER)
 #include "Adafruit_ThinkInk.h"
 
@@ -131,7 +140,93 @@ void drawBatteryIcon(int x, int y, int percent) {
         display.fillRect(x + 2, y + 2, fillWidth, 8, EPD_BLACK);
     }
 }
+
+void drawBottleGraphic(int x, int y, float fill_percent) {
+    // Bottle dimensions
+    int bottle_width = 40;
+    int bottle_height = 90;
+    int bottle_body_height = 70;  // Main body height
+    int neck_height = 10;
+    int cap_height = 10;
+
+    // Calculate fill level (0-100%)
+    int fill_height = (int)(bottle_body_height * fill_percent);
+
+    // Draw bottle body (vertical cylinder)
+    display.fillRoundRect(x, y + cap_height + neck_height,
+                         bottle_width, bottle_body_height, 8, EPD_BLACK);
+    display.fillRoundRect(x + 2, y + cap_height + neck_height + 2,
+                         bottle_width - 4, bottle_body_height - 4, 6, EPD_WHITE);
+
+    // Draw neck (narrower at top)
+    int neck_width = bottle_width - 12;
+    int neck_x = x + 6;
+    display.fillRect(neck_x, y + cap_height, neck_width, neck_height, EPD_BLACK);
+    display.fillRect(neck_x + 2, y + cap_height + 2, neck_width - 4, neck_height - 4, EPD_WHITE);
+
+    // Draw cap
+    int cap_width = neck_width - 4;
+    int cap_x = neck_x + 2;
+    display.fillRect(cap_x, y, cap_width, cap_height, EPD_BLACK);
+
+    // Draw water level inside bottle (fill from bottom)
+    if (fill_height > 0) {
+        int water_y = y + cap_height + neck_height + bottle_body_height - fill_height;
+        display.fillRoundRect(x + 4, water_y,
+                             bottle_width - 8, fill_height - 2, 4, EPD_BLACK);
+    }
+}
 #endif
+
+// Get day name from weekday number (0=Sunday, 1=Monday, etc.)
+const char* getDayName(int weekday) {
+    switch (weekday) {
+        case 0: return "Sun";
+        case 1: return "Mon";
+        case 2: return "Tue";
+        case 3: return "Wed";
+        case 4: return "Thu";
+        case 5: return "Fri";
+        case 6: return "Sat";
+        default: return "---";
+    }
+}
+
+// Format time for display as "Wed 2pm" (day + 12-hour format)
+// Returns "--- --" if time not valid
+void formatTimeForDisplay(char* buffer, size_t buffer_size) {
+    if (!g_time_valid) {
+        snprintf(buffer, buffer_size, "--- --");
+        return;
+    }
+
+    // Get current time from RTC
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    time_t now = tv.tv_sec;
+
+    // Convert to local time using timezone offset
+    now += g_timezone_offset * 3600;  // Add timezone offset in seconds
+    struct tm timeinfo;
+    gmtime_r(&now, &timeinfo);
+
+    // Get day name
+    const char* day = getDayName(timeinfo.tm_wday);
+
+    // Convert to 12-hour format
+    int hour_12 = timeinfo.tm_hour % 12;
+    if (hour_12 == 0) hour_12 = 12;  // 0 or 12 should display as 12
+    const char* am_pm = (timeinfo.tm_hour < 12) ? "am" : "pm";
+
+    // Format as "Wed 2pm"
+    snprintf(buffer, buffer_size, "%s %d%s", day, hour_12, am_pm);
+}
+
+// Callback when time is set via serial command
+void onTimeSet() {
+    g_time_valid = true;
+    Serial.println("Main: Time set callback - time is now valid");
+}
 
 void writeAccelReg(uint8_t reg, uint8_t value) {
     Wire.beginTransmission(0x18);
@@ -284,39 +379,8 @@ void drawMainScreen() {
     // Draw vertical bottle graphic on left side
     int bottle_x = 10;  // Left side of screen
     int bottle_y = 20;   // Top margin
-    int bottle_width = 40;
-    int bottle_height = 90;
-    int bottle_body_height = 70;  // Main body height
-    int neck_height = 10;
-    int cap_height = 10;
-
-    // Calculate fill level (0-100%)
     float fill_percent = water_ml / 830.0f;
-    int fill_height = (int)(bottle_body_height * fill_percent);
-
-    // Draw bottle body (vertical cylinder)
-    display.fillRoundRect(bottle_x, bottle_y + cap_height + neck_height,
-                         bottle_width, bottle_body_height, 8, EPD_BLACK);
-    display.fillRoundRect(bottle_x + 2, bottle_y + cap_height + neck_height + 2,
-                         bottle_width - 4, bottle_body_height - 4, 6, EPD_WHITE);
-
-    // Draw neck (narrower at top)
-    int neck_width = bottle_width - 12;
-    int neck_x = bottle_x + 6;
-    display.fillRect(neck_x, bottle_y + cap_height, neck_width, neck_height, EPD_BLACK);
-    display.fillRect(neck_x + 2, bottle_y + cap_height + 2, neck_width - 4, neck_height - 4, EPD_WHITE);
-
-    // Draw cap
-    int cap_width = neck_width - 4;
-    int cap_x = neck_x + 2;
-    display.fillRect(cap_x, bottle_y, cap_width, cap_height, EPD_BLACK);
-
-    // Draw water level inside bottle (fill from bottom)
-    if (fill_height > 0) {
-        int water_y = bottle_y + cap_height + neck_height + bottle_body_height - fill_height;
-        display.fillRoundRect(bottle_x + 4, water_y,
-                             bottle_width - 8, fill_height - 2, 4, EPD_BLACK);
-    }
+    drawBottleGraphic(bottle_x, bottle_y, fill_percent);
 
     // Draw large text showing milliliters (right side)
     display.setTextSize(3);
@@ -331,6 +395,18 @@ void drawMainScreen() {
     float batteryV = getBatteryVoltage();
     int batteryPct = getBatteryPercent(batteryV);
     drawBatteryIcon(220, 5, batteryPct);
+
+    // Draw time centered at top
+    char time_text[16];
+    formatTimeForDisplay(time_text, sizeof(time_text));
+    display.setTextSize(1);
+
+    // Calculate width of text for centering (size 1 = 6 pixels per char)
+    int text_width = strlen(time_text) * 6;  // Approximate width
+    int center_x = (250 - text_width) / 2;  // Display width is 250 pixels
+
+    display.setCursor(center_x, 5);
+    display.print(time_text);
 
     display.display();
 }
@@ -452,9 +528,34 @@ void setup() {
         } else {
             Serial.println("No valid calibration found - calibration required");
         }
+
+        // Load timezone and time_valid from NVS
+        g_timezone_offset = storageLoadTimezone();
+        g_time_valid = storageLoadTimeValid();
+
+        if (g_time_valid) {
+            Serial.println("Time configuration loaded:");
+            Serial.print("  Timezone offset: ");
+            Serial.println(g_timezone_offset);
+
+            // Show current time
+            char time_str[64];
+            formatTimeForDisplay(time_str, sizeof(time_str));
+            Serial.print("  Current time: ");
+            Serial.println(time_str);
+        } else {
+            Serial.println("WARNING: Time not set!");
+            Serial.println("Use SET_TIME command to set time");
+            Serial.println("Example: SET_TIME 2026-01-13 14:30:00 -5");
+        }
     } else {
         Serial.println("Storage initialization failed");
     }
+
+    // Initialize serial command handler
+    serialCommandsInit();
+    serialCommandsSetTimeCallback(onTimeSet);
+    Serial.println("Serial command handler initialized");
 
     // Initialize gesture detection
     if (lisReady) {
@@ -502,6 +603,9 @@ void setup() {
 }
 
 void loop() {
+    // Check for serial commands
+    serialCommandsUpdate();
+
     // Update gesture detection
     GestureType gesture = GESTURE_NONE;
     if (lisReady) {
@@ -527,12 +631,14 @@ void loop() {
         }
 
         // If calibrated, show water level
+        #if DEBUG_WATER_LEVEL
         if (g_calibrated && nauReady) {
             float water_ml = calibrationGetWaterWeight(current_adc, g_calibration);
             Serial.print("Water level: ");
             Serial.print(water_ml);
             Serial.println(" ml");
         }
+        #endif
     }
 
     // If in calibration mode, update state machine
@@ -631,18 +737,22 @@ void loop() {
                     if (g_last_displayed_water_ml < 0 ||
                         fabs(current_water_ml - g_last_displayed_water_ml) >= DISPLAY_UPDATE_THRESHOLD_ML) {
 
+                        #if DEBUG_DISPLAY_UPDATES
                         Serial.print("Main: Water level changed from ");
                         Serial.print(g_last_displayed_water_ml, 1);
                         Serial.print("ml to ");
                         Serial.print(current_water_ml, 1);
                         Serial.println("ml - refreshing display");
+                        #endif
 
                         drawMainScreen();
                         g_last_displayed_water_ml = current_water_ml;
                     } else {
+                        #if DEBUG_DISPLAY_UPDATES
                         Serial.print("Main: Water level unchanged (");
                         Serial.print(current_water_ml, 1);
                         Serial.println("ml) - no display refresh");
+                        #endif
                     }
                 }
             }
@@ -651,6 +761,7 @@ void loop() {
     }
 
     // Debug output (only print periodically to reduce serial spam)
+    #if DEBUG_ACCELEROMETER
     static unsigned long last_debug_print = 0;
     if (lisReady && (millis() - last_debug_print >= 1000)) {
         last_debug_print = millis();
@@ -680,6 +791,7 @@ void loop() {
         Serial.print(remaining);
         Serial.println("s)");
     }
+    #endif
 
     // Check if it's time to sleep
     // DISABLED FOR CALIBRATION TESTING

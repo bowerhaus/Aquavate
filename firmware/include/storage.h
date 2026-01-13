@@ -35,4 +35,16 @@ bool storageHasValidCalibration();
 // Get empty CalibrationData structure
 CalibrationData storageGetEmptyCalibration();
 
+// Save timezone offset to NVS (-12 to +14)
+bool storageSaveTimezone(int8_t utc_offset);
+
+// Load timezone offset from NVS (default: 0 UTC)
+int8_t storageLoadTimezone();
+
+// Save time valid flag to NVS
+bool storageSaveTimeValid(bool valid);
+
+// Load time valid flag from NVS (default: false)
+bool storageLoadTimeValid();
+
 #endif // STORAGE_H

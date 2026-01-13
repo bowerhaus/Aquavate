@@ -67,19 +67,20 @@ Pin definitions are automatically selected based on these flags.
 ### Implemented
 - ✅ Weight-based water tracking via NAU7802 load cell ADC
 - ✅ Wake-on-tilt using LIS3DH accelerometer interrupt (80° threshold)
-- ✅ E-paper display with battery status and graphics
+- ✅ E-paper display with battery status, time, and bottle graphic
 - ✅ Deep sleep with EXT0 wake-up for 1-2 week battery life
 - ✅ Battery voltage monitoring and percentage display
-
-### In Development
-- 🚧 Load cell calibration and tare system
-- 🚧 Vertical orientation and stability detection
-- 🚧 Drink detection algorithm
+- ✅ Two-point calibration system (empty + full bottle)
+- ✅ Gesture-based calibration (inverted hold for 5s triggers calibration)
+- ✅ Real-time water level measurement and display
+- ✅ USB time setting via serial commands (SET_TIME, GET_TIME)
+- ✅ Timezone support with NVS persistence
+- ✅ ESP32 internal RTC (no external RTC chip needed)
 
 ### Planned
 - 📋 BLE communication with iOS app
 - 📋 Drink history storage in NVS (7-day buffer)
-- 📋 DS3231 RTC for standalone daily tracking
+- 📋 Daily drink tracking and summaries
 - 📋 Empty gesture detection (invert + shake)
 
 ## Documentation
@@ -97,9 +98,9 @@ Pin definitions are automatically selected based on these flags.
 
 ## Current Status
 
-**Branch:** `Calibration`
-**Phase:** Firmware Phase 1 (Foundation) - Near complete
-**Next:** Implementing calibration and measurement logic
+**Branch:** `usb-time-setting`
+**Phase:** Standalone device features complete
+**Status:** Ready to merge - calibration, water tracking, and time setting fully working
 
 See [PROGRESS.md](PROGRESS.md) for detailed status and next steps.
 

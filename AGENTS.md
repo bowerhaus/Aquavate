@@ -17,8 +17,13 @@ This is an active hardware + firmware + iOS app project. The firmware is well un
 ### Firmware Development
 
 **Key Files:**
-- [firmware/src/main.cpp](firmware/src/main.cpp) - Main entry point and sensor initialization
-- [firmware/include/config.h](firmware/include/config.h) - Pin definitions and calibration constants
+- [firmware/src/main.cpp](firmware/src/main.cpp) - Main entry point, sensor initialization, UI rendering
+- [firmware/src/calibration.cpp](firmware/src/calibration.cpp) - Two-point calibration state machine
+- [firmware/src/gestures.cpp](firmware/src/gestures.cpp) - Gesture detection (inverted hold, upright stable)
+- [firmware/src/weight.cpp](firmware/src/weight.cpp) - Load cell reading and stability detection
+- [firmware/src/storage.cpp](firmware/src/storage.cpp) - NVS storage for calibration and settings
+- [firmware/src/serial_commands.cpp](firmware/src/serial_commands.cpp) - USB time setting commands
+- [firmware/include/config.h](firmware/include/config.h) - Pin definitions, calibration constants, debug flags
 - [firmware/platformio.ini](firmware/platformio.ini) - Build configurations for both hardware options
 
 **Hardware Configurations:**
@@ -90,7 +95,9 @@ When completing work:
 - Current implementation uses Adafruit_ThinkInk library
 - Display updates are slow (~2s), plan accordingly
 - Only update on wake events to save power
-- See PRD.md for planned UI layout (daily total, battery, BLE status)
+- Main screen shows: time (centered top), battery (top right), bottle graphic (left), water level in ml (right)
+- Calibration UI has 7 static screens for the calibration wizard
+- Smart refresh: only updates if water level changes by ≥5ml (configurable in config.h)
 
 ## Testing Hardware
 
@@ -109,6 +116,8 @@ When completing work:
 
 - [docs/PRD.md](docs/PRD.md) - Complete product specification and firmware architecture
 - [Plans/004-sensor-puck-design.md](Plans/004-sensor-puck-design.md) - Mechanical design and assembly
+- [Plans/005-standalone-calibration-mode.md](Plans/005-standalone-calibration-mode.md) - Two-point calibration implementation
+- [Plans/006-usb-time-setting.md](Plans/006-usb-time-setting.md) - USB time setting via serial commands
 - [Plans/002-bom-adafruit-feather.md](Plans/002-bom-adafruit-feather.md) - UK parts list
 
 ## Questions?

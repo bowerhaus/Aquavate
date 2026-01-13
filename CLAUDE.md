@@ -8,9 +8,9 @@ Aquavate is a smart water bottle project that measures daily water intake using 
 
 **Current Status:**
 - Hardware design complete (v3.0 sensor puck)
-- Firmware foundation implemented (sensors, display, deep sleep)
+- Firmware standalone features complete (sensors, display, deep sleep, calibration, time setting)
 - iOS app skeleton created
-- Currently working on calibration and measurement logic (branch: `Calibration`)
+- Currently on branch: `usb-time-setting` (ready to merge)
 
 ## Hardware Options
 
@@ -64,8 +64,14 @@ Two prototype configurations are being evaluated:
 ## Important Implementation Notes
 
 ### Firmware Structure
-- `firmware/src/main.cpp` - Main entry point, sensor initialization, wake/sleep logic
-- `firmware/include/config.h` - Pin definitions, calibration constants
+- `firmware/src/main.cpp` - Main entry point, sensor initialization, wake/sleep logic, UI rendering
+- `firmware/src/calibration.cpp` - Two-point calibration state machine
+- `firmware/src/gestures.cpp` - Gesture detection (inverted hold, upright stable)
+- `firmware/src/weight.cpp` - Load cell reading and stability detection
+- `firmware/src/storage.cpp` - NVS storage for calibration and settings
+- `firmware/src/serial_commands.cpp` - USB time setting commands
+- `firmware/src/ui_calibration.cpp` - E-paper calibration UI screens
+- `firmware/include/config.h` - Pin definitions, calibration constants, debug flags
 - `firmware/include/aquavate.h` - Version info and shared declarations
 - `firmware/platformio.ini` - Dual environment config (Adafruit Feather / SparkFun Qwiic)
 
@@ -88,6 +94,8 @@ Read these documents for progressive disclosure - CLAUDE.md keeps context light,
 | [AGENTS.md](AGENTS.md) | Extended development workflow and patterns | Before making changes, understanding code style, common tasks, hardware testing |
 | [docs/PRD.md](docs/PRD.md) | Complete product specification | Understanding features, BLE protocol, calibration logic, implementation phases - authoritative source for requirements |
 | [Plans/004-sensor-puck-design.md](Plans/004-sensor-puck-design.md) | Mechanical design v3.0 | Hardware questions, physical constraints, assembly, dimensions - physical design affects firmware |
+| [Plans/005-standalone-calibration-mode.md](Plans/005-standalone-calibration-mode.md) | Two-point calibration implementation | Understanding calibration flow, gestures, state machine |
+| [Plans/006-usb-time-setting.md](Plans/006-usb-time-setting.md) | USB time setting via serial commands | Understanding time configuration, serial protocol |
 | [Plans/001-hardware-research.md](Plans/001-hardware-research.md) | Component selection rationale | Understanding hardware limitations or evaluating alternatives |
 | [Plans/002-bom-adafruit-feather.md](Plans/002-bom-adafruit-feather.md) | UK parts list (Adafruit) | Bill of materials for Feather configuration |
 | [Plans/003-bom-sparkfun-qwiic.md](Plans/003-bom-sparkfun-qwiic.md) | UK parts list (SparkFun) | Bill of materials for Qwiic configuration |

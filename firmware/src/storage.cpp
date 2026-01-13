@@ -17,6 +17,8 @@ static const char* KEY_EMPTY_ADC = "empty_adc";
 static const char* KEY_FULL_ADC = "full_adc";
 static const char* KEY_TIMESTAMP = "cal_timestamp";
 static const char* KEY_VALID = "cal_valid";
+static const char* KEY_TIMEZONE = "timezone";
+static const char* KEY_TIME_VALID = "time_valid";
 
 bool storageInit() {
     if (g_initialized) {
@@ -128,4 +130,52 @@ bool storageHasValidCalibration() {
 
     uint8_t valid = g_preferences.getUChar(KEY_VALID, 0);
     return (valid == 1);
+}
+
+bool storageSaveTimezone(int8_t utc_offset) {
+    if (!g_initialized) {
+        Serial.println("Storage: Not initialized");
+        return false;
+    }
+
+    g_preferences.putChar(KEY_TIMEZONE, utc_offset);
+    Serial.print("Storage: Saved timezone = ");
+    Serial.println(utc_offset);
+    return true;
+}
+
+int8_t storageLoadTimezone() {
+    if (!g_initialized) {
+        Serial.println("Storage: Not initialized, using default timezone 0");
+        return 0; // Default UTC
+    }
+
+    int8_t timezone = g_preferences.getChar(KEY_TIMEZONE, 0);
+    Serial.print("Storage: Loaded timezone = ");
+    Serial.println(timezone);
+    return timezone;
+}
+
+bool storageSaveTimeValid(bool valid) {
+    if (!g_initialized) {
+        Serial.println("Storage: Not initialized");
+        return false;
+    }
+
+    g_preferences.putBool(KEY_TIME_VALID, valid);
+    Serial.print("Storage: Saved time_valid = ");
+    Serial.println(valid ? "true" : "false");
+    return true;
+}
+
+bool storageLoadTimeValid() {
+    if (!g_initialized) {
+        Serial.println("Storage: Not initialized, using default time_valid false");
+        return false;
+    }
+
+    bool valid = g_preferences.getBool(KEY_TIME_VALID, false);
+    Serial.print("Storage: Loaded time_valid = ");
+    Serial.println(valid ? "true" : "false");
+    return valid;
 }

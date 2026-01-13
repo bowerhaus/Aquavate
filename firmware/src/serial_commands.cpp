@@ -1,0 +1,332 @@
+// serial_commands.cpp
+// Serial command parser for USB time setting and configuration
+// Uses ESP32 internal RTC (gettimeofday/settimeofday)
+
+#include "serial_commands.h"
+#include "storage.h"
+#include <sys/time.h>
+#include <time.h>
+
+// Command buffer for serial input
+#define CMD_BUFFER_SIZE 128
+static char cmdBuffer[CMD_BUFFER_SIZE];
+static uint8_t cmdBufferPos = 0;
+
+// Callback for time set events
+static OnTimeSetCallback g_onTimeSetCallback = nullptr;
+
+// External timezone offset (managed in main.cpp)
+extern int8_t g_timezone_offset;
+
+// Initialize serial command handler
+void serialCommandsInit() {
+    cmdBufferPos = 0;
+    cmdBuffer[0] = '\0';
+}
+
+// Register callback for time set events
+void serialCommandsSetTimeCallback(OnTimeSetCallback callback) {
+    g_onTimeSetCallback = callback;
+}
+
+// Parse integer from string
+// Returns true if successful, false otherwise
+static bool parseInt(const char* str, int& value) {
+    char* endptr;
+    long result = strtol(str, &endptr, 10);
+    if (endptr == str || *endptr != '\0') {
+        return false;
+    }
+    value = (int)result;
+    return true;
+}
+
+// Validate date components
+static bool validateDate(int year, int month, int day) {
+    if (year < 2026 || year > 2099) {
+        Serial.println("ERROR: Year must be 2026-2099");
+        return false;
+    }
+    if (month < 1 || month > 12) {
+        Serial.println("ERROR: Month must be 1-12");
+        return false;
+    }
+
+    // Days in month (non-leap year, good enough for validation)
+    const int daysInMonth[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+    int maxDay = daysInMonth[month - 1];
+
+    // Leap year check
+    if (month == 2 && ((year % 4 == 0 && year % 100 != 0) || (year % 400 == 0))) {
+        maxDay = 29;
+    }
+
+    if (day < 1 || day > maxDay) {
+        Serial.printf("ERROR: Day must be 1-%d for month %d\n", maxDay, month);
+        return false;
+    }
+
+    return true;
+}
+
+// Validate time components
+static bool validateTime(int hour, int minute, int second) {
+    if (hour < 0 || hour > 23) {
+        Serial.println("ERROR: Hour must be 0-23");
+        return false;
+    }
+    if (minute < 0 || minute > 59) {
+        Serial.println("ERROR: Minute must be 0-59");
+        return false;
+    }
+    if (second < 0 || second > 59) {
+        Serial.println("ERROR: Second must be 0-59");
+        return false;
+    }
+    return true;
+}
+
+// Validate timezone offset
+static bool validateTimezone(int offset) {
+    if (offset < -12 || offset > 14) {
+        Serial.println("ERROR: Timezone must be -12 to +14");
+        return false;
+    }
+    return true;
+}
+
+// Get timezone name for common offsets
+static const char* getTimezoneName(int offset) {
+    switch (offset) {
+        case -8: return "PST";
+        case -7: return "MST";
+        case -6: return "CST";
+        case -5: return "EST";
+        case 0: return "UTC";
+        case 1: return "CET";
+        default: return "";
+    }
+}
+
+// Handle SET_TIME command
+// Format: SET_TIME 2026-01-13 14:30:00 -5
+static void handleSetTime(char* args) {
+    // Parse date and time
+    int year, month, day, hour, minute, second;
+    int timezone_offset = g_timezone_offset; // Default to current offset
+
+    // Try to parse date, time, and optional timezone
+    int parsed = sscanf(args, "%d-%d-%d %d:%d:%d %d",
+                       &year, &month, &day, &hour, &minute, &second, &timezone_offset);
+
+    if (parsed < 6) {
+        Serial.println("ERROR: Invalid format");
+        Serial.println("Usage: SET_TIME YYYY-MM-DD HH:MM:SS [timezone_offset]");
+        Serial.println("Example: SET_TIME 2026-01-13 14:30:00 -5");
+        return;
+    }
+
+    // Validate components
+    if (!validateDate(year, month, day)) return;
+    if (!validateTime(hour, minute, second)) return;
+    if (!validateTimezone(timezone_offset)) return;
+
+    // Create tm structure with the user's LOCAL time
+    struct tm timeinfo = {};
+    timeinfo.tm_year = year - 1900;  // tm_year is years since 1900
+    timeinfo.tm_mon = month - 1;      // tm_mon is 0-11
+    timeinfo.tm_mday = day;
+    timeinfo.tm_hour = hour;
+    timeinfo.tm_min = minute;
+    timeinfo.tm_sec = second;
+    timeinfo.tm_isdst = -1;  // Let mktime determine DST
+
+    // Convert to Unix timestamp
+    // mktime() uses system timezone, but we'll adjust for our custom offset
+    time_t timestamp = mktime(&timeinfo);
+    if (timestamp == -1) {
+        Serial.println("ERROR: Failed to convert time");
+        return;
+    }
+
+    // Adjust for timezone offset (mktime assumes system timezone)
+    timestamp -= timezone_offset * 3600;
+
+    // Set ESP32 internal RTC
+    struct timeval tv;
+    tv.tv_sec = timestamp;
+    tv.tv_usec = 0;
+
+    if (settimeofday(&tv, NULL) != 0) {
+        Serial.println("ERROR: Failed to set RTC");
+        return;
+    }
+
+    // Save timezone offset to NVS
+    if (!storageSaveTimezone(timezone_offset)) {
+        Serial.println("WARNING: Failed to save timezone to NVS");
+    }
+
+    // Save time_valid flag to NVS
+    if (!storageSaveTimeValid(true)) {
+        Serial.println("WARNING: Failed to save time_valid flag to NVS");
+    }
+
+    // Update global timezone offset
+    g_timezone_offset = timezone_offset;
+
+    // Format success message with local time
+    char timeStr[64];
+    const char* tzName = getTimezoneName(timezone_offset);
+    if (strlen(tzName) > 0) {
+        snprintf(timeStr, sizeof(timeStr), "Time set: %04d-%02d-%02d %02d:%02d:%02d %s (%+d)",
+                 year, month, day,
+                 hour + timezone_offset, minute, second,
+                 tzName, timezone_offset);
+    } else {
+        snprintf(timeStr, sizeof(timeStr), "Time set: %04d-%02d-%02d %02d:%02d:%02d (UTC%+d)",
+                 year, month, day,
+                 hour + timezone_offset, minute, second,
+                 timezone_offset);
+    }
+    Serial.println(timeStr);
+    Serial.println("Timezone and time_valid flag saved to NVS");
+
+    // Call callback if registered
+    if (g_onTimeSetCallback != nullptr) {
+        g_onTimeSetCallback();
+    }
+}
+
+// Handle GET_TIME command
+static void handleGetTime() {
+    // Load time_valid flag
+    bool time_valid = storageLoadTimeValid();
+
+    if (!time_valid) {
+        Serial.println("WARNING: Time not set!");
+        Serial.println("Current RTC: 1970-01-01 00:00:00 (epoch)");
+        Serial.println("Use SET_TIME command to set time");
+        Serial.println("Example: SET_TIME 2026-01-13 14:30:00 -5");
+        return;
+    }
+
+    // Get current time from RTC
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    time_t now = tv.tv_sec;
+
+    // Convert to local time using timezone offset
+    now += g_timezone_offset * 3600;  // Add timezone offset in seconds
+    struct tm timeinfo;
+    gmtime_r(&now, &timeinfo);
+
+    // Format time string
+    char timeStr[128];
+    const char* tzName = getTimezoneName(g_timezone_offset);
+    if (strlen(tzName) > 0) {
+        snprintf(timeStr, sizeof(timeStr), "Current time: %04d-%02d-%02d %02d:%02d:%02d %s (%+d)",
+                 timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday,
+                 timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec,
+                 tzName, g_timezone_offset);
+    } else {
+        snprintf(timeStr, sizeof(timeStr), "Current time: %04d-%02d-%02d %02d:%02d:%02d (UTC%+d)",
+                 timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday,
+                 timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec,
+                 g_timezone_offset);
+    }
+    Serial.println(timeStr);
+    Serial.println("Time valid: Yes");
+    Serial.println("RTC drift: ~3-5 minutes/day (resync recommended weekly)");
+}
+
+// Handle SET_TIMEZONE command
+static void handleSetTimezone(char* args) {
+    int offset;
+    if (!parseInt(args, offset)) {
+        Serial.println("ERROR: Invalid timezone offset");
+        Serial.println("Usage: SET_TIMEZONE offset");
+        Serial.println("Example: SET_TIMEZONE -8");
+        return;
+    }
+
+    if (!validateTimezone(offset)) return;
+
+    // Save to NVS
+    if (!storageSaveTimezone(offset)) {
+        Serial.println("ERROR: Failed to save timezone to NVS");
+        return;
+    }
+
+    // Update global offset
+    g_timezone_offset = offset;
+
+    const char* tzName = getTimezoneName(offset);
+    if (strlen(tzName) > 0) {
+        Serial.printf("Timezone set: %+d hours (%s)\n", offset, tzName);
+    } else {
+        Serial.printf("Timezone set: UTC%+d\n", offset);
+    }
+    Serial.println("Saved to NVS");
+}
+
+// Process a complete command
+static void processCommand(char* cmd) {
+    // Trim leading whitespace
+    while (*cmd == ' ' || *cmd == '\t') cmd++;
+
+    // Check for empty command
+    if (*cmd == '\0') return;
+
+    // Find command and arguments
+    char* args = strchr(cmd, ' ');
+    if (args != nullptr) {
+        *args = '\0';  // Null-terminate command
+        args++;        // Point to arguments
+        // Trim leading whitespace from args
+        while (*args == ' ' || *args == '\t') args++;
+    } else {
+        args = cmd + strlen(cmd);  // Point to empty string
+    }
+
+    // Process commands
+    if (strcmp(cmd, "SET_TIME") == 0) {
+        handleSetTime(args);
+    } else if (strcmp(cmd, "GET_TIME") == 0) {
+        handleGetTime();
+    } else if (strcmp(cmd, "SET_TIMEZONE") == 0) {
+        handleSetTimezone(args);
+    } else {
+        Serial.print("ERROR: Unknown command: ");
+        Serial.println(cmd);
+        Serial.println("Available commands:");
+        Serial.println("  SET_TIME YYYY-MM-DD HH:MM:SS [timezone]");
+        Serial.println("  GET_TIME");
+        Serial.println("  SET_TIMEZONE offset");
+    }
+}
+
+// Update serial command handler (call in loop())
+void serialCommandsUpdate() {
+    while (Serial.available() > 0) {
+        char c = Serial.read();
+
+        // Handle newline (command complete)
+        if (c == '\n' || c == '\r') {
+            if (cmdBufferPos > 0) {
+                cmdBuffer[cmdBufferPos] = '\0';
+                processCommand(cmdBuffer);
+                cmdBufferPos = 0;
+            }
+        }
+        // Add character to buffer
+        else if (cmdBufferPos < CMD_BUFFER_SIZE - 1) {
+            cmdBuffer[cmdBufferPos++] = c;
+        }
+        // Buffer overflow - reset
+        else {
+            Serial.println("ERROR: Command too long");
+            cmdBufferPos = 0;
+        }
+    }
+}
