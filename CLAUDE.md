@@ -71,7 +71,7 @@ Two prototype configurations are being evaluated:
 - `firmware/src/storage.cpp` - NVS storage for calibration and settings
 - `firmware/src/serial_commands.cpp` - USB time setting commands
 - `firmware/src/ui_calibration.cpp` - E-paper calibration UI screens
-- `firmware/include/config.h` - Pin definitions, calibration constants, debug flags
+- `firmware/src/config.h` - Debug flags, power management, sensor thresholds, display config
 - `firmware/include/aquavate.h` - Version info and shared declarations
 - `firmware/platformio.ini` - Dual environment config (Adafruit Feather / SparkFun Qwiic)
 
