@@ -8,11 +8,56 @@
 
 // ==================== Debug Configuration ====================
 
-// Enable/disable debug output (set to 0 to disable all verbose output)
+// Debug levels (runtime control via serial commands '0'-'4', '9')
+// Level 0: All debug output OFF (quiet mode)
+// Level 1: Events (drink tracking, bottle refills, display updates)
+// Level 2: + Gestures (gesture detection, state changes, calibration)
+// Level 3: + Weight readings (load cell ADC values, water levels)
+// Level 4: + Accelerometer raw data (periodic accelerometer readings)
+// Level 9: All debug ON (all categories enabled, room for future expansion)
+
+// Default debug flags (can be overridden at runtime via serial commands)
 #define DEBUG_ENABLED                   1   // 0 = quiet mode, 1 = verbose debug output
 #define DEBUG_WATER_LEVEL               1   // 0 = disable water level messages
 #define DEBUG_ACCELEROMETER             1   // 0 = disable accelerometer debug output
 #define DEBUG_DISPLAY_UPDATES           1   // 0 = disable display update messages
+#define DEBUG_DRINK_TRACKING            1   // 0 = disable drink detection debug
+#define DEBUG_CALIBRATION               1   // 0 = disable calibration debug
+#define DEBUG_BLE                       0   // 0 = disable BLE debug (not yet implemented)
+
+// Runtime debug control - these extern declarations allow runtime debug control
+// Use these macros in your code instead of #if DEBUG_* for runtime control
+#ifndef CONFIG_H_GLOBALS_ONLY
+extern bool g_debug_enabled;
+extern bool g_debug_water_level;
+extern bool g_debug_accelerometer;
+extern bool g_debug_display;
+extern bool g_debug_drink_tracking;
+extern bool g_debug_calibration;
+extern bool g_debug_ble;
+
+// Helper macros for conditional debug output (runtime control)
+#define DEBUG_PRINT(category, ...) \
+    do { \
+        if (g_debug_enabled && category) { \
+            Serial.print(__VA_ARGS__); \
+        } \
+    } while(0)
+
+#define DEBUG_PRINTLN(category, ...) \
+    do { \
+        if (g_debug_enabled && category) { \
+            Serial.println(__VA_ARGS__); \
+        } \
+    } while(0)
+
+#define DEBUG_PRINTF(category, ...) \
+    do { \
+        if (g_debug_enabled && category) { \
+            Serial.printf(__VA_ARGS__); \
+        } \
+    } while(0)
+#endif
 
 // ==================== Power Management ====================
 

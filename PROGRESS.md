@@ -168,44 +168,41 @@ RESET_DAILY_DRINKS    - Reset daily counter to 0
 CLEAR_DRINKS          - Clear all drink records (WARNING: erases data)
 ```
 
-Active Debugging (2026-01-14):
+Progress - Day 5 Debug Level System (2026-01-14):
+- ✅ Implemented runtime debug level control via single-character serial commands
+- ✅ Created 6 debug levels for progressive verbosity:
+  - **0**: All debug OFF (quiet mode)
+  - **1**: Events only (drinks, refills, display updates)
+  - **2**: + Gestures (gesture detection, state changes, calibration)
+  - **3**: + Weight readings (load cell ADC, water levels)
+  - **4**: + Accelerometer (raw accelerometer data every second)
+  - **9**: All ON (all categories, reserved levels 5-8 for future expansion)
+- ✅ Replaced all compile-time `#if DEBUG_*` checks with runtime checks
+- ✅ Added global debug control variables in main.cpp:
+  - `g_debug_enabled`, `g_debug_water_level`, `g_debug_accelerometer`
+  - `g_debug_display`, `g_debug_drink_tracking`, `g_debug_calibration`, `g_debug_ble`
+- ✅ Updated main.cpp: Water level, display, and accelerometer debug output now runtime-controlled
+- ✅ Updated gestures.cpp: Gesture detection debug now uses `g_debug_calibration` (level 2+)
+- ✅ Helper macros added to config.h: `DEBUG_PRINT()`, `DEBUG_PRINTLN()`, `DEBUG_PRINTF()`
+- ✅ Single-character commands: Just type `0`-`4` or `9` in serial monitor (no enter needed)
+- ✅ Debug settings reset to config.h defaults on reboot (non-persistent by design)
+- ✅ Firmware compiles successfully (RAM: 6.9%, Flash: 35.5%)
 
-**Issue #1: Every-Other-Drink Detection**
-**Symptoms:**
-- First drink: Detected correctly, baseline updated
-- Second drink: Not detected (delta_ml calculation issue?)
-- Third drink: Detected correctly
-- Pattern repeats
+Debug Level System Files:
+- firmware/src/config.h lines 11-59 - Debug level documentation, helper macros, extern declarations
+- firmware/src/main.cpp lines 299-308 - Runtime debug control variables
+- firmware/src/serial_commands.cpp lines 398-486 - Debug level handler and command parser
+- firmware/src/gestures.cpp - All gesture debug output uses `g_debug_calibration`
 
-**Suspected Root Cause:**
-After a drink is detected, `last_recorded_adc` is updated (line 172 in drinks.cpp).
-On the next UPRIGHT_STABLE, the baseline might already reflect the new weight,
-resulting in delta_ml ≈ 0, so the next drink isn't detected until baseline drifts back.
-
-**Investigation Needed:**
-- Check if baseline update (line 213: drift compensation) is running too frequently
-- Verify baseline only updates when NOT in aggregation window AND no drink detected
-- Consider adding cooldown period after drink detection before baseline updates
-
----
-
-**Issue #2: Time/Date Display Incorrect**
-**Symptoms:**
-- Display showing: "Thursday 1pm"
-- Actual time: Wednesday 5am (2026-01-15 05:00)
-- Off by ~20 hours and wrong day of week
-
-**Context:**
-- Time was previously set via SET_TIME command
-- User about to reset time again using SET_TIME command
-- May be timezone offset issue or RTC drift
-- Need to verify formatTimeForDisplay() logic and timezone handling
-
-**Investigation Needed:**
-- Check if timezone offset is being applied correctly
-- Verify ESP32 internal RTC is maintaining accurate time
-- Review formatTimeForDisplay() implementation
-- Confirm SET_TIME command sets both UTC and timezone offset correctly
+Usage Examples:
+```
+0  - Turn off all debug output (quiet mode)
+1  - Show only drink events and display updates
+2  - Add gesture detection messages (UPRIGHT, UPRIGHT_STABLE, conditions)
+3  - Add weight readings (Water level: 450ml)
+4  - Add raw accelerometer data (Accel X: 0.02g Y: -0.01g Z: 0.98g)
+9  - Enable everything including future BLE debug
+```
 
 Next Steps:
 1. Fix every-other-drink detection issue

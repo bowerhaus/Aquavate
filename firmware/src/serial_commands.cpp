@@ -22,6 +22,15 @@ static OnTimeSetCallback g_onTimeSetCallback = nullptr;
 // External variables (managed in main.cpp)
 extern int8_t g_timezone_offset;
 
+// Runtime debug control variables (managed in main.cpp)
+extern bool g_debug_enabled;
+extern bool g_debug_water_level;
+extern bool g_debug_accelerometer;
+extern bool g_debug_display;
+extern bool g_debug_drink_tracking;
+extern bool g_debug_calibration;
+extern bool g_debug_ble;
+
 // Initialize serial command handler
 void serialCommandsInit() {
     cmdBufferPos = 0;
@@ -395,6 +404,87 @@ static void handleClearDrinks() {
     Serial.println("OK: All drink records cleared");
 }
 
+// Handle debug level change (single character '0'-'4')
+static void handleDebugLevel(char level) {
+    switch (level) {
+        case '0':  // Level 0: All OFF
+            g_debug_enabled = false;
+            g_debug_water_level = false;
+            g_debug_accelerometer = false;
+            g_debug_display = false;
+            g_debug_drink_tracking = false;
+            g_debug_calibration = false;
+            g_debug_ble = false;
+            Serial.println("Debug Level 0: All debug output OFF");
+            break;
+
+        case '1':  // Level 1: Events only (no gesture details)
+            g_debug_enabled = true;
+            g_debug_water_level = false;
+            g_debug_accelerometer = false;
+            g_debug_display = true;
+            g_debug_drink_tracking = true;
+            g_debug_calibration = false;  // Gestures are level 2
+            g_debug_ble = false;
+            Serial.println("Debug Level 1: Events (drinks, refills, display)");
+            break;
+
+        case '2':  // Level 2: + Gestures (uses g_debug_calibration for gesture output)
+            g_debug_enabled = true;
+            g_debug_water_level = false;
+            g_debug_accelerometer = false;
+            g_debug_display = true;
+            g_debug_drink_tracking = true;
+            g_debug_calibration = true;  // Used for gesture detection output
+            g_debug_ble = false;
+            Serial.println("Debug Level 2: + Gestures (gesture detection, state changes)");
+            break;
+
+        case '3':  // Level 3: + Weight readings
+            g_debug_enabled = true;
+            g_debug_water_level = true;
+            g_debug_accelerometer = false;
+            g_debug_display = true;
+            g_debug_drink_tracking = true;
+            g_debug_calibration = true;
+            g_debug_ble = false;
+            Serial.println("Debug Level 3: + Weight (load cell ADC, water levels)");
+            break;
+
+        case '4':  // Level 4: + Accelerometer
+            g_debug_enabled = true;
+            g_debug_water_level = true;
+            g_debug_accelerometer = true;
+            g_debug_display = true;
+            g_debug_drink_tracking = true;
+            g_debug_calibration = true;
+            g_debug_ble = false;
+            Serial.println("Debug Level 4: + Accelerometer (raw readings)");
+            break;
+
+        case '9':  // Level 9: All ON (future-proof)
+            g_debug_enabled = true;
+            g_debug_water_level = true;
+            g_debug_accelerometer = true;
+            g_debug_display = true;
+            g_debug_drink_tracking = true;
+            g_debug_calibration = true;
+            g_debug_ble = true;
+            Serial.println("Debug Level 9: All debug ON (all categories)");
+            break;
+
+        default:
+            Serial.println("ERROR: Invalid debug level (use 0-4 or 9)");
+            Serial.println("  0 = All OFF");
+            Serial.println("  1 = Events (drinks, refills, display)");
+            Serial.println("  2 = + Gestures (gesture detection)");
+            Serial.println("  3 = + Weight readings (load cell)");
+            Serial.println("  4 = + Accelerometer (raw data)");
+            Serial.println("  9 = All ON");
+            break;
+    }
+}
+
 // Process a complete command
 static void processCommand(char* cmd) {
     // Trim leading whitespace
@@ -402,6 +492,12 @@ static void processCommand(char* cmd) {
 
     // Check for empty command
     if (*cmd == '\0') return;
+
+    // Check for single-character debug level commands ('0'-'4', '9')
+    if (strlen(cmd) == 1 && ((cmd[0] >= '0' && cmd[0] <= '4') || cmd[0] == '9')) {
+        handleDebugLevel(cmd[0]);
+        return;
+    }
 
     // Find command and arguments
     char* args = strchr(cmd, ' ');
@@ -435,7 +531,11 @@ static void processCommand(char* cmd) {
         Serial.print("ERROR: Unknown command: ");
         Serial.println(cmd);
         Serial.println("\nAvailable commands:");
-        Serial.println("Time/Timezone:");
+        Serial.println("Debug Control:");
+        Serial.println("  0-4, 9                - Set debug level (single character)");
+        Serial.println("                          0=OFF, 1=Events, 2=+Gestures,");
+        Serial.println("                          3=+Weight, 4=+Accel, 9=All ON");
+        Serial.println("\nTime/Timezone:");
         Serial.println("  SET_TIME YYYY-MM-DD HH:MM:SS [timezone]");
         Serial.println("  GET_TIME");
         Serial.println("  SET_TIMEZONE offset");

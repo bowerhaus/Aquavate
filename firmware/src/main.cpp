@@ -296,6 +296,17 @@ float g_last_displayed_water_ml = -1.0f;  // -1 means not yet displayed
 int8_t g_timezone_offset = 0;  // UTC offset in hours
 bool g_time_valid = false;     // Has time been set?
 
+// Runtime debug control (non-persistent, reset on boot)
+// Global enable flag
+bool g_debug_enabled = DEBUG_ENABLED;
+// Individual category flags
+bool g_debug_water_level = DEBUG_WATER_LEVEL;
+bool g_debug_accelerometer = DEBUG_ACCELEROMETER;
+bool g_debug_display = DEBUG_DISPLAY_UPDATES;
+bool g_debug_drink_tracking = DEBUG_DRINK_TRACKING;
+bool g_debug_calibration = DEBUG_CALIBRATION;
+bool g_debug_ble = DEBUG_BLE;
+
 #if defined(BOARD_ADAFRUIT_FEATHER)
 #include "Adafruit_ThinkInk.h"
 
@@ -999,14 +1010,12 @@ void loop() {
         }
 
         // If calibrated, show water level
-        #if DEBUG_WATER_LEVEL
-        if (g_calibrated && nauReady) {
+        if (g_debug_enabled && g_debug_water_level && g_calibrated && nauReady) {
             float water_ml = calibrationGetWaterWeight(current_adc, g_calibration);
             Serial.print("Water level: ");
             Serial.print(water_ml);
             Serial.println(" ml");
         }
-        #endif
     }
 
     // If in calibration mode, update state machine
@@ -1103,22 +1112,22 @@ void loop() {
                 if (g_last_displayed_water_ml < 0 ||
                     fabs(display_water_ml - g_last_displayed_water_ml) >= DISPLAY_UPDATE_THRESHOLD_ML) {
 
-                    #if DEBUG_DISPLAY_UPDATES
-                    Serial.print("Main: Water level changed from ");
-                    Serial.print(g_last_displayed_water_ml, 1);
-                    Serial.print("ml to ");
-                    Serial.print(display_water_ml, 1);
-                    Serial.println("ml - refreshing display");
-                    #endif
+                    if (g_debug_enabled && g_debug_display) {
+                        Serial.print("Main: Water level changed from ");
+                        Serial.print(g_last_displayed_water_ml, 1);
+                        Serial.print("ml to ");
+                        Serial.print(display_water_ml, 1);
+                        Serial.println("ml - refreshing display");
+                    }
 
                     drawMainScreen();
                     g_last_displayed_water_ml = display_water_ml;
                 } else {
-                    #if DEBUG_DISPLAY_UPDATES
-                    Serial.print("Main: Water level unchanged (");
-                    Serial.print(display_water_ml, 1);
-                    Serial.println("ml) - no display refresh");
-                    #endif
+                    if (g_debug_enabled && g_debug_display) {
+                        Serial.print("Main: Water level unchanged (");
+                        Serial.print(display_water_ml, 1);
+                        Serial.println("ml) - no display refresh");
+                    }
                 }
             }
 #endif
@@ -1126,37 +1135,37 @@ void loop() {
     }
 
     // Debug output (only print periodically to reduce serial spam)
-    #if DEBUG_ACCELEROMETER
-    static unsigned long last_debug_print = 0;
-    if (lisReady && (millis() - last_debug_print >= 1000)) {
-        last_debug_print = millis();
+    if (g_debug_enabled && g_debug_accelerometer) {
+        static unsigned long last_debug_print = 0;
+        if (lisReady && (millis() - last_debug_print >= 1000)) {
+            last_debug_print = millis();
 
-        float x, y, z;
-        gesturesGetAccel(x, y, z);
-        Serial.print("Accel X: ");
-        Serial.print(x, 2);
-        Serial.print("g  Y: ");
-        Serial.print(y, 2);
-        Serial.print("g  Z: ");
-        Serial.print(z, 2);
-        Serial.print("g  Gesture: ");
+            float x, y, z;
+            gesturesGetAccel(x, y, z);
+            Serial.print("Accel X: ");
+            Serial.print(x, 2);
+            Serial.print("g  Y: ");
+            Serial.print(y, 2);
+            Serial.print("g  Z: ");
+            Serial.print(z, 2);
+            Serial.print("g  Gesture: ");
 
-        switch (gesture) {
-            case GESTURE_INVERTED_HOLD: Serial.print("INVERTED_HOLD"); break;
-            case GESTURE_UPRIGHT_STABLE: Serial.print("UPRIGHT_STABLE"); break;
-            case GESTURE_SIDEWAYS_TILT: Serial.print("SIDEWAYS_TILT"); break;
-            default: Serial.print("NONE"); break;
+            switch (gesture) {
+                case GESTURE_INVERTED_HOLD: Serial.print("INVERTED_HOLD"); break;
+                case GESTURE_UPRIGHT_STABLE: Serial.print("UPRIGHT_STABLE"); break;
+                case GESTURE_SIDEWAYS_TILT: Serial.print("SIDEWAYS_TILT"); break;
+                default: Serial.print("NONE"); break;
+            }
+
+            Serial.print("  Cal State: ");
+            Serial.print(calibrationGetStateName(cal_state));
+
+            unsigned long remaining = (AWAKE_DURATION_MS - (millis() - wakeTime)) / 1000;
+            Serial.print("  (sleep in ");
+            Serial.print(remaining);
+            Serial.println("s)");
         }
-
-        Serial.print("  Cal State: ");
-        Serial.print(calibrationGetStateName(cal_state));
-
-        unsigned long remaining = (AWAKE_DURATION_MS - (millis() - wakeTime)) / 1000;
-        Serial.print("  (sleep in ");
-        Serial.print(remaining);
-        Serial.println("s)");
     }
-    #endif
 
     // Check if it's time to sleep
     // DISABLED FOR CALIBRATION TESTING

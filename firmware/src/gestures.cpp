@@ -7,6 +7,11 @@
 #include "config.h"
 #include <math.h>
 
+// Runtime debug control (managed in main.cpp)
+extern bool g_debug_enabled;
+extern bool g_debug_accelerometer;
+extern bool g_debug_calibration;
+
 // Static variables
 static Adafruit_LIS3DH* g_lis = nullptr;
 static GestureConfig g_config;
@@ -183,35 +188,35 @@ GestureType gesturesUpdate(float weight_ml) {
     bool stable = gesturesIsStable();
     float variance = gesturesGetVariance();
 
-    #if DEBUG_ACCELEROMETER
-    // Debug: show why UPRIGHT_STABLE is or isn't detected
-    static unsigned long last_debug = 0;
-    if (millis() - last_debug >= 1000) {
-        last_debug = millis();
-        if (z_ok && x_ok && y_ok && weight_ok) {
-            if (!stable) {
-                Serial.print("Gestures: Upright conditions met but NOT STABLE - variance=");
-                Serial.print(variance, 4);
-                Serial.print(" (need <");
-                Serial.print(g_config.stability_variance, 4);
-                Serial.println(")");
+    if (g_debug_enabled && g_debug_calibration) {
+        // Debug: show why UPRIGHT_STABLE is or isn't detected
+        static unsigned long last_debug = 0;
+        if (millis() - last_debug >= 1000) {
+            last_debug = millis();
+            if (z_ok && x_ok && y_ok && weight_ok) {
+                if (!stable) {
+                    Serial.print("Gestures: Upright conditions met but NOT STABLE - variance=");
+                    Serial.print(variance, 4);
+                    Serial.print(" (need <");
+                    Serial.print(g_config.stability_variance, 4);
+                    Serial.println(")");
+                } else {
+                    Serial.print("Gestures: UPRIGHT_STABLE detected - variance=");
+                    Serial.print(variance, 4);
+                    Serial.println(" (stable)");
+                }
             } else {
-                Serial.print("Gestures: UPRIGHT_STABLE detected - variance=");
-                Serial.print(variance, 4);
-                Serial.println(" (stable)");
+                Serial.print("Gestures: Conditions check - Z:");
+                Serial.print(z_ok ? "✓" : "✗");
+                Serial.print(" X:");
+                Serial.print(x_ok ? "✓" : "✗");
+                Serial.print(" Y:");
+                Serial.print(y_ok ? "✓" : "✗");
+                Serial.print(" Weight:");
+                Serial.println(weight_ok ? "✓" : "✗");
             }
-        } else {
-            Serial.print("Gestures: Conditions check - Z:");
-            Serial.print(z_ok ? "✓" : "✗");
-            Serial.print(" X:");
-            Serial.print(x_ok ? "✓" : "✗");
-            Serial.print(" Y:");
-            Serial.print(y_ok ? "✓" : "✗");
-            Serial.print(" Weight:");
-            Serial.println(weight_ok ? "✓" : "✗");
         }
     }
-    #endif
 
     // Check if bottle is upright (meets all conditions)
     if (z_ok && x_ok && y_ok && weight_ok && stable) {
@@ -220,9 +225,9 @@ GestureType gesturesUpdate(float weight_ml) {
             g_upright_active = true;
             g_upright_start_time = millis();
             g_last_stable_weight = weight_ml;
-            #if DEBUG_ACCELEROMETER
-            Serial.println("Gestures: UPRIGHT detected - tracking weight stability");
-            #endif
+            if (g_debug_enabled && g_debug_calibration) {
+                Serial.println("Gestures: UPRIGHT detected - tracking weight stability");
+            }
         }
 
         // Check if weight is stable (not fluctuating)
@@ -242,21 +247,21 @@ GestureType gesturesUpdate(float weight_ml) {
         // Check if held stable long enough
         uint32_t upright_duration = millis() - g_upright_start_time;
 
-        #if DEBUG_ACCELEROMETER
-        static unsigned long last_weight_debug = 0;
-        if (millis() - last_weight_debug >= 1000) {
-            last_weight_debug = millis();
-            if (!weight_stable) {
-                Serial.print("Gestures: UPRIGHT but weight NOT stable - delta=");
-                Serial.print(weight_delta, 1);
-                Serial.println("ml (need <6ml)");
-            } else if (upright_duration < 2000) {
-                Serial.print("Gestures: UPRIGHT and weight stable - duration=");
-                Serial.print(upright_duration);
-                Serial.println("ms (need 2000ms)");
+        if (g_debug_enabled && g_debug_calibration) {
+            static unsigned long last_weight_debug = 0;
+            if (millis() - last_weight_debug >= 1000) {
+                last_weight_debug = millis();
+                if (!weight_stable) {
+                    Serial.print("Gestures: UPRIGHT but weight NOT stable - delta=");
+                    Serial.print(weight_delta, 1);
+                    Serial.println("ml (need <6ml)");
+                } else if (upright_duration < 2000) {
+                    Serial.print("Gestures: UPRIGHT and weight stable - duration=");
+                    Serial.print(upright_duration);
+                    Serial.println("ms (need 2000ms)");
+                }
             }
         }
-        #endif
 
         // Return UPRIGHT_STABLE if weight has been stable for 2+ seconds
         if (weight_stable && upright_duration >= 2000) {
@@ -268,9 +273,9 @@ GestureType gesturesUpdate(float weight_ml) {
     } else {
         // Reset upright tracking if conditions no longer met
         if (g_upright_active) {
-            #if DEBUG_ACCELEROMETER
-            Serial.println("Gestures: UPRIGHT ended");
-            #endif
+            if (g_debug_enabled && g_debug_calibration) {
+                Serial.println("Gestures: UPRIGHT ended");
+            }
         }
         g_upright_active = false;
         g_upright_start_time = 0;
