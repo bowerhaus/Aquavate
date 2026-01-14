@@ -121,9 +121,9 @@ static const char* getTimezoneName(int offset) {
     }
 }
 
-// Handle SET_TIME command
-// Format: SET_TIME 2026-01-13 14:30:00 -5
-static void handleSetTime(char* args) {
+// Handle SET_DATETIME command
+// Format: SET_DATETIME 2026-01-13 14:30:00 -5
+static void handleSetDateTime(char* args) {
     // Parse date and time
     int year, month, day, hour, minute, second;
     int timezone_offset = g_timezone_offset; // Default to current offset
@@ -134,8 +134,8 @@ static void handleSetTime(char* args) {
 
     if (parsed < 6) {
         Serial.println("ERROR: Invalid format");
-        Serial.println("Usage: SET_TIME YYYY-MM-DD HH:MM:SS [timezone_offset]");
-        Serial.println("Example: SET_TIME 2026-01-13 14:30:00 -5");
+        Serial.println("Usage: SET_DATETIME YYYY-MM-DD HH:MM:SS [timezone_offset]");
+        Serial.println("Example: SET_DATETIME 2026-01-13 14:30:00 -5");
         return;
     }
 
@@ -188,6 +188,9 @@ static void handleSetTime(char* args) {
     // Update global timezone offset
     g_timezone_offset = timezone_offset;
 
+    // Save current timestamp to NVS for time persistence
+    storageSaveLastBootTime(timestamp);
+
     // Format success message with local time
     char timeStr[64];
     const char* tzName = getTimezoneName(timezone_offset);
@@ -224,8 +227,8 @@ static void handleGetTime() {
     if (!time_valid) {
         Serial.println("WARNING: Time not set!");
         Serial.println("Current RTC: 1970-01-01 00:00:00 (epoch)");
-        Serial.println("Use SET_TIME command to set time");
-        Serial.println("Example: SET_TIME 2026-01-13 14:30:00 -5");
+        Serial.println("Use SET_DATETIME command to set time");
+        Serial.println("Example: SET_DATETIME 2026-01-13 14:30:00 -5");
         return;
     }
 
@@ -258,12 +261,169 @@ static void handleGetTime() {
     Serial.println("RTC drift: ~3-5 minutes/day (resync recommended weekly)");
 }
 
-// Handle SET_TIMEZONE command
+// Handle SET_DATE command
+// Format: SET_DATE 2026-01-13
+static void handleSetDate(char* args) {
+    int year, month, day;
+
+    // Parse date
+    int parsed = sscanf(args, "%d-%d-%d", &year, &month, &day);
+
+    if (parsed != 3) {
+        Serial.println("ERROR: Invalid format");
+        Serial.println("Usage: SET_DATE YYYY-MM-DD");
+        Serial.println("Example: SET_DATE 2026-01-13");
+        return;
+    }
+
+    // Validate date
+    if (!validateDate(year, month, day)) return;
+
+    // Get current time from RTC
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    time_t now = tv.tv_sec;
+
+    // Convert current time to struct tm with timezone offset
+    now += g_timezone_offset * 3600;
+    struct tm current_time;
+    gmtime_r(&now, &current_time);
+
+    // Update only the date fields, keep existing time
+    current_time.tm_year = year - 1900;
+    current_time.tm_mon = month - 1;
+    current_time.tm_mday = day;
+
+    // Convert back to Unix timestamp
+    time_t new_timestamp = mktime(&current_time);
+    if (new_timestamp == -1) {
+        Serial.println("ERROR: Failed to convert time");
+        return;
+    }
+
+    // Adjust for timezone offset
+    new_timestamp -= g_timezone_offset * 3600;
+
+    // Set ESP32 internal RTC
+    tv.tv_sec = new_timestamp;
+    tv.tv_usec = 0;
+
+    if (settimeofday(&tv, NULL) != 0) {
+        Serial.println("ERROR: Failed to set RTC");
+        return;
+    }
+
+    // Save current timestamp to NVS for time persistence
+    storageSaveLastBootTime(new_timestamp);
+
+    // Save time_valid flag if not already set
+    if (!storageLoadTimeValid()) {
+        if (!storageSaveTimeValid(true)) {
+            Serial.println("WARNING: Failed to save time_valid flag to NVS");
+        }
+
+        // Initialize drink tracking if time just became valid
+        extern bool g_time_valid;
+        g_time_valid = true;
+        drinksInit();
+
+        // Call callback if registered
+        if (g_onTimeSetCallback != nullptr) {
+            g_onTimeSetCallback();
+        }
+    }
+
+    Serial.printf("Date set: %04d-%02d-%02d (time preserved: %02d:%02d:%02d)\n",
+                 year, month, day,
+                 current_time.tm_hour, current_time.tm_min, current_time.tm_sec);
+}
+
+// Handle SET_TIME command
+// Format: SET_TIME HH[:MM[:SS]]
+static void handleSetTime(char* args) {
+    int hour, minute = 0, second = 0;
+
+    // Parse time - allow HH, HH:MM, or HH:MM:SS
+    int parsed = sscanf(args, "%d:%d:%d", &hour, &minute, &second);
+
+    if (parsed < 1) {
+        Serial.println("ERROR: Invalid format");
+        Serial.println("Usage: SET_TIME HH[:MM[:SS]]");
+        Serial.println("Examples:");
+        Serial.println("  SET_TIME 14          → 14:00:00");
+        Serial.println("  SET_TIME 14:30       → 14:30:00");
+        Serial.println("  SET_TIME 14:30:45    → 14:30:45");
+        return;
+    }
+
+    // Validate time
+    if (!validateTime(hour, minute, second)) return;
+
+    // Get current time from RTC
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    time_t now = tv.tv_sec;
+
+    // Convert current time to struct tm with timezone offset
+    now += g_timezone_offset * 3600;
+    struct tm current_time;
+    gmtime_r(&now, &current_time);
+
+    // Update only the time fields, keep existing date
+    current_time.tm_hour = hour;
+    current_time.tm_min = minute;
+    current_time.tm_sec = second;
+
+    // Convert back to Unix timestamp
+    time_t new_timestamp = mktime(&current_time);
+    if (new_timestamp == -1) {
+        Serial.println("ERROR: Failed to convert time");
+        return;
+    }
+
+    // Adjust for timezone offset
+    new_timestamp -= g_timezone_offset * 3600;
+
+    // Set ESP32 internal RTC
+    tv.tv_sec = new_timestamp;
+    tv.tv_usec = 0;
+
+    if (settimeofday(&tv, NULL) != 0) {
+        Serial.println("ERROR: Failed to set RTC");
+        return;
+    }
+
+    // Save current timestamp to NVS for time persistence
+    storageSaveLastBootTime(new_timestamp);
+
+    // Save time_valid flag if not already set
+    if (!storageLoadTimeValid()) {
+        if (!storageSaveTimeValid(true)) {
+            Serial.println("WARNING: Failed to save time_valid flag to NVS");
+        }
+
+        // Initialize drink tracking if time just became valid
+        extern bool g_time_valid;
+        g_time_valid = true;
+        drinksInit();
+
+        // Call callback if registered
+        if (g_onTimeSetCallback != nullptr) {
+            g_onTimeSetCallback();
+        }
+    }
+
+    Serial.printf("Time set: %02d:%02d:%02d (date preserved: %04d-%02d-%02d)\n",
+                 hour, minute, second,
+                 current_time.tm_year + 1900, current_time.tm_mon + 1, current_time.tm_mday);
+}
+
+// Handle SET_TIMEZONE command (and SET_TZ alias)
 static void handleSetTimezone(char* args) {
     int offset;
     if (!parseInt(args, offset)) {
         Serial.println("ERROR: Invalid timezone offset");
-        Serial.println("Usage: SET_TIMEZONE offset");
+        Serial.println("Usage: SET_TIMEZONE offset  (or SET_TZ offset)");
         Serial.println("Example: SET_TIMEZONE -8");
         return;
     }
@@ -510,12 +670,21 @@ static void processCommand(char* cmd) {
         args = cmd + strlen(cmd);  // Point to empty string
     }
 
+    // Convert command to uppercase for case-insensitive comparison
+    for (char* p = cmd; *p; p++) {
+        *p = toupper((unsigned char)*p);
+    }
+
     // Process commands
-    if (strcmp(cmd, "SET_TIME") == 0) {
+    if (strcmp(cmd, "SET_DATETIME") == 0) {
+        handleSetDateTime(args);
+    } else if (strcmp(cmd, "SET_DATE") == 0) {
+        handleSetDate(args);
+    } else if (strcmp(cmd, "SET_TIME") == 0) {
         handleSetTime(args);
     } else if (strcmp(cmd, "GET_TIME") == 0) {
         handleGetTime();
-    } else if (strcmp(cmd, "SET_TIMEZONE") == 0) {
+    } else if (strcmp(cmd, "SET_TIMEZONE") == 0 || strcmp(cmd, "SET_TZ") == 0) {
         handleSetTimezone(args);
     } else if (strcmp(cmd, "GET_DAILY_STATE") == 0) {
         handleGetDailyState();
@@ -536,9 +705,11 @@ static void processCommand(char* cmd) {
         Serial.println("                          0=OFF, 1=Events, 2=+Gestures,");
         Serial.println("                          3=+Weight, 4=+Accel, 9=All ON");
         Serial.println("\nTime/Timezone:");
-        Serial.println("  SET_TIME YYYY-MM-DD HH:MM:SS [timezone]");
-        Serial.println("  GET_TIME");
-        Serial.println("  SET_TIMEZONE offset");
+        Serial.println("  SET_DATETIME YYYY-MM-DD HH:MM:SS [tz]    - Set date, time, and timezone");
+        Serial.println("  SET_DATE YYYY-MM-DD                       - Set date only");
+        Serial.println("  SET_TIME HH[:MM[:SS]]                     - Set time (defaults: MM=00, SS=00)");
+        Serial.println("  SET_TZ offset                             - Set timezone (alias: SET_TIMEZONE)");
+        Serial.println("  GET_TIME                                  - Show current time");
         Serial.println("\nDrink Tracking:");
         Serial.println("  GET_DAILY_STATE       - Show current daily state");
         Serial.println("  GET_LAST_DRINK        - Show most recent drink record");

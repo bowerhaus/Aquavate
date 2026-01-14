@@ -295,6 +295,7 @@ float g_last_displayed_water_ml = -1.0f;  // -1 means not yet displayed
 // Time state
 int8_t g_timezone_offset = 0;  // UTC offset in hours
 bool g_time_valid = false;     // Has time been set?
+bool g_rtc_ds3231_present = false;  // DS3231 RTC detected (future)
 
 // Runtime debug control (non-persistent, reset on boot)
 // Global enable flag
@@ -896,6 +897,17 @@ void setup() {
             Serial.print("  Timezone offset: ");
             Serial.println(g_timezone_offset);
 
+            // Restore time from last boot (approximation until DS3231 added)
+            uint32_t last_boot_time = storageLoadLastBootTime();
+            if (last_boot_time > 0) {
+                struct timeval tv;
+                tv.tv_sec = last_boot_time;
+                tv.tv_usec = 0;
+                settimeofday(&tv, NULL);
+                Serial.println("  RTC restored from last boot timestamp");
+                Serial.println("  WARNING: Time may be inaccurate (DS3231 RTC recommended)");
+            }
+
             // Show current time
             char time_str[64];
             formatTimeForDisplay(time_str, sizeof(time_str));
@@ -903,8 +915,8 @@ void setup() {
             Serial.println(time_str);
         } else {
             Serial.println("WARNING: Time not set!");
-            Serial.println("Use SET_TIME command to set time");
-            Serial.println("Example: SET_TIME 2026-01-13 14:30:00 -5");
+            Serial.println("Use SET_DATETIME command to set time");
+            Serial.println("Example: SET_DATETIME 2026-01-13 14:30:00 -5");
         }
     } else {
         Serial.println("Storage initialization failed");
@@ -1164,6 +1176,28 @@ void loop() {
             Serial.print("  (sleep in ");
             Serial.print(remaining);
             Serial.println("s)");
+        }
+    }
+
+    // Periodically save current timestamp to NVS (for time persistence across power cycles)
+    // Only save if DS3231 RTC is not present (when DS3231 is added, this is unnecessary)
+    // Save every hour on the hour to minimize NVS wear
+    // With hourly interval: 24 writes/day → ~11 years flash lifespan
+    if (g_time_valid && !g_rtc_ds3231_present) {
+        static unsigned long last_time_save = 0;
+        static int last_saved_hour = -1;
+
+        struct timeval tv;
+        gettimeofday(&tv, NULL);
+        time_t now = tv.tv_sec + (g_timezone_offset * 3600);
+        struct tm timeinfo;
+        gmtime_r(&now, &timeinfo);
+
+        // Save on hour boundaries (e.g., 14:00, 15:00, etc.)
+        if (timeinfo.tm_hour != last_saved_hour && timeinfo.tm_min == 0) {
+            storageSaveLastBootTime(tv.tv_sec);
+            last_saved_hour = timeinfo.tm_hour;
+            Serial.println("Time: Hourly timestamp saved to NVS");
         }
     }
 

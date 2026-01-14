@@ -73,14 +73,30 @@ Pin definitions are automatically selected based on these flags.
 - ✅ Two-point calibration system (empty + full bottle)
 - ✅ Gesture-based calibration (inverted hold for 5s triggers calibration)
 - ✅ Real-time water level measurement and display
-- ✅ USB time setting via serial commands (SET_TIME, GET_TIME)
+- ✅ Daily water intake tracking with drink detection (≥30ml threshold)
+- ✅ Refill detection (≥100ml threshold) with baseline updates
+- ✅ 5-minute drink aggregation window for multiple sips
+- ✅ Daily reset at 4am boundary with 20-hour fallback logic
+- ✅ Drink record storage in NVS (200-record circular buffer)
+- ✅ Dual visualization modes (human figure or tumbler grid)
+- ✅ USB time setting via granular serial commands:
+  - SET_DATETIME (combined date+time+timezone)
+  - SET_DATE (date only)
+  - SET_TIME (time only with flexible HH[:MM[:SS]] format)
+  - SET_TZ (timezone offset)
+  - GET_TIME (display current time)
+- ✅ Case-insensitive command parsing
 - ✅ Timezone support with NVS persistence
-- ✅ ESP32 internal RTC (no external RTC chip needed)
+- ✅ ESP32 internal RTC with smart time persistence:
+  - Saves on drink/refill events (opportunistic)
+  - Saves hourly on the hour (periodic fallback)
+  - Restores from NVS on boot
+  - Only saves when DS3231 RTC not present (future-proof)
+- ✅ Runtime debug level control (0-4, 9) via single-character commands
 
 ### Planned
 - 📋 BLE communication with iOS app
-- 📋 Drink history storage in NVS (7-day buffer)
-- 📋 Daily drink tracking and summaries
+- 📋 Drink history sync protocol
 - 📋 Empty gesture detection (invert + shake)
 
 ## Documentation
@@ -98,9 +114,9 @@ Pin definitions are automatically selected based on these flags.
 
 ## Current Status
 
-**Branch:** `usb-time-setting`
-**Phase:** Standalone device features complete
-**Status:** Ready to merge - calibration, water tracking, and time setting fully working
+**Branch:** `daily-water-intake-tracking`
+**Phase:** Phase 2 complete - Daily water intake tracking fully implemented
+**Status:** All standalone features working - Ready for BLE integration
 
 See [PROGRESS.md](PROGRESS.md) for detailed status and next steps.
 

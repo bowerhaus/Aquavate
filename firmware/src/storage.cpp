@@ -19,6 +19,7 @@ static const char* KEY_TIMESTAMP = "cal_timestamp";
 static const char* KEY_VALID = "cal_valid";
 static const char* KEY_TIMEZONE = "timezone";
 static const char* KEY_TIME_VALID = "time_valid";
+static const char* KEY_LAST_BOOT_TIME = "last_boot_time";
 
 bool storageInit() {
     if (g_initialized) {
@@ -178,4 +179,28 @@ bool storageLoadTimeValid() {
     Serial.print("Storage: Loaded time_valid = ");
     Serial.println(valid ? "true" : "false");
     return valid;
+}
+
+bool storageSaveLastBootTime(uint32_t timestamp) {
+    if (!g_initialized) {
+        Serial.println("Storage: Not initialized");
+        return false;
+    }
+
+    g_preferences.putUInt(KEY_LAST_BOOT_TIME, timestamp);
+    Serial.print("Storage: Saved last_boot_time = ");
+    Serial.println(timestamp);
+    return true;
+}
+
+uint32_t storageLoadLastBootTime() {
+    if (!g_initialized) {
+        Serial.println("Storage: Not initialized, using default last_boot_time 0");
+        return 0;
+    }
+
+    uint32_t timestamp = g_preferences.getUInt(KEY_LAST_BOOT_TIME, 0);
+    Serial.print("Storage: Loaded last_boot_time = ");
+    Serial.println(timestamp);
+    return timestamp;
 }

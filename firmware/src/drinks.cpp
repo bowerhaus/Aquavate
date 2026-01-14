@@ -11,6 +11,7 @@
 // External variables from main.cpp
 extern int8_t g_timezone_offset;  // Timezone offset in hours
 extern bool g_time_valid;         // True if time has been set
+extern bool g_rtc_ds3231_present; // DS3231 RTC detected
 
 // Static state for drink detection
 static DailyState g_daily_state;
@@ -22,6 +23,18 @@ uint32_t getCurrentUnixTime() {
     gettimeofday(&tv, NULL);
     // Apply timezone offset (convert hours to seconds)
     return tv.tv_sec + (g_timezone_offset * 3600);
+}
+
+// Helper: Save timestamp to NVS on drink/refill events (for time persistence)
+// Only saves if DS3231 RTC is not present
+static void saveTimestampOnEvent(const char* event_type) {
+    if (!g_rtc_ds3231_present) {
+        struct timeval tv;
+        gettimeofday(&tv, NULL);
+        storageSaveLastBootTime(tv.tv_sec);
+        Serial.print("Time: Timestamp saved to NVS on ");
+        Serial.println(event_type);
+    }
 }
 
 // Helper: Check if daily counter should reset
@@ -196,6 +209,9 @@ void drinksUpdate(int32_t current_adc, const CalibrationData& cal) {
 
         storageSaveDailyState(g_daily_state);
 
+        // Save timestamp to NVS on drink event (for time persistence)
+        saveTimestampOnEvent("drink");
+
         Serial.printf("Daily total: %dml (%d drinks)\n",
                      g_daily_state.daily_total_ml,
                      g_daily_state.drink_count_today);
@@ -222,6 +238,9 @@ void drinksUpdate(int32_t current_adc, const CalibrationData& cal) {
         g_daily_state.last_recorded_adc = current_adc;
 
         storageSaveDailyState(g_daily_state);
+
+        // Save timestamp to NVS on refill event (for time persistence)
+        saveTimestampOnEvent("refill");
 
         Serial.println("Daily total unchanged (refill)");
     }

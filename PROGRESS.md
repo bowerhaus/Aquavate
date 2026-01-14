@@ -1,21 +1,24 @@
 # Aquavate - Active Development Progress
 
-**Last Updated:** 2026-01-14 (Minimal Bug Fixes - In Progress)
+**Last Updated:** 2026-01-14 (Daily Water Intake Tracking - Bug Fixes Complete)
 
 ---
 
 ## Current Branch: `daily-water-intake-tracking`
 
-**Status:** Implementing minimal bug fixes (FSM-free approach)
+**Status:** Phase 2 complete - Ready for BLE integration
 
 All standalone device features complete:
 - Two-point calibration system (empty + full 830ml bottle)
 - Gesture-based calibration trigger (inverted hold for 5s)
 - Real-time water level measurement and display (±10-15ml accuracy)
-- USB time configuration via serial commands (SET_TIME, GET_TIME, SET_TIMEZONE)
+- USB time configuration via serial commands (SET_DATETIME, SET_DATE, SET_TIME, SET_TZ, GET_TIME)
+- Case-insensitive command parsing
 - Smart e-paper display refresh (only updates when water level changes ≥5ml)
-- NVS storage for calibration data, timezone, and time_valid flag
-- ESP32 internal RTC (no external DS3231 needed)
+- NVS storage for calibration data, timezone, time_valid flag, and time persistence
+- ESP32 internal RTC with NVS-based time persistence (event-based + hourly saves)
+- Daily water intake tracking with 5-minute drink aggregation
+- Daily reset at 4am boundary with fallback logic
 
 Hardware testing complete. Documentation updated. Code refactored.
 
@@ -161,11 +164,27 @@ Gesture Architecture:
 
 Serial Commands Available:
 ```
-GET_DAILY_STATE       - Show current daily state
-GET_LAST_DRINK        - Show most recent drink record
-DUMP_DRINKS           - Display all drink records
-RESET_DAILY_DRINKS    - Reset daily counter to 0
-CLEAR_DRINKS          - Clear all drink records (WARNING: erases data)
+Time Setting:
+  SET_DATETIME <date> <time> <tz>  - Set date+time+timezone (e.g., SET_DATETIME 2026-01-14 14:30:00 +0)
+  SET_DATE <date>                   - Set date only (YYYY-MM-DD)
+  SET_TIME <time>                   - Set time only (HH[:MM[:SS]])
+  SET_TZ <offset>                   - Set timezone offset (-12 to +14)
+  GET_TIME                          - Display current time
+
+Drink Tracking:
+  GET_DAILY_STATE       - Show current daily state
+  GET_LAST_DRINK        - Show most recent drink record
+  DUMP_DRINKS           - Display all drink records
+  RESET_DAILY_DRINKS    - Reset daily counter to 0
+  CLEAR_DRINKS          - Clear all drink records (WARNING: erases data)
+
+Debug Levels:
+  0  - All debug OFF (quiet mode)
+  1  - Events only (drinks, refills, display updates)
+  2  - + Gestures (gesture detection, state changes, calibration)
+  3  - + Weight readings (load cell ADC, water levels)
+  4  - + Accelerometer (raw accelerometer data every second)
+  9  - All ON (all categories including future BLE)
 ```
 
 Progress - Day 5 Debug Level System (2026-01-14):
@@ -204,12 +223,54 @@ Usage Examples:
 9  - Enable everything including future BLE debug
 ```
 
+Progress - Day 6 Refill Bug Fix & Command Improvements (2026-01-14):
+- ✅ Fixed refill bug where refills were being saved as drink records
+  - Removed storageSaveDrinkRecord() call from refill detection block
+  - Refills now only update baseline ADC and close aggregation window
+  - Added comment explaining why refills aren't stored
+- ✅ Improved time setting commands with granular control:
+  - Created SET_DATETIME (combined date+time+timezone)
+  - Created SET_DATE (date only, YYYY-MM-DD format)
+  - Created SET_TIME (time only, flexible HH[:MM[:SS]] format with optional MM and SS)
+  - Created SET_TZ (timezone-only alias for SET_TIMEZONE)
+  - Made all commands case-insensitive (toupper conversion in parser)
+- ✅ Firmware compiles successfully (RAM: 6.9%, Flash: 35.7%)
+
+Files Modified:
+- firmware/src/drinks.cpp - Removed refill record saving (lines 229-246)
+- firmware/src/serial_commands.cpp - Command refactoring and case-insensitive parsing
+- All time-setting commands now support flexible input formats
+
+Progress - Day 7 Time Persistence Implementation (2026-01-14):
+- ✅ Implemented NVS-based time persistence to preserve time across power cycles
+- ✅ Smart save strategy to minimize flash wear:
+  - Save timestamp on every drink or refill event (opportunistic)
+  - Save timestamp hourly on the hour (periodic fallback)
+  - Save timestamp on all time-setting commands (immediate)
+  - Only save if DS3231 RTC is not present (g_rtc_ds3231_present flag)
+- ✅ Time restoration on boot from NVS (storageLoadLastBootTime)
+- ✅ Flash lifespan optimized: ~40 writes/day = ~7-8 years
+- ✅ Added saveTimestampOnEvent() helper in drinks.cpp
+- ✅ Added g_rtc_ds3231_present flag for future DS3231 integration
+- ✅ Firmware compiles successfully (RAM: 6.9%, Flash: 35.7%)
+
+Files Modified:
+- firmware/src/main.cpp - Time restoration on boot, hourly save logic, g_rtc_ds3231_present flag
+- firmware/src/drinks.cpp - saveTimestampOnEvent() helper, calls on drink/refill
+- firmware/src/storage.cpp - storageSaveLastBootTime() and storageLoadLastBootTime()
+- firmware/include/storage.h - Function declarations
+
+Time Persistence Strategy:
+- Maximum time loss: ~1 hour on power cycle (typically much less)
+- ESP32 internal RTC maintains time during deep sleep (no loss)
+- NVS saves act as checkpoints for power cycle recovery
+- Strategy balances accuracy vs. flash wear (100,000 write cycles per sector)
+
 Next Steps:
-1. Fix every-other-drink detection issue
-2. Test full drink/refill cycle with serial commands
-3. Validate daily intake visualization updates on display
-4. Test daily reset at 4am boundary
-5. Test full day simulation scenarios
+1. Validate daily intake visualization updates on display
+2. Test daily reset at 4am boundary
+3. Test full day simulation scenarios
+4. Begin BLE integration planning
 
 Key Features Implemented:
 - ✅ Drink event detection with 5-minute aggregation window
@@ -221,92 +282,15 @@ Key Features Implemented:
 
 ---
 
-## Completed: Minimal Bug Fixes (2026-01-14)
-
-**Status:** ✅ Complete and tested
-**Result:** All 5 bugs fixed with ~80 lines of surgical changes (as estimated)
-
-### Implementation Summary
-
-After discovering bugs during drink tracking testing, we evaluated two approaches:
-1. **Comprehensive FSM refactoring** (~500-800 lines) - Implemented on `comprehensive-fsm-refactoring` branch
-2. **Minimal targeted fixes** (~80 lines) - **This approach (CHOSEN)**
-
-**Decision:** The FSM was over-engineered for the immediate bugs. While FSM provides value for future multi-state workflows (BLE pairing, OTA updates), these bugs were fixed with minimal, surgical changes. FSM branch is banked for future use.
-
-### Bugs Fixed
-
-#### ✅ Bug #1 & #2: Atomic Daily Reset (drinks.cpp)
-- **Added** `performAtomicDailyReset()` function that atomically resets all counters
-- **Fixed** `last_recorded_adc` not being reset (every-other-drink bug)
-- **Fixed** aggregation window state pollution across daily boundaries
-- **Updated** `drinksUpdate()` to call atomic reset with early return
-- **Files:** firmware/src/drinks.cpp (~30 lines)
-
-#### ✅ Bug #3: Calibration Double-Trigger (gestures.cpp)
-- **Added** 2-second cooldown timer (`g_inverted_cooldown_end`)
-- **Prevents** re-triggering calibration on wobble during inverted hold
-- **Files:** firmware/src/gestures.cpp (~8 lines)
-
-#### ✅ Bug #4: Sensor Read Collision (main.cpp)
-- **Added** `SensorSnapshot` struct to store readings
-- **Refactored** `loop()` to read sensors once at start
-- **Eliminated** race conditions from multiple sensor reads per iteration
-- **Files:** firmware/src/main.cpp (~35 lines)
-
-#### ✅ Bug #5: Time Valid Initialization (serial_commands.cpp)
-- **Added** explicit `drinksInit()` call in `handleSetTime()`
-- **Initializes** drink tracking immediately when time becomes valid
-- **Files:** firmware/src/serial_commands.cpp (~7 lines)
-
-#### ✅ Bonus Fix: Display Update Accuracy (main.cpp)
-- **Changed** display updates to only trigger on UPRIGHT_STABLE (not UPRIGHT)
-- **Ensures** display only refreshes with accurate, stable weight readings
-- **Prevents** spurious updates from fluctuating sensor data
-
-### Build Results
-
-✅ **Firmware compiled successfully**
-- RAM: 6.9% (22,748 / 327,680 bytes)
-- Flash: 35.4% (464,408 / 1,310,720 bytes)
-- No compilation warnings or errors
-
-### Hardware Testing
-
-✅ **All bugs verified as fixed** (2026-01-14)
-- Every-other-drink detection working correctly
-- Daily reset logic functioning properly
-- Calibration only triggers once per gesture
-- Sensor readings consistent throughout loop
-- Time setting initializes drink tracking
-- Display updates only on stable readings
-
-### Future: FSM Architecture (Banked)
-
-The comprehensive FSM refactoring on `comprehensive-fsm-refactoring` branch is banked for future use when implementing:
-- BLE pairing state machine
-- OTA firmware update flow
-- Deep sleep state management with wake handling
-
-At that point, the upfront architecture cost will be justified by the complexity of multi-state workflows.
-
----
-
 ## Next Up
 
-### Firmware - Phase 2: Storage & Display (After Time Setting)
-- [ ] Implement drink record storage in NVS (7-day circular buffer)
-- [ ] Create DrinkRecord structure with timestamp, amount, level
-- [ ] Build e-paper UI abstraction layer
-- [ ] Design and render status display (daily total, battery, BLE status)
-- [ ] Implement empty gesture detection (invert + shake)
-
-### Firmware - Phase 3: BLE Communication
-- [ ] Set up NimBLE server with Device Info service
-- [ ] Implement custom Aquavate GATT service
-- [ ] Create drink history sync protocol
-- [ ] Add bottle configuration characteristics
-- [ ] Test BLE advertising and connection
+### Firmware - Phase 3: BLE Integration & App Sync
+- [ ] Plan BLE GATT service structure
+- [ ] Implement NimBLE server with Device Info service
+- [ ] Create custom Aquavate GATT service (drink history, current state)
+- [ ] Add drink record sync protocol (forward from NVS to app)
+- [ ] Test BLE advertising and connection from iOS
+- [ ] Consider FSM architecture for BLE pairing state management
 
 ### iOS App - Phase 4: BLE & Storage
 - [ ] Implement CoreBluetooth BLE manager

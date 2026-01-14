@@ -47,4 +47,10 @@ bool storageSaveTimeValid(bool valid);
 // Load time valid flag from NVS (default: false)
 bool storageLoadTimeValid();
 
+// Save last boot timestamp to NVS (for time persistence across resets)
+bool storageSaveLastBootTime(uint32_t timestamp);
+
+// Load last boot timestamp from NVS (default: 0)
+uint32_t storageLoadLastBootTime();
+
 #endif // STORAGE_H
