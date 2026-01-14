@@ -29,6 +29,11 @@ static uint32_t g_inverted_start_time = 0;
 static bool g_inverted_active = false;
 static bool g_inverted_triggered = false;  // Latch to prevent re-triggering
 
+// Weight stability tracking for UPRIGHT_STABLE
+static float g_last_stable_weight = 0.0f;
+static uint32_t g_upright_start_time = 0;
+static bool g_upright_active = false;
+
 // Default configuration
 static GestureConfig getDefaultConfig() {
     GestureConfig config;
@@ -101,7 +106,7 @@ static float rawToGs(int16_t raw) {
     return raw / 16000.0f;
 }
 
-GestureType gesturesUpdate() {
+GestureType gesturesUpdate(float weight_ml) {
     if (!g_initialized || !g_lis) {
         return GESTURE_NONE;
     }
@@ -157,11 +162,114 @@ GestureType gesturesUpdate() {
         return GESTURE_SIDEWAYS_TILT;
     }
 
-    // Check for upright stable (bottle placement)
-    if (g_current_z > g_config.upright_z_threshold) {
-        if (gesturesIsStable()) {
+    // Check for upright stable (bottle placement on table)
+    // Requirements:
+    // 1. Z-axis close to 1g (within ~12° of vertical: cos(12°) ≈ 0.978)
+    // 2. X and Y axes close to 0 (bottle not tilted sideways)
+    // 3. Low variance (bottle not moving)
+    // 4. Weight is positive (bottle is on table, not in the air)
+    const float UPRIGHT_Z_MIN = 0.97f;   // Relaxed threshold for sensor noise tolerance
+    const float TILT_XY_MAX = 0.174f;    // sin(10°) for minimal sideways tilt
+
+    bool z_ok = g_current_z >= UPRIGHT_Z_MIN;
+    bool x_ok = fabs(g_current_x) <= TILT_XY_MAX;
+    bool y_ok = fabs(g_current_y) <= TILT_XY_MAX;
+    bool weight_ok = weight_ml >= -50.0f;
+    bool stable = gesturesIsStable();
+    float variance = gesturesGetVariance();
+
+    #if DEBUG_ACCELEROMETER
+    // Debug: show why UPRIGHT_STABLE is or isn't detected
+    static unsigned long last_debug = 0;
+    if (millis() - last_debug >= 1000) {
+        last_debug = millis();
+        if (z_ok && x_ok && y_ok && weight_ok) {
+            if (!stable) {
+                Serial.print("Gestures: Upright conditions met but NOT STABLE - variance=");
+                Serial.print(variance, 4);
+                Serial.print(" (need <");
+                Serial.print(g_config.stability_variance, 4);
+                Serial.println(")");
+            } else {
+                Serial.print("Gestures: UPRIGHT_STABLE detected - variance=");
+                Serial.print(variance, 4);
+                Serial.println(" (stable)");
+            }
+        } else {
+            Serial.print("Gestures: Conditions check - Z:");
+            Serial.print(z_ok ? "✓" : "✗");
+            Serial.print(" X:");
+            Serial.print(x_ok ? "✓" : "✗");
+            Serial.print(" Y:");
+            Serial.print(y_ok ? "✓" : "✗");
+            Serial.print(" Weight:");
+            Serial.println(weight_ok ? "✓" : "✗");
+        }
+    }
+    #endif
+
+    // Check if bottle is upright (meets all conditions)
+    if (z_ok && x_ok && y_ok && weight_ok && stable) {
+        // Track how long bottle has been upright with stable weight
+        if (!g_upright_active) {
+            g_upright_active = true;
+            g_upright_start_time = millis();
+            g_last_stable_weight = weight_ml;
+            #if DEBUG_ACCELEROMETER
+            Serial.println("Gestures: UPRIGHT detected - tracking weight stability");
+            #endif
+        }
+
+        // Check if weight is stable (not fluctuating)
+        // Allow ~6ml variance (weight_ml is in ml, so direct comparison)
+        float weight_delta = fabs(weight_ml - g_last_stable_weight);
+        bool weight_stable = (weight_delta < 6.0f);
+
+        // If weight is stable, update the baseline (tracks gradual changes)
+        if (weight_stable) {
+            g_last_stable_weight = weight_ml;
+        } else {
+            // Weight changed significantly - reset timer
+            g_upright_start_time = millis();
+            g_last_stable_weight = weight_ml;
+        }
+
+        // Check if held stable long enough
+        uint32_t upright_duration = millis() - g_upright_start_time;
+
+        #if DEBUG_ACCELEROMETER
+        static unsigned long last_weight_debug = 0;
+        if (millis() - last_weight_debug >= 1000) {
+            last_weight_debug = millis();
+            if (!weight_stable) {
+                Serial.print("Gestures: UPRIGHT but weight NOT stable - delta=");
+                Serial.print(weight_delta, 1);
+                Serial.println("ml (need <6ml)");
+            } else if (upright_duration < 2000) {
+                Serial.print("Gestures: UPRIGHT and weight stable - duration=");
+                Serial.print(upright_duration);
+                Serial.println("ms (need 2000ms)");
+            }
+        }
+        #endif
+
+        // Return UPRIGHT_STABLE if weight has been stable for 2+ seconds
+        if (weight_stable && upright_duration >= 2000) {
             return GESTURE_UPRIGHT_STABLE;
         }
+
+        // Otherwise just UPRIGHT
+        return GESTURE_UPRIGHT;
+    } else {
+        // Reset upright tracking if conditions no longer met
+        if (g_upright_active) {
+            #if DEBUG_ACCELEROMETER
+            Serial.println("Gestures: UPRIGHT ended");
+            #endif
+        }
+        g_upright_active = false;
+        g_upright_start_time = 0;
+        g_last_stable_weight = 0.0f;
     }
 
     return GESTURE_NONE;
@@ -211,4 +319,7 @@ void gesturesReset() {
     g_inverted_active = false;
     g_inverted_triggered = false;
     g_inverted_start_time = 0;
+    g_upright_active = false;
+    g_upright_start_time = 0;
+    g_last_stable_weight = 0.0f;
 }

@@ -21,6 +21,9 @@
 #include <sys/time.h>
 #include <time.h>
 
+// Daily intake tracking
+#include "drinks.h"
+
 Adafruit_NAU7802 nau;
 Adafruit_LIS3DH lis = Adafruit_LIS3DH();
 bool nauReady = false;
@@ -672,14 +675,36 @@ void drawMainScreen() {
     float fill_percent = water_ml / 830.0f;
     drawBottleGraphic(bottle_x, bottle_y, fill_percent);
 
-    // Draw large text showing milliliters (right side)
+    // Draw large text showing daily intake (right side)
     display.setTextSize(3);
-    char ml_text[16];
-    snprintf(ml_text, sizeof(ml_text), "%dml", (int)water_ml);
 
-    // Position text on right side (x=80, centered vertically)
-    display.setCursor(80, 50);
-    display.print(ml_text);
+    // Get daily intake total
+    uint16_t daily_total_ml = 0;
+    if (g_time_valid) {
+        DailyState daily_state;
+        drinksGetState(daily_state);
+        daily_total_ml = daily_state.daily_total_ml;
+    }
+
+    char intake_text[16];
+    snprintf(intake_text, sizeof(intake_text), "%dml", daily_total_ml);
+
+    // Calculate text width for centering (size 3: 18 pixels per char)
+    int intake_text_width = strlen(intake_text) * 18;
+    // Center between bottle (ends at ~60px) and visualization (starts at ~185px)
+    int available_width = 185 - 60;  // ~125 pixels available
+    int intake_x = 60 + (available_width - intake_text_width) / 2;
+
+    // Position text centered between bottle and visualization
+    display.setCursor(intake_x, 50);
+    display.print(intake_text);
+
+    // Draw "today" label below in size 2 (12 pixels per char)
+    display.setTextSize(2);
+    int today_width = 5 * 12;  // "today" = 5 chars
+    int today_x = 60 + (available_width - today_width) / 2;
+    display.setCursor(today_x, 75);
+    display.print("today");
 
     // Draw battery status in top-right corner
     float batteryV = getBatteryVoltage();
@@ -698,15 +723,29 @@ void drawMainScreen() {
     display.setCursor(center_x, 5);
     display.print(time_text);
 
-    // TEMPORARY TEST: Draw glass grid with daily intake
-    // Position on right side of screen
-    // Grid is 2 cols x 5 rows: ~44px wide x 86px tall
-    int grid_x = 195;  // Right side (250 - 44 - 11 margin)
-    int grid_y = 20;   // Same as bottle
+    // Draw daily intake visualization (if time is valid)
+    float daily_fill = 0.0f;
+    if (g_time_valid) {
+        // Get current daily state
+        DailyState daily_state;
+        drinksGetState(daily_state);
 
-    // Test with 55% fill (simulating 5.5 out of 10 glasses = 1375ml of 2500ml goal)
-    float daily_fill = 0.55f;
-    drawGlassGrid(grid_x, grid_y, daily_fill);
+        // Calculate fill percentage based on daily goal
+        daily_fill = (float)daily_state.daily_total_ml / (float)DRINK_DAILY_GOAL_ML;
+        if (daily_fill > 1.0f) daily_fill = 1.0f;  // Cap at 100%
+    }
+
+    #if DAILY_INTAKE_DISPLAY_MODE == 0
+        // Human figure mode: 50x83px figure on right side
+        int figure_x = 185;  // Right side (250 - 50 - 15 margin)
+        int figure_y = 20;   // Top margin
+        drawHumanFigure(figure_x, figure_y, daily_fill);
+    #else
+        // Tumbler grid mode: 44x86px grid (2 cols x 5 rows) on right side
+        int grid_x = 195;    // Right side (250 - 44 - 11 margin)
+        int grid_y = 20;     // Top margin
+        drawGlassGrid(grid_x, grid_y, daily_fill);
+    #endif
 
     display.display();
 }
@@ -896,6 +935,14 @@ void setup() {
     }
 #endif
 
+    // Initialize drink tracking system (only if time is valid)
+    if (g_time_valid) {
+        drinksInit();
+        Serial.println("Drink tracking system initialized");
+    } else {
+        Serial.println("WARNING: Drink tracking not initialized - time not set");
+    }
+
     Serial.println("Setup complete!");
     Serial.print("Will sleep in ");
     Serial.print(AWAKE_DURATION_MS / 1000);
@@ -906,16 +953,21 @@ void loop() {
     // Check for serial commands
     serialCommandsUpdate();
 
-    // Update gesture detection
-    GestureType gesture = GESTURE_NONE;
-    if (lisReady) {
-        gesture = gesturesUpdate();
-    }
-
-    // Get current load cell reading
+    // Get current load cell reading and calculate weight
     int32_t current_adc = 0;
+    float current_water_ml = 0.0f;
     if (nauReady && nau.available()) {
         current_adc = nau.read();
+        // Calculate weight (will be negative if bottle is in the air)
+        if (g_calibrated) {
+            current_water_ml = calibrationGetWaterWeight(current_adc, g_calibration);
+        }
+    }
+
+    // Update gesture detection (pass weight for in-air detection)
+    GestureType gesture = GESTURE_NONE;
+    if (lisReady) {
+        gesture = gesturesUpdate(current_water_ml);
     }
 
     // Check calibration state
@@ -1011,7 +1063,9 @@ void loop() {
     // Only refresh e-paper display if water level changed by >5ml to minimize flashing
     static unsigned long last_level_check = 0;
 
-    if (cal_state == CAL_IDLE && g_calibrated && gesture == GESTURE_UPRIGHT_STABLE) {
+    // Check water level when bottle is upright (GESTURE_UPRIGHT or GESTURE_UPRIGHT_STABLE)
+    if (cal_state == CAL_IDLE && g_calibrated &&
+        (gesture == GESTURE_UPRIGHT || gesture == GESTURE_UPRIGHT_STABLE)) {
         // Check water level every DISPLAY_UPDATE_INTERVAL_MS when bottle is upright stable
         if (millis() - last_level_check >= DISPLAY_UPDATE_INTERVAL_MS) {
             last_level_check = millis();
@@ -1032,6 +1086,11 @@ void loop() {
                     // Clamp to valid range
                     if (current_water_ml < 0) current_water_ml = 0;
                     if (current_water_ml > 830) current_water_ml = 830;
+
+                    // Only process drink tracking if UPRIGHT_STABLE (weight has been stable for 2s)
+                    if (gesture == GESTURE_UPRIGHT_STABLE && g_time_valid) {
+                        drinksUpdate(current_adc, g_calibration);
+                    }
 
                     // Only refresh display if water level changed by more than threshold
                     if (g_last_displayed_water_ml < 0 ||

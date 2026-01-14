@@ -4,6 +4,10 @@
 
 #include "serial_commands.h"
 #include "storage.h"
+#include "drinks.h"
+#include "storage_drinks.h"
+#include "config.h"
+#include <Preferences.h>
 #include <sys/time.h>
 #include <time.h>
 
@@ -15,7 +19,7 @@ static uint8_t cmdBufferPos = 0;
 // Callback for time set events
 static OnTimeSetCallback g_onTimeSetCallback = nullptr;
 
-// External timezone offset (managed in main.cpp)
+// External variables (managed in main.cpp)
 extern int8_t g_timezone_offset;
 
 // Initialize serial command handler
@@ -270,6 +274,122 @@ static void handleSetTimezone(char* args) {
     Serial.println("Saved to NVS");
 }
 
+// Handle GET_DAILY_STATE command - display current daily state
+static void handleGetDailyState() {
+    DailyState state;
+    drinksGetState(state);
+
+    Serial.println("\n=== DAILY STATE ===");
+    Serial.printf("Daily total: %dml\n", state.daily_total_ml);
+    Serial.printf("Drink count: %d\n", state.drink_count_today);
+    Serial.printf("Last reset: %u\n", state.last_reset_timestamp);
+    Serial.printf("Last drink: %u\n", state.last_drink_timestamp);
+    Serial.printf("Last baseline ADC: %d\n", state.last_recorded_adc);
+    Serial.printf("Last displayed: %dml\n", state.last_displayed_total_ml);
+    Serial.printf("Aggregation window: %s\n",
+                 state.aggregation_window_active ? "ACTIVE" : "closed");
+    if (state.aggregation_window_active) {
+        Serial.printf("Window started: %u\n", state.aggregation_window_start);
+        uint32_t elapsed = getCurrentUnixTime() - state.aggregation_window_start;
+        Serial.printf("Window elapsed: %us\n", elapsed);
+    }
+    Serial.println("==================\n");
+}
+
+// Handle GET_LAST_DRINK command - display most recent drink record
+static void handleGetLastDrink() {
+    DrinkRecord record;
+    if (!storageLoadLastDrinkRecord(record)) {
+        Serial.println("No drink records found");
+        return;
+    }
+
+    Serial.println("\n=== LAST DRINK RECORD ===");
+    Serial.printf("Timestamp: %u\n", record.timestamp);
+    Serial.printf("Amount: %dml\n", record.amount_ml);
+    Serial.printf("Bottle level: %dml\n", record.bottle_level_ml);
+    Serial.printf("Flags: 0x%02X\n", record.flags);
+
+    // Format timestamp
+    time_t t = record.timestamp;
+    struct tm tm;
+    gmtime_r(&t, &tm);
+    Serial.printf("Time: %04d-%02d-%02d %02d:%02d:%02d\n",
+                 tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
+                 tm.tm_hour, tm.tm_min, tm.tm_sec);
+    Serial.println("=========================\n");
+}
+
+// Handle DUMP_DRINKS command - display all drink records
+static void handleDumpDrinks() {
+    CircularBufferMetadata meta;
+    if (!storageLoadBufferMetadata(meta)) {
+        Serial.println("No drink records in buffer");
+        return;
+    }
+
+    Serial.println("\n=== DRINK BUFFER METADATA ===");
+    Serial.printf("Write index: %d\n", meta.write_index);
+    Serial.printf("Record count: %d\n", meta.record_count);
+    Serial.printf("Total writes: %u\n", meta.total_writes);
+    Serial.println("=============================\n");
+
+    if (meta.record_count == 0) {
+        Serial.println("No drink records stored");
+        return;
+    }
+
+    Serial.printf("Showing %d most recent drinks:\n\n", meta.record_count);
+
+    // Calculate starting index (oldest record in buffer)
+    uint16_t start_index = (meta.record_count < DRINK_MAX_RECORDS)
+        ? 0
+        : meta.write_index;
+
+    // Display records in chronological order
+    for (uint16_t i = 0; i < meta.record_count; i++) {
+        uint16_t index = (start_index + i) % DRINK_MAX_RECORDS;
+
+        // Load record directly from NVS
+        char key[16];
+        snprintf(key, sizeof(key), "drink_%03d", index);
+
+        DrinkRecord record;
+        Preferences prefs;
+        if (prefs.begin(NVS_NAMESPACE, true)) {
+            size_t read_size = prefs.getBytes(key, &record, sizeof(DrinkRecord));
+            prefs.end();
+
+            if (read_size == sizeof(DrinkRecord)) {
+                time_t t = record.timestamp;
+                struct tm tm;
+                gmtime_r(&t, &tm);
+
+                Serial.printf("%3d: %04d-%02d-%02d %02d:%02d:%02d | %+5dml | level: %4dml | flags: 0x%02X\n",
+                             i + 1,
+                             tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
+                             tm.tm_hour, tm.tm_min, tm.tm_sec,
+                             record.amount_ml,
+                             record.bottle_level_ml,
+                             record.flags);
+            }
+        }
+    }
+    Serial.println();
+}
+
+// Handle RESET_DAILY_DRINKS command - reset daily counter
+static void handleResetDailyDrinks() {
+    drinksResetDaily();
+    Serial.println("OK: Daily drinks reset");
+}
+
+// Handle CLEAR_DRINKS command - clear all drink records
+static void handleClearDrinks() {
+    drinksClearAll();
+    Serial.println("OK: All drink records cleared");
+}
+
 // Process a complete command
 static void processCommand(char* cmd) {
     // Trim leading whitespace
@@ -296,13 +416,30 @@ static void processCommand(char* cmd) {
         handleGetTime();
     } else if (strcmp(cmd, "SET_TIMEZONE") == 0) {
         handleSetTimezone(args);
+    } else if (strcmp(cmd, "GET_DAILY_STATE") == 0) {
+        handleGetDailyState();
+    } else if (strcmp(cmd, "GET_LAST_DRINK") == 0) {
+        handleGetLastDrink();
+    } else if (strcmp(cmd, "DUMP_DRINKS") == 0) {
+        handleDumpDrinks();
+    } else if (strcmp(cmd, "RESET_DAILY_DRINKS") == 0) {
+        handleResetDailyDrinks();
+    } else if (strcmp(cmd, "CLEAR_DRINKS") == 0) {
+        handleClearDrinks();
     } else {
         Serial.print("ERROR: Unknown command: ");
         Serial.println(cmd);
-        Serial.println("Available commands:");
+        Serial.println("\nAvailable commands:");
+        Serial.println("Time/Timezone:");
         Serial.println("  SET_TIME YYYY-MM-DD HH:MM:SS [timezone]");
         Serial.println("  GET_TIME");
         Serial.println("  SET_TIMEZONE offset");
+        Serial.println("\nDrink Tracking:");
+        Serial.println("  GET_DAILY_STATE       - Show current daily state");
+        Serial.println("  GET_LAST_DRINK        - Show most recent drink record");
+        Serial.println("  DUMP_DRINKS           - Display all drink records");
+        Serial.println("  RESET_DAILY_DRINKS    - Reset daily counter to 0");
+        Serial.println("  CLEAR_DRINKS          - Clear all drink records (WARNING: erases data)");
     }
 }
 

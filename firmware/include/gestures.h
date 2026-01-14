@@ -13,7 +13,8 @@
 enum GestureType {
     GESTURE_NONE,
     GESTURE_INVERTED_HOLD,    // Z < -0.8g for 5s (calibration trigger)
-    GESTURE_UPRIGHT_STABLE,   // Z > 0.9g, low variance (bottle placement)
+    GESTURE_UPRIGHT,          // Z > 0.985g, low variance (bottle on table - for display updates)
+    GESTURE_UPRIGHT_STABLE,   // Upright + weight stable for 2s (for drink tracking)
     GESTURE_SIDEWAYS_TILT,    // |X| or |Y| > 0.5g (confirmation)
 };
 
@@ -42,7 +43,8 @@ void gesturesInit(Adafruit_LIS3DH& lis);
 void gesturesInit(Adafruit_LIS3DH& lis, const GestureConfig& config);
 
 // Update gesture detection (call regularly in loop)
-GestureType gesturesUpdate();
+// weight_ml: current weight reading in ml (negative if bottle is in the air)
+GestureType gesturesUpdate(float weight_ml = 0.0f);
 
 // Get current gesture config
 const GestureConfig& gesturesGetConfig();
