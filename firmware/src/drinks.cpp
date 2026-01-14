@@ -64,6 +64,31 @@ static bool shouldResetDailyCounter(uint32_t current_time) {
     return false;
 }
 
+// Helper: Perform atomic daily reset
+// FIX Bug #1 & #2: Reset all counters and state atomically in one place
+static void performAtomicDailyReset(uint32_t current_time) {
+    Serial.println("\n=== ATOMIC DAILY RESET ===");
+    Serial.printf("Previous total: %dml (%d drinks)\n",
+                 g_daily_state.daily_total_ml,
+                 g_daily_state.drink_count_today);
+
+    // Reset all daily counters atomically (all in one place)
+    g_daily_state.daily_total_ml = 0;
+    g_daily_state.drink_count_today = 0;
+    g_daily_state.last_displayed_total_ml = 0;
+    g_daily_state.last_reset_timestamp = current_time;
+
+    // FIX Bug #1: Reset baseline ADC so first drink uses fresh baseline
+    g_daily_state.last_recorded_adc = 0;
+
+    // FIX Bug #2: Clear aggregation window state
+    g_daily_state.aggregation_window_active = 0;
+    g_daily_state.aggregation_window_start = 0;
+
+    storageSaveDailyState(g_daily_state);
+    Serial.println("Daily counter reset complete");
+}
+
 // Initialize drink tracking system
 void drinksInit() {
     if (!g_time_valid) {
@@ -97,32 +122,22 @@ void drinksUpdate(int32_t current_adc, const CalibrationData& cal) {
 
     uint32_t current_time = getCurrentUnixTime();
 
-    // Check for daily reset
+    // Check for daily reset FIRST
     if (shouldResetDailyCounter(current_time)) {
-        Serial.println("=== DAILY RESET TRIGGERED ===");
-        Serial.printf("Previous total: %dml (%d drinks)\n",
-                     g_daily_state.daily_total_ml,
-                     g_daily_state.drink_count_today);
-
-        g_daily_state.daily_total_ml = 0;
-        g_daily_state.drink_count_today = 0;
-        g_daily_state.last_displayed_total_ml = 0;
-        g_daily_state.last_reset_timestamp = current_time;
-        g_daily_state.aggregation_window_active = 0;
-
-        storageSaveDailyState(g_daily_state);
-        Serial.println("Daily counter reset to 0ml");
+        performAtomicDailyReset(current_time);
+        // Early return to establish fresh baseline on next call
+        return;
     }
 
     // Convert current ADC to ml using calibration
     float current_ml = calibrationGetWaterWeight(current_adc, cal);
 
-    // Initialize baseline on first call
+    // Initialize baseline on first call (or after reset)
     if (g_daily_state.last_recorded_adc == 0) {
-        Serial.println("First drinksUpdate() call - initializing baseline");
+        Serial.println("Establishing baseline after reset");
         g_daily_state.last_recorded_adc = current_adc;
         storageSaveDailyState(g_daily_state);
-        return;  // Skip detection on first call
+        return;  // Wait for next reading before detecting drinks
     }
 
     // Calculate delta from last recorded baseline
@@ -240,12 +255,7 @@ void drinksGetState(DailyState& state) {
 // Debug function: Reset daily drinks (for testing)
 void drinksResetDaily() {
     Serial.println("=== MANUAL DAILY RESET ===");
-    g_daily_state.daily_total_ml = 0;
-    g_daily_state.drink_count_today = 0;
-    g_daily_state.last_displayed_total_ml = 0;
-    g_daily_state.last_reset_timestamp = getCurrentUnixTime();
-    g_daily_state.aggregation_window_active = 0;
-    storageSaveDailyState(g_daily_state);
+    performAtomicDailyReset(getCurrentUnixTime());
     Serial.println("Daily drinks reset to 0ml");
 }
 

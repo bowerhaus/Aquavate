@@ -196,6 +196,11 @@ static void handleSetTime(char* args) {
     Serial.println(timeStr);
     Serial.println("Timezone and time_valid flag saved to NVS");
 
+    // FIX Bug #5: Initialize drink tracking when time becomes valid
+    extern bool g_time_valid;  // Forward declaration
+    g_time_valid = true;
+    drinksInit();
+
     // Call callback if registered
     if (g_onTimeSetCallback != nullptr) {
         g_onTimeSetCallback();

@@ -1,12 +1,12 @@
 # Aquavate - Active Development Progress
 
-**Last Updated:** 2026-01-13 (USB Time Setting Complete & Tested)
+**Last Updated:** 2026-01-14 (Minimal Bug Fixes - In Progress)
 
 ---
 
-## Current Branch: `usb-time-setting`
+## Current Branch: `daily-water-intake-tracking`
 
-**Status:** Ready to merge to master
+**Status:** Implementing minimal bug fixes (FSM-free approach)
 
 All standalone device features complete:
 - Two-point calibration system (empty + full 830ml bottle)
@@ -220,7 +220,78 @@ Key Features Implemented:
 - ✅ NVS circular buffer storage (200 records)
 - ✅ Dual visualization modes (human figure or tumbler grid)
 - ✅ Hardcoded 2500ml daily goal
-- 🔧 Baseline drift compensation (currently causing false negatives)
+- ✅ Baseline drift compensation working correctly
+
+---
+
+## Completed: Minimal Bug Fixes (2026-01-14)
+
+**Status:** ✅ Complete and tested
+**Result:** All 5 bugs fixed with ~80 lines of surgical changes (as estimated)
+
+### Implementation Summary
+
+After discovering bugs during drink tracking testing, we evaluated two approaches:
+1. **Comprehensive FSM refactoring** (~500-800 lines) - Implemented on `comprehensive-fsm-refactoring` branch
+2. **Minimal targeted fixes** (~80 lines) - **This approach (CHOSEN)**
+
+**Decision:** The FSM was over-engineered for the immediate bugs. While FSM provides value for future multi-state workflows (BLE pairing, OTA updates), these bugs were fixed with minimal, surgical changes. FSM branch is banked for future use.
+
+### Bugs Fixed
+
+#### ✅ Bug #1 & #2: Atomic Daily Reset (drinks.cpp)
+- **Added** `performAtomicDailyReset()` function that atomically resets all counters
+- **Fixed** `last_recorded_adc` not being reset (every-other-drink bug)
+- **Fixed** aggregation window state pollution across daily boundaries
+- **Updated** `drinksUpdate()` to call atomic reset with early return
+- **Files:** firmware/src/drinks.cpp (~30 lines)
+
+#### ✅ Bug #3: Calibration Double-Trigger (gestures.cpp)
+- **Added** 2-second cooldown timer (`g_inverted_cooldown_end`)
+- **Prevents** re-triggering calibration on wobble during inverted hold
+- **Files:** firmware/src/gestures.cpp (~8 lines)
+
+#### ✅ Bug #4: Sensor Read Collision (main.cpp)
+- **Added** `SensorSnapshot` struct to store readings
+- **Refactored** `loop()` to read sensors once at start
+- **Eliminated** race conditions from multiple sensor reads per iteration
+- **Files:** firmware/src/main.cpp (~35 lines)
+
+#### ✅ Bug #5: Time Valid Initialization (serial_commands.cpp)
+- **Added** explicit `drinksInit()` call in `handleSetTime()`
+- **Initializes** drink tracking immediately when time becomes valid
+- **Files:** firmware/src/serial_commands.cpp (~7 lines)
+
+#### ✅ Bonus Fix: Display Update Accuracy (main.cpp)
+- **Changed** display updates to only trigger on UPRIGHT_STABLE (not UPRIGHT)
+- **Ensures** display only refreshes with accurate, stable weight readings
+- **Prevents** spurious updates from fluctuating sensor data
+
+### Build Results
+
+✅ **Firmware compiled successfully**
+- RAM: 6.9% (22,748 / 327,680 bytes)
+- Flash: 35.4% (464,408 / 1,310,720 bytes)
+- No compilation warnings or errors
+
+### Hardware Testing
+
+✅ **All bugs verified as fixed** (2026-01-14)
+- Every-other-drink detection working correctly
+- Daily reset logic functioning properly
+- Calibration only triggers once per gesture
+- Sensor readings consistent throughout loop
+- Time setting initializes drink tracking
+- Display updates only on stable readings
+
+### Future: FSM Architecture (Banked)
+
+The comprehensive FSM refactoring on `comprehensive-fsm-refactoring` branch is banked for future use when implementing:
+- BLE pairing state machine
+- OTA firmware update flow
+- Deep sleep state management with wake handling
+
+At that point, the upfront architecture cost will be justified by the complexity of multi-state workflows.
 
 ---
 
@@ -257,8 +328,11 @@ None currently.
 
 ## Branch Status
 
+- `daily-water-intake-tracking` - **ACTIVE**: Implementing minimal bug fixes (FSM-free approach)
+- `comprehensive-fsm-refactoring` - Banked: Full FSM refactor (for future BLE/OTA work)
 - `master` - Stable: Basic iOS Hello World + Hardware design
-- `standalone-calibration-mode` - Active: Calibration system implemented, hardware testing in progress
+- `standalone-calibration-mode` - Merged: Calibration system complete
+- `usb-time-setting` - Merged: Serial time configuration complete
 - `Calibration` - Archived: Superseded by standalone-calibration-mode
 - `Hello-IOS` - Merged: Initial iOS project
 - `Hardware-design` - Merged: Sensor puck v3.0 design

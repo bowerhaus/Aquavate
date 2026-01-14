@@ -28,6 +28,7 @@ static float g_current_z = 0.0f;
 static uint32_t g_inverted_start_time = 0;
 static bool g_inverted_active = false;
 static bool g_inverted_triggered = false;  // Latch to prevent re-triggering
+static uint32_t g_inverted_cooldown_end = 0;  // FIX Bug #3: Cooldown timer to prevent double-trigger
 
 // Weight stability tracking for UPRIGHT_STABLE
 static float g_last_stable_weight = 0.0f;
@@ -122,19 +123,23 @@ GestureType gesturesUpdate(float weight_ml) {
 
     // Check for inverted hold gesture (highest priority - triggers calibration)
     if (g_current_z < g_config.inverted_z_threshold) {
-        if (!g_inverted_active) {
+        uint32_t now = millis();
+
+        // FIX Bug #3: Only start new detection if cooldown expired
+        if (!g_inverted_active && now >= g_inverted_cooldown_end) {
             g_inverted_active = true;
             g_inverted_triggered = false;
-            g_inverted_start_time = millis();
+            g_inverted_start_time = now;
             Serial.print("Gestures: Inverted detected! Z=");
             Serial.print(g_current_z);
             Serial.println("g - hold for 5 seconds...");
         } else if (!g_inverted_triggered) {
             // Check if held long enough
-            uint32_t held_duration = millis() - g_inverted_start_time;
+            uint32_t held_duration = now - g_inverted_start_time;
             if (held_duration >= g_config.inverted_hold_duration) {
                 Serial.println("Gestures: INVERTED_HOLD gesture triggered!");
                 g_inverted_triggered = true;  // Latch to prevent re-triggering
+                g_inverted_cooldown_end = now + 2000;  // FIX Bug #3: 2 second cooldown
                 return GESTURE_INVERTED_HOLD;
             }
             // Debug: show progress every second

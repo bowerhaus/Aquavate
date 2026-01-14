@@ -24,6 +24,14 @@
 // Daily intake tracking
 #include "drinks.h"
 
+// FIX Bug #4: Sensor snapshot to prevent multiple reads per loop
+struct SensorSnapshot {
+    uint32_t timestamp;
+    int32_t adc_reading;
+    float water_ml;
+    GestureType gesture;
+};
+
 Adafruit_NAU7802 nau;
 Adafruit_LIS3DH lis = Adafruit_LIS3DH();
 bool nauReady = false;
@@ -953,22 +961,30 @@ void loop() {
     // Check for serial commands
     serialCommandsUpdate();
 
-    // Get current load cell reading and calculate weight
-    int32_t current_adc = 0;
-    float current_water_ml = 0.0f;
+    // FIX Bug #4: READ SENSORS ONCE - create snapshot for this loop iteration
+    SensorSnapshot sensors;
+    sensors.timestamp = millis();
+    sensors.adc_reading = 0;
+    sensors.water_ml = 0.0f;
+    sensors.gesture = GESTURE_NONE;
+
+    // Read load cell
     if (nauReady && nau.available()) {
-        current_adc = nau.read();
-        // Calculate weight (will be negative if bottle is in the air)
+        sensors.adc_reading = nau.read();
         if (g_calibrated) {
-            current_water_ml = calibrationGetWaterWeight(current_adc, g_calibration);
+            sensors.water_ml = calibrationGetWaterWeight(sensors.adc_reading, g_calibration);
         }
     }
 
-    // Update gesture detection (pass weight for in-air detection)
-    GestureType gesture = GESTURE_NONE;
+    // Read accelerometer and get gesture (ONCE)
     if (lisReady) {
-        gesture = gesturesUpdate(current_water_ml);
+        sensors.gesture = gesturesUpdate(sensors.water_ml);
     }
+
+    // NOW use snapshot for all logic below
+    int32_t current_adc = sensors.adc_reading;
+    float current_water_ml = sensors.water_ml;
+    GestureType gesture = sensors.gesture;
 
     // Check calibration state
     CalibrationState cal_state = calibrationGetState();
@@ -1063,56 +1079,46 @@ void loop() {
     // Only refresh e-paper display if water level changed by >5ml to minimize flashing
     static unsigned long last_level_check = 0;
 
-    // Check water level when bottle is upright (GESTURE_UPRIGHT or GESTURE_UPRIGHT_STABLE)
-    if (cal_state == CAL_IDLE && g_calibrated &&
-        (gesture == GESTURE_UPRIGHT || gesture == GESTURE_UPRIGHT_STABLE)) {
+    // Check water level ONLY when bottle is upright stable (accurate readings)
+    if (cal_state == CAL_IDLE && g_calibrated && gesture == GESTURE_UPRIGHT_STABLE) {
         // Check water level every DISPLAY_UPDATE_INTERVAL_MS when bottle is upright stable
         if (millis() - last_level_check >= DISPLAY_UPDATE_INTERVAL_MS) {
             last_level_check = millis();
 
 #if defined(BOARD_ADAFRUIT_FEATHER)
             if (nauReady) {
-                // Wait for NAU7802 to have data available
-                int retry_count = 0;
-                while (!nau.available() && retry_count < 10) {
-                    delay(10);
-                    retry_count++;
+                // FIX Bug #4: Use snapshot data instead of reading sensors again
+                float display_water_ml = current_water_ml;
+
+                // Clamp to valid range
+                if (display_water_ml < 0) display_water_ml = 0;
+                if (display_water_ml > 830) display_water_ml = 830;
+
+                // Process drink tracking (we're already UPRIGHT_STABLE)
+                if (g_time_valid) {
+                    drinksUpdate(current_adc, g_calibration);
                 }
 
-                if (nau.available()) {
-                    int32_t current_adc = nau.read();
-                    float current_water_ml = calibrationGetWaterWeight(current_adc, g_calibration);
+                // Only refresh display if water level changed by more than threshold
+                if (g_last_displayed_water_ml < 0 ||
+                    fabs(display_water_ml - g_last_displayed_water_ml) >= DISPLAY_UPDATE_THRESHOLD_ML) {
 
-                    // Clamp to valid range
-                    if (current_water_ml < 0) current_water_ml = 0;
-                    if (current_water_ml > 830) current_water_ml = 830;
+                    #if DEBUG_DISPLAY_UPDATES
+                    Serial.print("Main: Water level changed from ");
+                    Serial.print(g_last_displayed_water_ml, 1);
+                    Serial.print("ml to ");
+                    Serial.print(display_water_ml, 1);
+                    Serial.println("ml - refreshing display");
+                    #endif
 
-                    // Only process drink tracking if UPRIGHT_STABLE (weight has been stable for 2s)
-                    if (gesture == GESTURE_UPRIGHT_STABLE && g_time_valid) {
-                        drinksUpdate(current_adc, g_calibration);
-                    }
-
-                    // Only refresh display if water level changed by more than threshold
-                    if (g_last_displayed_water_ml < 0 ||
-                        fabs(current_water_ml - g_last_displayed_water_ml) >= DISPLAY_UPDATE_THRESHOLD_ML) {
-
-                        #if DEBUG_DISPLAY_UPDATES
-                        Serial.print("Main: Water level changed from ");
-                        Serial.print(g_last_displayed_water_ml, 1);
-                        Serial.print("ml to ");
-                        Serial.print(current_water_ml, 1);
-                        Serial.println("ml - refreshing display");
-                        #endif
-
-                        drawMainScreen();
-                        g_last_displayed_water_ml = current_water_ml;
-                    } else {
-                        #if DEBUG_DISPLAY_UPDATES
-                        Serial.print("Main: Water level unchanged (");
-                        Serial.print(current_water_ml, 1);
-                        Serial.println("ml) - no display refresh");
-                        #endif
-                    }
+                    drawMainScreen();
+                    g_last_displayed_water_ml = display_water_ml;
+                } else {
+                    #if DEBUG_DISPLAY_UPDATES
+                    Serial.print("Main: Water level unchanged (");
+                    Serial.print(display_water_ml, 1);
+                    Serial.println("ml) - no display refresh");
+                    #endif
                 }
             }
 #endif
