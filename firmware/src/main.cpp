@@ -24,6 +24,9 @@
 // Daily intake tracking
 #include "drinks.h"
 
+// System state machine
+#include "system_state.h"
+
 Adafruit_NAU7802 nau;
 Adafruit_LIS3DH lis = Adafruit_LIS3DH();
 bool nauReady = false;
@@ -288,6 +291,13 @@ float g_last_displayed_water_ml = -1.0f;  // -1 means not yet displayed
 int8_t g_timezone_offset = 0;  // UTC offset in hours
 bool g_time_valid = false;     // Has time been set?
 
+// System state
+SystemState g_system_state = SYSTEM_STARTUP;
+
+// Forward declarations for state handlers
+void handleNormalOperation(const SystemContext& ctx);
+void handleCalibration(const SystemContext& ctx);
+
 #if defined(BOARD_ADAFRUIT_FEATHER)
 #include "Adafruit_ThinkInk.h"
 
@@ -406,6 +416,9 @@ void formatTimeForDisplay(char* buffer, size_t buffer_size) {
 void onTimeSet() {
     g_time_valid = true;
     Serial.println("Main: Time set callback - time is now valid");
+
+    // FIX Bug 4.2: Initialize drink tracking when time becomes valid
+    drinksOnTimeSet();
 }
 
 void writeAccelReg(uint8_t reg, uint8_t value) {
@@ -947,55 +960,302 @@ void setup() {
     Serial.print("Will sleep in ");
     Serial.print(AWAKE_DURATION_MS / 1000);
     Serial.println(" seconds...");
+
+    // Transition to NORMAL_OPERATION state after setup
+    transitionSystemState(SYSTEM_NORMAL_OPERATION);
 }
 
+// ============================================================================
+// System State Machine Functions
+// ============================================================================
+
+const char* getSystemStateName(SystemState state) {
+    switch (state) {
+        case SYSTEM_STARTUP:           return "STARTUP";
+        case SYSTEM_NORMAL_OPERATION:  return "NORMAL_OPERATION";
+        case SYSTEM_CALIBRATION:       return "CALIBRATION";
+        case SYSTEM_DEEP_SLEEP:        return "DEEP_SLEEP";
+        default:                       return "UNKNOWN";
+    }
+}
+
+SystemState getCurrentSystemState() {
+    return g_system_state;
+}
+
+void enterSystemState(SystemState new_state) {
+    #if DEBUG_ENABLED
+    Serial.print("[FSM] Entering state: ");
+    Serial.println(getSystemStateName(new_state));
+    #endif
+
+    switch (new_state) {
+        case SYSTEM_STARTUP:
+            // Nothing to do - handled in setup()
+            break;
+
+        case SYSTEM_NORMAL_OPERATION:
+            // Reset display update tracking
+            g_last_displayed_water_ml = -1.0f;
+            // Redraw main screen
+            #if defined(BOARD_ADAFRUIT_FEATHER)
+            drawMainScreen();
+            #endif
+            break;
+
+        case SYSTEM_CALIBRATION:
+            // Calibration entry handled by calibration subsystem
+            break;
+
+        case SYSTEM_DEEP_SLEEP:
+            // Deep sleep entry (future implementation)
+            break;
+    }
+}
+
+void exitSystemState(SystemState old_state) {
+    #if DEBUG_ENABLED
+    Serial.print("[FSM] Exiting state: ");
+    Serial.println(getSystemStateName(old_state));
+    #endif
+
+    switch (old_state) {
+        case SYSTEM_STARTUP:
+            // Nothing to clean up
+            break;
+
+        case SYSTEM_NORMAL_OPERATION:
+            // Nothing to clean up
+            break;
+
+        case SYSTEM_CALIBRATION:
+            // Calibration exit handled by calibration subsystem
+            break;
+
+        case SYSTEM_DEEP_SLEEP:
+            // Wake from deep sleep (future implementation)
+            break;
+    }
+}
+
+void transitionSystemState(SystemState to_state) {
+    if (g_system_state == to_state) {
+        return;  // Already in this state
+    }
+
+    #if DEBUG_ENABLED
+    Serial.print("[FSM] State transition: ");
+    Serial.print(getSystemStateName(g_system_state));
+    Serial.print(" -> ");
+    Serial.println(getSystemStateName(to_state));
+    #endif
+
+    SystemState old_state = g_system_state;
+
+    // Exit current state
+    exitSystemState(old_state);
+
+    // Update state
+    g_system_state = to_state;
+
+    // Enter new state
+    enterSystemState(to_state);
+}
+
+// ============================================================================
+// Main Loop
+// ============================================================================
+
 void loop() {
-    // Check for serial commands
+    // Check for serial commands (always runs first)
     serialCommandsUpdate();
 
-    // Get current load cell reading and calculate weight
-    int32_t current_adc = 0;
-    float current_water_ml = 0.0f;
+    // ========================================================================
+    // CREATE SYSTEM CONTEXT - Read all sensors ONCE per loop iteration
+    // This prevents Bug 1.1 (stale sensor reads) and Bug 4.1 (coordination)
+    // ========================================================================
+    SystemContext ctx;
+    ctx.loop_timestamp = millis();
+    ctx.current_adc = 0;
+    ctx.current_water_ml = 0.0f;
+    ctx.gesture_state = {GESTURE_NONE, false, 0};
+    ctx.gesture_consumed = false;
+    ctx.time_valid = g_time_valid;
+
+    // Read load cell
     if (nauReady && nau.available()) {
-        current_adc = nau.read();
+        ctx.current_adc = nau.read();
         // Calculate weight (will be negative if bottle is in the air)
         if (g_calibrated) {
-            current_water_ml = calibrationGetWaterWeight(current_adc, g_calibration);
+            ctx.current_water_ml = calibrationGetWaterWeight(ctx.current_adc, g_calibration);
         }
     }
 
-    // Update gesture detection (pass weight for in-air detection)
-    GestureType gesture = GESTURE_NONE;
+    // Read accelerometer and update gesture detection
     if (lisReady) {
-        gesture = gesturesUpdate(current_water_ml);
+        ctx.gesture_state = gesturesUpdate(ctx.current_water_ml);
     }
 
-    // Check calibration state
-    CalibrationState cal_state = calibrationGetState();
+    // ========================================================================
+    // DISPATCH TO STATE HANDLER
+    // ========================================================================
+    switch (g_system_state) {
+        case SYSTEM_STARTUP:
+            // Startup is handled in setup(), should never reach here
+            break;
 
-    // If not in calibration mode, check for calibration trigger
-    if (cal_state == CAL_IDLE) {
-        // Check for calibration trigger gesture (hold inverted for 5s)
-        if (gesture == GESTURE_INVERTED_HOLD) {
-            Serial.println("Main: Calibration triggered!");
-            calibrationStart();
-            cal_state = calibrationGetState();
-        }
+        case SYSTEM_NORMAL_OPERATION:
+            handleNormalOperation(ctx);
+            break;
 
-        // If calibrated, show water level
-        #if DEBUG_WATER_LEVEL
-        if (g_calibrated && nauReady) {
-            float water_ml = calibrationGetWaterWeight(current_adc, g_calibration);
-            Serial.print("Water level: ");
-            Serial.print(water_ml);
-            Serial.println(" ml");
-        }
-        #endif
+        case SYSTEM_CALIBRATION:
+            handleCalibration(ctx);
+            break;
+
+        case SYSTEM_DEEP_SLEEP:
+            // Deep sleep (future implementation)
+            break;
     }
 
-    // If in calibration mode, update state machine
+    // Debug output (only print periodically to reduce serial spam)
+    #if DEBUG_ACCELEROMETER
+    static unsigned long last_debug_print = 0;
+    if (lisReady && (ctx.loop_timestamp - last_debug_print >= 1000)) {
+        last_debug_print = ctx.loop_timestamp;
+
+        float x, y, z;
+        gesturesGetAccel(x, y, z);
+        Serial.print("Accel X: ");
+        Serial.print(x, 2);
+        Serial.print("g  Y: ");
+        Serial.print(y, 2);
+        Serial.print("g  Z: ");
+        Serial.print(z, 2);
+        Serial.print("g  Gesture: ");
+
+        switch (ctx.gesture_state.type) {
+            case GESTURE_INVERTED_HOLD: Serial.print("INVERTED_HOLD"); break;
+            case GESTURE_UPRIGHT: Serial.print("UPRIGHT"); break;
+            case GESTURE_UPRIGHT_STABLE: Serial.print("UPRIGHT_STABLE"); break;
+            case GESTURE_SIDEWAYS_TILT: Serial.print("SIDEWAYS_TILT"); break;
+            default: Serial.print("NONE"); break;
+        }
+
+        Serial.print("  System State: ");
+        Serial.print(getSystemStateName(g_system_state));
+
+        unsigned long remaining = (AWAKE_DURATION_MS - (ctx.loop_timestamp - wakeTime)) / 1000;
+        Serial.print("  (sleep in ");
+        Serial.print(remaining);
+        Serial.println("s)");
+    }
+    #endif
+
+    // Check if it's time to sleep
+    // DISABLED FOR CALIBRATION TESTING
+    /*
+    if (ctx.loop_timestamp - wakeTime >= AWAKE_DURATION_MS) {
+        if (lisReady) {
+            // Clear any pending interrupt before sleep
+            readAccelReg(LIS3DH_REG_INT1SRC);
+
+            Serial.print("INT pin before sleep: ");
+            Serial.println(digitalRead(LIS3DH_INT_PIN));
+        }
+        enterDeepSleep();
+    }
+    */
+
+    // Reduced delay for more responsive gesture detection
+    delay(200);
+}
+
+// ============================================================================
+// State Handler: NORMAL_OPERATION
+// ============================================================================
+
+void handleNormalOperation(const SystemContext& ctx) {
+    // Check for calibration trigger gesture (hold inverted for 5s)
+    if (ctx.gesture_state.type == GESTURE_INVERTED_HOLD && !ctx.gesture_consumed) {
+        Serial.println("[FSM] Calibration triggered by gesture");
+
+        // Acknowledge gesture to prevent re-triggering (Bug 2.1 fix)
+        if (ctx.gesture_state.needs_acknowledgment) {
+            gestureAcknowledge(GESTURE_INVERTED_HOLD);
+        }
+
+        calibrationStart();
+        transitionSystemState(SYSTEM_CALIBRATION);
+        return;  // Exit early, next loop will handle calibration state
+    }
+
+    // If calibrated, show water level (debug)
+    #if DEBUG_WATER_LEVEL
+    if (g_calibrated && nauReady) {
+        Serial.print("Water level: ");
+        Serial.print(ctx.current_water_ml);
+        Serial.println(" ml");
+    }
+    #endif
+
+    // Periodically check water level and update display if changed significantly
+    // Only refresh e-paper display if water level changed by >5ml to minimize flashing
+    static unsigned long last_level_check = 0;
+
+    // Check water level when bottle is upright (GESTURE_UPRIGHT or GESTURE_UPRIGHT_STABLE)
+    if (g_calibrated && (ctx.gesture_state.type == GESTURE_UPRIGHT || ctx.gesture_state.type == GESTURE_UPRIGHT_STABLE)) {
+        // Check water level every DISPLAY_UPDATE_INTERVAL_MS when bottle is upright stable
+        if (ctx.loop_timestamp - last_level_check >= DISPLAY_UPDATE_INTERVAL_MS) {
+            last_level_check = ctx.loop_timestamp;
+
+#if defined(BOARD_ADAFRUIT_FEATHER)
+            if (nauReady) {
+                float current_water_ml = ctx.current_water_ml;
+
+                // Clamp to valid range
+                if (current_water_ml < 0) current_water_ml = 0;
+                if (current_water_ml > 830) current_water_ml = 830;
+
+                // Only process drink tracking if UPRIGHT_STABLE (weight has been stable for 2s)
+                if (ctx.gesture_state.type == GESTURE_UPRIGHT_STABLE && ctx.time_valid) {
+                    drinksUpdate(ctx.current_adc, g_calibration);
+                }
+
+                // Only refresh display if water level changed by more than threshold
+                if (g_last_displayed_water_ml < 0 ||
+                    fabs(current_water_ml - g_last_displayed_water_ml) >= DISPLAY_UPDATE_THRESHOLD_ML) {
+
+                    #if DEBUG_DISPLAY_UPDATES
+                    Serial.print("Main: Water level changed from ");
+                    Serial.print(g_last_displayed_water_ml, 1);
+                    Serial.print("ml to ");
+                    Serial.print(current_water_ml, 1);
+                    Serial.println("ml - refreshing display");
+                    #endif
+
+                    drawMainScreen();
+                    g_last_displayed_water_ml = current_water_ml;
+                } else {
+                    #if DEBUG_DISPLAY_UPDATES
+                    Serial.print("Main: Water level unchanged (");
+                    Serial.print(current_water_ml, 1);
+                    Serial.println("ml) - no display refresh");
+                    #endif
+                }
+            }
+#endif
+        }
+    }
+}
+
+// ============================================================================
+// State Handler: CALIBRATION
+// ============================================================================
+
+void handleCalibration(const SystemContext& ctx) {
+    // Update calibration state machine
     if (calibrationIsActive()) {
-        CalibrationState new_state = calibrationUpdate(gesture, current_adc);
+        CalibrationState new_state = calibrationUpdate(ctx.gesture_state.type, ctx.current_adc);
 
         // Update UI when state changes
         if (new_state != g_last_cal_state) {
@@ -1026,7 +1286,7 @@ void loop() {
         if (new_state == CAL_COMPLETE && g_last_cal_state != CAL_COMPLETE) {
             CalibrationResult result = calibrationGetResult();
             if (result.success) {
-                Serial.println("Main: Calibration completed successfully!");
+                Serial.println("[FSM] Calibration completed successfully!");
                 g_calibration = result.data;
                 g_calibrated = true;
 
@@ -1036,9 +1296,8 @@ void loop() {
                 // Return to IDLE and redraw main screen
                 calibrationCancel();
                 g_last_cal_state = CAL_IDLE;
-                g_last_displayed_water_ml = -1.0f;  // Reset so first check will update display
-                Serial.println("Main: Returning to main screen");
-                drawMainScreen();
+                Serial.println("[FSM] Returning to NORMAL_OPERATION after calibration complete");
+                transitionSystemState(SYSTEM_NORMAL_OPERATION);
             }
         }
 
@@ -1054,119 +1313,8 @@ void loop() {
             // Return to IDLE and redraw main screen
             calibrationCancel();
             g_last_cal_state = CAL_IDLE;
-            Serial.println("Main: Returning to main screen after error");
-            drawMainScreen();
+            Serial.println("[FSM] Returning to NORMAL_OPERATION after calibration error");
+            transitionSystemState(SYSTEM_NORMAL_OPERATION);
         }
     }
-
-    // Periodically check water level and update display if changed significantly
-    // Only refresh e-paper display if water level changed by >5ml to minimize flashing
-    static unsigned long last_level_check = 0;
-
-    // Check water level when bottle is upright (GESTURE_UPRIGHT or GESTURE_UPRIGHT_STABLE)
-    if (cal_state == CAL_IDLE && g_calibrated &&
-        (gesture == GESTURE_UPRIGHT || gesture == GESTURE_UPRIGHT_STABLE)) {
-        // Check water level every DISPLAY_UPDATE_INTERVAL_MS when bottle is upright stable
-        if (millis() - last_level_check >= DISPLAY_UPDATE_INTERVAL_MS) {
-            last_level_check = millis();
-
-#if defined(BOARD_ADAFRUIT_FEATHER)
-            if (nauReady) {
-                // Wait for NAU7802 to have data available
-                int retry_count = 0;
-                while (!nau.available() && retry_count < 10) {
-                    delay(10);
-                    retry_count++;
-                }
-
-                if (nau.available()) {
-                    int32_t current_adc = nau.read();
-                    float current_water_ml = calibrationGetWaterWeight(current_adc, g_calibration);
-
-                    // Clamp to valid range
-                    if (current_water_ml < 0) current_water_ml = 0;
-                    if (current_water_ml > 830) current_water_ml = 830;
-
-                    // Only process drink tracking if UPRIGHT_STABLE (weight has been stable for 2s)
-                    if (gesture == GESTURE_UPRIGHT_STABLE && g_time_valid) {
-                        drinksUpdate(current_adc, g_calibration);
-                    }
-
-                    // Only refresh display if water level changed by more than threshold
-                    if (g_last_displayed_water_ml < 0 ||
-                        fabs(current_water_ml - g_last_displayed_water_ml) >= DISPLAY_UPDATE_THRESHOLD_ML) {
-
-                        #if DEBUG_DISPLAY_UPDATES
-                        Serial.print("Main: Water level changed from ");
-                        Serial.print(g_last_displayed_water_ml, 1);
-                        Serial.print("ml to ");
-                        Serial.print(current_water_ml, 1);
-                        Serial.println("ml - refreshing display");
-                        #endif
-
-                        drawMainScreen();
-                        g_last_displayed_water_ml = current_water_ml;
-                    } else {
-                        #if DEBUG_DISPLAY_UPDATES
-                        Serial.print("Main: Water level unchanged (");
-                        Serial.print(current_water_ml, 1);
-                        Serial.println("ml) - no display refresh");
-                        #endif
-                    }
-                }
-            }
-#endif
-        }
-    }
-
-    // Debug output (only print periodically to reduce serial spam)
-    #if DEBUG_ACCELEROMETER
-    static unsigned long last_debug_print = 0;
-    if (lisReady && (millis() - last_debug_print >= 1000)) {
-        last_debug_print = millis();
-
-        float x, y, z;
-        gesturesGetAccel(x, y, z);
-        Serial.print("Accel X: ");
-        Serial.print(x, 2);
-        Serial.print("g  Y: ");
-        Serial.print(y, 2);
-        Serial.print("g  Z: ");
-        Serial.print(z, 2);
-        Serial.print("g  Gesture: ");
-
-        switch (gesture) {
-            case GESTURE_INVERTED_HOLD: Serial.print("INVERTED_HOLD"); break;
-            case GESTURE_UPRIGHT_STABLE: Serial.print("UPRIGHT_STABLE"); break;
-            case GESTURE_SIDEWAYS_TILT: Serial.print("SIDEWAYS_TILT"); break;
-            default: Serial.print("NONE"); break;
-        }
-
-        Serial.print("  Cal State: ");
-        Serial.print(calibrationGetStateName(cal_state));
-
-        unsigned long remaining = (AWAKE_DURATION_MS - (millis() - wakeTime)) / 1000;
-        Serial.print("  (sleep in ");
-        Serial.print(remaining);
-        Serial.println("s)");
-    }
-    #endif
-
-    // Check if it's time to sleep
-    // DISABLED FOR CALIBRATION TESTING
-    /*
-    if (millis() - wakeTime >= AWAKE_DURATION_MS) {
-        if (lisReady) {
-            // Clear any pending interrupt before sleep
-            readAccelReg(LIS3DH_REG_INT1SRC);
-
-            Serial.print("INT pin before sleep: ");
-            Serial.println(digitalRead(LIS3DH_INT_PIN));
-        }
-        enterDeepSleep();
-    }
-    */
-
-    // Reduced delay for more responsive gesture detection
-    delay(200);
 }

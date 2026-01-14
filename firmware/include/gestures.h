@@ -18,6 +18,13 @@ enum GestureType {
     GESTURE_SIDEWAYS_TILT,    // |X| or |Y| > 0.5g (confirmation)
 };
 
+// Gesture state (returned by gesturesUpdate)
+struct GestureState {
+    GestureType type;             // Current gesture detected
+    bool needs_acknowledgment;    // True if gesture needs to be acknowledged to prevent re-trigger
+    uint32_t timestamp;           // When gesture was first detected (milliseconds)
+};
+
 // Gesture detection configuration
 struct GestureConfig {
     // Thresholds (in g units)
@@ -44,7 +51,12 @@ void gesturesInit(Adafruit_LIS3DH& lis, const GestureConfig& config);
 
 // Update gesture detection (call regularly in loop)
 // weight_ml: current weight reading in ml (negative if bottle is in the air)
-GestureType gesturesUpdate(float weight_ml = 0.0f);
+// Returns GestureState with detected gesture and acknowledgment flag
+GestureState gesturesUpdate(float weight_ml = 0.0f);
+
+// Acknowledge a gesture to prevent re-triggering
+// Call this after handling GESTURE_INVERTED_HOLD to allow next detection
+void gestureAcknowledge(GestureType type);
 
 // Get current gesture config
 const GestureConfig& gesturesGetConfig();

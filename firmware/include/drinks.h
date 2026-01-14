@@ -7,6 +7,14 @@
 #include <Arduino.h>
 #include "storage.h"
 
+// Drink tracking state machine states
+enum DrinkTrackingState {
+    DRINK_UNINITIALIZED,        // Time not set or drinksInit() not called
+    DRINK_ESTABLISHING_BASELINE,// Waiting for first stable reading to establish baseline
+    DRINK_MONITORING,           // Monitoring for drink events (normal state)
+    DRINK_AGGREGATING          // In 5-minute aggregation window after drink
+};
+
 // DrinkRecord structure: Stores individual drink/refill events (9 bytes)
 struct DrinkRecord {
     uint32_t timestamp;         // Unix timestamp (seconds since epoch)
@@ -15,8 +23,9 @@ struct DrinkRecord {
     uint8_t  flags;             // Bit flags: 0x01=synced to app, 0x02=day_boundary
 };
 
-// DailyState structure: Tracks current day's drinking state (26 bytes)
+// DailyState structure: Tracks current day's drinking state (27 bytes)
 struct DailyState {
+    DrinkTrackingState state;           // Current drink tracking FSM state
     uint32_t last_reset_timestamp;      // Last 4am daily reset (Unix time)
     uint32_t last_drink_timestamp;      // Most recent drink event (Unix time)
     int32_t  last_recorded_adc;         // Baseline ADC value for drink detection
@@ -70,5 +79,20 @@ void drinksResetDaily();
  * WARNING: This erases all stored drink data
  */
 void drinksClearAll();
+
+/**
+ * Called when time becomes valid (via SET_TIME command)
+ * Initializes drink tracking if it wasn't already initialized
+ * Fixes Bug 4.2: Time valid change handling
+ */
+void drinksOnTimeSet();
+
+/**
+ * Get drink tracking state name for debugging
+ *
+ * @param state The state to get the name for
+ * @return Human-readable state name
+ */
+const char* getDrinkTrackingStateName(DrinkTrackingState state);
 
 #endif // DRINKS_H

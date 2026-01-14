@@ -10,7 +10,7 @@
 
 // Enable/disable debug output (set to 0 to disable all verbose output)
 #define DEBUG_ENABLED                   1   // 0 = quiet mode, 1 = verbose debug output
-#define DEBUG_WATER_LEVEL               1   // 0 = disable water level messages
+#define DEBUG_WATER_LEVEL               0   // 0 = disable water level messages
 #define DEBUG_ACCELEROMETER             1   // 0 = disable accelerometer debug output
 #define DEBUG_DISPLAY_UPDATES           1   // 0 = disable display update messages
 

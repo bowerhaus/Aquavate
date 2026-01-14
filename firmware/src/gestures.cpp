@@ -28,10 +28,12 @@ static float g_current_z = 0.0f;
 static uint32_t g_inverted_start_time = 0;
 static bool g_inverted_active = false;
 static bool g_inverted_triggered = false;  // Latch to prevent re-triggering
+static bool g_inverted_acknowledged = true;  // Must acknowledge before next trigger
+static uint32_t g_inverted_cooldown_end = 0;  // Cooldown timer (Bug 2.1 fix)
 
 // Weight stability tracking for UPRIGHT_STABLE
 static float g_last_stable_weight = 0.0f;
-static uint32_t g_upright_start_time = 0;
+static uint32_t g_upright_stable_start_time = 0;  // Bug 2.2 fix: explicit timer for 2s duration
 static bool g_upright_active = false;
 
 // Default configuration
@@ -59,7 +61,12 @@ void gesturesInit(Adafruit_LIS3DH& lis, const GestureConfig& config) {
     g_sample_index = 0;
     g_inverted_active = false;
     g_inverted_triggered = false;
+    g_inverted_acknowledged = true;
     g_inverted_start_time = 0;
+    g_inverted_cooldown_end = 0;
+    g_upright_active = false;
+    g_upright_stable_start_time = 0;
+    g_last_stable_weight = 0.0f;
 }
 
 // Calculate mean of samples
@@ -106,10 +113,14 @@ static float rawToGs(int16_t raw) {
     return raw / 16000.0f;
 }
 
-GestureType gesturesUpdate(float weight_ml) {
+GestureState gesturesUpdate(float weight_ml) {
+    GestureState result = {GESTURE_NONE, false, 0};
+
     if (!g_initialized || !g_lis) {
-        return GESTURE_NONE;
+        return result;
     }
+
+    uint32_t now = millis();
 
     // Read accelerometer
     g_lis->read();
@@ -121,21 +132,27 @@ GestureType gesturesUpdate(float weight_ml) {
     addSample(g_current_x, g_current_y, g_current_z);
 
     // Check for inverted hold gesture (highest priority - triggers calibration)
+    // Bug 2.1 Fix: Added cooldown timer and acknowledgment requirement
     if (g_current_z < g_config.inverted_z_threshold) {
-        if (!g_inverted_active) {
+        // Only start new detection if acknowledged and cooldown expired
+        if (!g_inverted_active && g_inverted_acknowledged && now >= g_inverted_cooldown_end) {
             g_inverted_active = true;
             g_inverted_triggered = false;
-            g_inverted_start_time = millis();
+            g_inverted_acknowledged = false;  // Requires acknowledgment before next trigger
+            g_inverted_start_time = now;
             Serial.print("Gestures: Inverted detected! Z=");
             Serial.print(g_current_z);
             Serial.println("g - hold for 5 seconds...");
-        } else if (!g_inverted_triggered) {
+        } else if (g_inverted_active && !g_inverted_triggered) {
             // Check if held long enough
-            uint32_t held_duration = millis() - g_inverted_start_time;
+            uint32_t held_duration = now - g_inverted_start_time;
             if (held_duration >= g_config.inverted_hold_duration) {
                 Serial.println("Gestures: INVERTED_HOLD gesture triggered!");
                 g_inverted_triggered = true;  // Latch to prevent re-triggering
-                return GESTURE_INVERTED_HOLD;
+                result.type = GESTURE_INVERTED_HOLD;
+                result.needs_acknowledgment = true;
+                result.timestamp = g_inverted_start_time;
+                return result;
             }
             // Debug: show progress every second
             if (held_duration % 1000 < 500) {
@@ -143,9 +160,12 @@ GestureType gesturesUpdate(float weight_ml) {
                 Serial.print(held_duration / 1000);
                 Serial.println("s");
             }
-        } else {
-            // Already triggered - keep returning the gesture until bottle is no longer inverted
-            return GESTURE_INVERTED_HOLD;
+        } else if (g_inverted_triggered) {
+            // Already triggered - keep returning the gesture until acknowledged
+            result.type = GESTURE_INVERTED_HOLD;
+            result.needs_acknowledgment = true;
+            result.timestamp = g_inverted_start_time;
+            return result;
         }
     } else {
         // Reset inverted state if bottle no longer inverted
@@ -159,7 +179,10 @@ GestureType gesturesUpdate(float weight_ml) {
     // Check for sideways tilt (confirmation gesture)
     if (fabs(g_current_x) > g_config.sideways_threshold ||
         fabs(g_current_y) > g_config.sideways_threshold) {
-        return GESTURE_SIDEWAYS_TILT;
+        result.type = GESTURE_SIDEWAYS_TILT;
+        result.needs_acknowledgment = false;
+        result.timestamp = now;
+        return result;
     }
 
     // Check for upright stable (bottle placement on table)
@@ -209,12 +232,13 @@ GestureType gesturesUpdate(float weight_ml) {
     #endif
 
     // Check if bottle is upright (meets all conditions)
+    // Bug 2.2 Fix: Separate timer for weight stability (g_upright_stable_start_time)
     if (z_ok && x_ok && y_ok && weight_ok && stable) {
-        // Track how long bottle has been upright with stable weight
+        // Track how long bottle has been upright
         if (!g_upright_active) {
             g_upright_active = true;
-            g_upright_start_time = millis();
             g_last_stable_weight = weight_ml;
+            g_upright_stable_start_time = 0;  // Reset stable timer
             #if DEBUG_ACCELEROMETER
             Serial.println("Gestures: UPRIGHT detected - tracking weight stability");
             #endif
@@ -225,41 +249,59 @@ GestureType gesturesUpdate(float weight_ml) {
         float weight_delta = fabs(weight_ml - g_last_stable_weight);
         bool weight_stable = (weight_delta < 6.0f);
 
-        // If weight is stable, update the baseline (tracks gradual changes)
         if (weight_stable) {
+            // Weight is stable - start or continue stability timer
+            if (g_upright_stable_start_time == 0) {
+                g_upright_stable_start_time = now;
+                #if DEBUG_ACCELEROMETER
+                Serial.println("Gestures: Weight stability timer STARTED");
+                #endif
+            }
+            // Update baseline slowly to track gradual changes
             g_last_stable_weight = weight_ml;
         } else {
-            // Weight changed significantly - reset timer
-            g_upright_start_time = millis();
+            // Weight changed significantly - reset stability timer
+            g_upright_stable_start_time = 0;
             g_last_stable_weight = weight_ml;
+            #if DEBUG_ACCELEROMETER
+            Serial.print("Gestures: Weight stability RESET - delta=");
+            Serial.print(weight_delta, 1);
+            Serial.println("ml");
+            #endif
         }
 
-        // Check if held stable long enough
-        uint32_t upright_duration = millis() - g_upright_start_time;
+        // Check if held stable long enough (2 seconds)
+        uint32_t stable_duration = (g_upright_stable_start_time > 0) ? (now - g_upright_stable_start_time) : 0;
 
         #if DEBUG_ACCELEROMETER
         static unsigned long last_weight_debug = 0;
-        if (millis() - last_weight_debug >= 1000) {
-            last_weight_debug = millis();
+        if (now - last_weight_debug >= 1000) {
+            last_weight_debug = now;
             if (!weight_stable) {
                 Serial.print("Gestures: UPRIGHT but weight NOT stable - delta=");
                 Serial.print(weight_delta, 1);
                 Serial.println("ml (need <6ml)");
-            } else if (upright_duration < 2000) {
+            } else if (stable_duration < 2000) {
                 Serial.print("Gestures: UPRIGHT and weight stable - duration=");
-                Serial.print(upright_duration);
+                Serial.print(stable_duration);
                 Serial.println("ms (need 2000ms)");
             }
         }
         #endif
 
         // Return UPRIGHT_STABLE if weight has been stable for 2+ seconds
-        if (weight_stable && upright_duration >= 2000) {
-            return GESTURE_UPRIGHT_STABLE;
+        if (weight_stable && stable_duration >= 2000) {
+            result.type = GESTURE_UPRIGHT_STABLE;
+            result.needs_acknowledgment = false;
+            result.timestamp = g_upright_stable_start_time;
+            return result;
         }
 
         // Otherwise just UPRIGHT
-        return GESTURE_UPRIGHT;
+        result.type = GESTURE_UPRIGHT;
+        result.needs_acknowledgment = false;
+        result.timestamp = now;
+        return result;
     } else {
         // Reset upright tracking if conditions no longer met
         if (g_upright_active) {
@@ -268,11 +310,11 @@ GestureType gesturesUpdate(float weight_ml) {
             #endif
         }
         g_upright_active = false;
-        g_upright_start_time = 0;
+        g_upright_stable_start_time = 0;
         g_last_stable_weight = 0.0f;
     }
 
-    return GESTURE_NONE;
+    return result;
 }
 
 const GestureConfig& gesturesGetConfig() {
@@ -313,13 +355,24 @@ float gesturesGetVariance() {
     return x_var + y_var + z_var;
 }
 
+void gestureAcknowledge(GestureType type) {
+    if (type == GESTURE_INVERTED_HOLD) {
+        g_inverted_acknowledged = true;
+        // Set 2-second cooldown to prevent immediate re-trigger
+        g_inverted_cooldown_end = millis() + 2000;
+        Serial.println("Gestures: INVERTED_HOLD acknowledged - 2s cooldown active");
+    }
+}
+
 void gesturesReset() {
     g_sample_count = 0;
     g_sample_index = 0;
     g_inverted_active = false;
     g_inverted_triggered = false;
+    g_inverted_acknowledged = true;
     g_inverted_start_time = 0;
+    g_inverted_cooldown_end = 0;
     g_upright_active = false;
-    g_upright_start_time = 0;
+    g_upright_stable_start_time = 0;
     g_last_stable_weight = 0.0f;
 }
