@@ -31,6 +31,9 @@ extern bool g_debug_drink_tracking;
 extern bool g_debug_calibration;
 extern bool g_debug_ble;
 
+// Runtime display mode variable (managed in main.cpp)
+extern uint8_t g_daily_intake_display_mode;
+
 // Initialize serial command handler
 void serialCommandsInit() {
     cmdBufferPos = 0;
@@ -569,6 +572,43 @@ static void handleClearDrinks() {
     Serial.println("OK: All drink records cleared");
 }
 
+// Handle SET_DISPLAY_MODE command - switch between man and tumblers
+static void handleSetDisplayMode(char* args) {
+    int mode;
+    if (!parseInt(args, mode)) {
+        Serial.println("ERROR: Invalid display mode");
+        Serial.println("Usage: SET_DISPLAY_MODE mode");
+        Serial.println("  0 = Human figure (continuous fill)");
+        Serial.println("  1 = Tumbler grid (10 glasses)");
+        return;
+    }
+
+    if (mode < 0 || mode > 1) {
+        Serial.println("ERROR: Display mode must be 0 or 1");
+        Serial.println("  0 = Human figure (continuous fill)");
+        Serial.println("  1 = Tumbler grid (10 glasses)");
+        return;
+    }
+
+    // Save to NVS
+    if (!storageSaveDisplayMode((uint8_t)mode)) {
+        Serial.println("ERROR: Failed to save display mode to NVS");
+        return;
+    }
+
+    // Update global variable
+    g_daily_intake_display_mode = (uint8_t)mode;
+
+    const char* mode_name = (mode == 0) ? "Human figure" : "Tumbler grid";
+    Serial.printf("Display mode set: %d (%s)\n", mode, mode_name);
+    Serial.println("Saved to NVS");
+
+    // Force immediate display update
+    extern void displayForceUpdate();
+    displayForceUpdate();
+    Serial.println("Display updated");
+}
+
 // Handle debug level change (single character '0'-'4')
 static void handleDebugLevel(char level) {
     switch (level) {
@@ -701,6 +741,8 @@ static void processCommand(char* cmd) {
         handleResetDailyDrinks();
     } else if (strcmp(cmd, "CLEAR_DRINKS") == 0) {
         handleClearDrinks();
+    } else if (strcmp(cmd, "SET_DISPLAY_MODE") == 0) {
+        handleSetDisplayMode(args);
     } else {
         Serial.print("ERROR: Unknown command: ");
         Serial.println(cmd);
@@ -721,6 +763,8 @@ static void processCommand(char* cmd) {
         Serial.println("  DUMP_DRINKS           - Display all drink records");
         Serial.println("  RESET_DAILY_DRINKS    - Reset daily counter to 0");
         Serial.println("  CLEAR_DRINKS          - Clear all drink records (WARNING: erases data)");
+        Serial.println("\nDisplay Settings:");
+        Serial.println("  SET_DISPLAY_MODE mode - Switch intake visualization (0=human, 1=tumblers)");
     }
 }
 

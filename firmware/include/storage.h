@@ -53,4 +53,10 @@ bool storageSaveLastBootTime(uint32_t timestamp);
 // Load last boot timestamp from NVS (default: 0)
 uint32_t storageLoadLastBootTime();
 
+// Save daily intake display mode to NVS (0=human figure, 1=tumbler grid)
+bool storageSaveDisplayMode(uint8_t mode);
+
+// Load daily intake display mode from NVS (default: 0=human figure)
+uint8_t storageLoadDisplayMode();
+
 #endif // STORAGE_H

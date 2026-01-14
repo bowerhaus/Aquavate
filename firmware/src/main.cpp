@@ -65,6 +65,9 @@ bool g_debug_drink_tracking = DEBUG_DRINK_TRACKING;
 bool g_debug_calibration = DEBUG_CALIBRATION;
 bool g_debug_ble = DEBUG_BLE;
 
+// Runtime display mode (persistent via NVS)
+uint8_t g_daily_intake_display_mode = DAILY_INTAKE_DISPLAY_MODE;
+
 #if defined(BOARD_ADAFRUIT_FEATHER)
 #include "Adafruit_ThinkInk.h"
 
@@ -352,6 +355,15 @@ void setup() {
         // Load timezone and time_valid from NVS
         g_timezone_offset = storageLoadTimezone();
         g_time_valid = storageLoadTimeValid();
+
+        // Load display mode from NVS
+        g_daily_intake_display_mode = storageLoadDisplayMode();
+        const char* mode_name = (g_daily_intake_display_mode == 0) ? "Human figure" : "Tumbler grid";
+        Serial.print("Display mode loaded: ");
+        Serial.print(g_daily_intake_display_mode);
+        Serial.print(" (");
+        Serial.print(mode_name);
+        Serial.println(")");
 
         if (g_time_valid) {
             Serial.println("Time configuration loaded:");

@@ -18,6 +18,7 @@ extern CalibrationData g_calibration;
 extern bool g_calibrated;
 extern int8_t g_timezone_offset;
 extern bool g_time_valid;
+extern uint8_t g_daily_intake_display_mode;
 
 // External battery functions (defined in main.cpp for Adafruit Feather)
 #if defined(BOARD_ADAFRUIT_FEATHER)
@@ -582,13 +583,13 @@ void drawMainScreen() {
     float water_ml = g_display_state.water_ml;
     if (water_ml < 0) water_ml = 0;  // Default if not initialized
 
-    // Draw vertical bottle graphic on left side
+    // Draw vertical bottle graphic on left side (shifted down 3px)
     int bottle_x = 10;
-    int bottle_y = 20;
+    int bottle_y = 23;
     float fill_percent = water_ml / 830.0f;
     drawBottleGraphic(bottle_x, bottle_y, fill_percent);
 
-    // Draw large text showing daily intake (center)
+    // Draw large text showing daily intake (center, shifted down 3px)
     g_display_ptr->setTextSize(3);
     char intake_text[16];
     snprintf(intake_text, sizeof(intake_text), "%dml", g_display_state.daily_total_ml);
@@ -597,14 +598,14 @@ void drawMainScreen() {
     int available_width = 185 - 60;
     int intake_x = 60 + (available_width - intake_text_width) / 2;
 
-    g_display_ptr->setCursor(intake_x, 50);
+    g_display_ptr->setCursor(intake_x, 53);
     g_display_ptr->print(intake_text);
 
-    // Draw "today" label below
+    // Draw "today" label below (shifted down 3px)
     g_display_ptr->setTextSize(2);
     int today_width = 5 * 12;
     int today_x = 60 + (available_width - today_width) / 2;
-    g_display_ptr->setCursor(today_x, 75);
+    g_display_ptr->setCursor(today_x, 78);
     g_display_ptr->print("today");
 
     // Draw battery status in top-right corner
@@ -627,15 +628,16 @@ void drawMainScreen() {
         if (daily_fill > 1.0f) daily_fill = 1.0f;
     }
 
-    #if DAILY_INTAKE_DISPLAY_MODE == 0
+    // Use runtime display mode instead of compile-time constant (shifted down 3px)
+    if (g_daily_intake_display_mode == 0) {
         int figure_x = 185;
-        int figure_y = 20;
+        int figure_y = 26;  // Human figure shifted down additional 3px (total 6px from original)
         drawHumanFigure(figure_x, figure_y, daily_fill);
-    #else
+    } else {
         int grid_x = 195;
-        int grid_y = 20;
+        int grid_y = 23;
         drawGlassGrid(grid_x, grid_y, daily_fill);
-    #endif
+    }
 
     g_display_ptr->display();
 }

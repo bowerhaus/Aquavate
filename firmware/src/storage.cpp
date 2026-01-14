@@ -20,6 +20,7 @@ static const char* KEY_VALID = "cal_valid";
 static const char* KEY_TIMEZONE = "timezone";
 static const char* KEY_TIME_VALID = "time_valid";
 static const char* KEY_LAST_BOOT_TIME = "last_boot_time";
+static const char* KEY_DISPLAY_MODE = "display_mode";
 
 bool storageInit() {
     if (g_initialized) {
@@ -203,4 +204,28 @@ uint32_t storageLoadLastBootTime() {
     Serial.print("Storage: Loaded last_boot_time = ");
     Serial.println(timestamp);
     return timestamp;
+}
+
+bool storageSaveDisplayMode(uint8_t mode) {
+    if (!g_initialized) {
+        Serial.println("Storage: Not initialized");
+        return false;
+    }
+
+    g_preferences.putUChar(KEY_DISPLAY_MODE, mode);
+    Serial.print("Storage: Saved display_mode = ");
+    Serial.println(mode);
+    return true;
+}
+
+uint8_t storageLoadDisplayMode() {
+    if (!g_initialized) {
+        Serial.println("Storage: Not initialized, using default display_mode 0");
+        return 0;
+    }
+
+    uint8_t mode = g_preferences.getUChar(KEY_DISPLAY_MODE, 0);
+    Serial.print("Storage: Loaded display_mode = ");
+    Serial.println(mode);
+    return mode;
 }

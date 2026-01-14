@@ -36,6 +36,9 @@ extern bool g_debug_drink_tracking;
 extern bool g_debug_calibration;
 extern bool g_debug_ble;
 
+// Runtime display mode control
+extern uint8_t g_daily_intake_display_mode;
+
 // Helper macros for conditional debug output (runtime control)
 #define DEBUG_PRINT(category, ...) \
     do { \
