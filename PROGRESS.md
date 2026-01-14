@@ -406,6 +406,37 @@ Hardware Testing Plan:
 **Memory Used:** RAM 6.9%, Flash 35.6% (well within constraints)
 **Status:** FSM Refactoring Complete - Ready for Hardware Validation
 
+**Documentation:**
+- ✅ Comprehensive FSM diagram created ([docs/aquavate_fsm_diagram.png](docs/aquavate_fsm_diagram.png))
+- ✅ Python generator script for easy updates ([docs/generate_fsm_diagram.py](docs/generate_fsm_diagram.py))
+- ✅ Diagram shows all FSM levels with decision logic visualization
+
+---
+
+### FSM Diagram Created (2026-01-14)
+
+**Files Created:**
+- [docs/aquavate_fsm_diagram.png](docs/aquavate_fsm_diagram.png) - 303 KB comprehensive state machine diagram
+- [docs/generate_fsm_diagram.py](docs/generate_fsm_diagram.py) - Python script using Graphviz for easy regeneration
+
+**Diagram Features:**
+- **Master System FSM** - 4 states (STARTUP, NORMAL_OPERATION, CALIBRATION, DEEP_SLEEP)
+- **Calibration Sub-FSM** - 10 states with complete calibration flow and error handling
+- **Drink Tracking Sub-FSM** - 4 states with decision node showing internal logic:
+  - Decision diamond visualizes delta_ml evaluation logic
+  - 3 branches: drink detection (≥30ml), refill detection (≤-100ml), drift compensation
+  - Shows aggregation window behavior and 5-minute window logic
+  - Daily reset at 4am boundary clearly marked
+- **Gesture Detection** - 5 event types with triggers and cooldown logic
+- **Color-coded** by subsystem with legend
+- **UML-style decision nodes** to show conditional logic without adding code complexity
+
+**Design Decisions:**
+- Used Graphviz with spline edges for professional appearance
+- Decision node inside DRINK_MONITORING shows if/else logic without creating transient sub-states
+- Avoids over-engineering: keeps code simple while documenting complex decision logic visually
+- Easy to regenerate: `cd docs && python3 generate_fsm_diagram.py`
+
 ---
 
 ## Known Issues
@@ -416,7 +447,7 @@ None currently.
 
 ## Branch Status
 
-- `comprehensive-fsm-refactoring` - **ACTIVE**: FSM architecture implementation (Phase 2/4 complete)
+- `comprehensive-fsm-refactoring` - **ACTIVE**: FSM architecture implementation complete (Phase 4/4 ✅)
 - `daily-water-intake-tracking` - Paused: Drink tracking implementation (superseded by FSM refactor)
 - `master` - Stable: Basic iOS Hello World + Hardware design
 - `standalone-calibration-mode` - Merged: Calibration system complete
