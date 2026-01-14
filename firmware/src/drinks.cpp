@@ -214,13 +214,8 @@ void drinksUpdate(int32_t current_adc, const CalibrationData& cal) {
     else if (delta_ml <= -DRINK_REFILL_THRESHOLD_ML) {
         Serial.printf("\n=== REFILL DETECTED: %.1fml ===\n", -delta_ml);
 
-        DrinkRecord record;
-        record.timestamp = current_time;
-        record.amount_ml = (int16_t)delta_ml;  // Negative for refill
-        record.bottle_level_ml = (uint16_t)current_ml;
-        record.flags = 0;
-
-        storageSaveDrinkRecord(record);
+        // NOTE: Refills are not saved as drink records since they don't represent
+        // water consumption. We only update the baseline ADC and close the aggregation window.
 
         // Close aggregation window on refill
         g_daily_state.aggregation_window_active = 0;
