@@ -17,6 +17,7 @@ struct DisplayState {
     uint32_t last_time_check_ms;       // Last time check
     uint32_t last_battery_check_ms;    // Last battery check
     bool initialized;                  // Has state been initialized?
+    bool sleeping;                     // True when showing Zzzz indicator
 };
 
 // Public API
@@ -25,8 +26,20 @@ bool displayNeedsUpdate(float current_water_ml,
                        uint16_t current_daily_ml,
                        bool time_interval_elapsed,
                        bool battery_interval_elapsed);
-void displayUpdate(float water_ml, uint16_t daily_total_ml);
-void displayForceUpdate();
+void displayUpdate(float water_ml, uint16_t daily_total_ml,
+                   uint8_t hour, uint8_t minute,
+                   uint8_t battery_percent, bool sleeping);
+void displayForceUpdate(float water_ml, uint16_t daily_total_ml,
+                       uint8_t hour, uint8_t minute,
+                       uint8_t battery_percent, bool sleeping);
+DisplayState displayGetState();
 void drawMainScreen();
+
+// Mark display as initialized (used when waking from deep sleep - display image preserved)
+void displayMarkInitialized();
+
+// RTC memory persistence for deep sleep
+void displaySaveToRTC();
+bool displayRestoreFromRTC();
 
 #endif

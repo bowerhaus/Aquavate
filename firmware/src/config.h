@@ -67,6 +67,11 @@ extern uint8_t g_daily_intake_display_mode;
 // How long to stay awake after waking from deep sleep (milliseconds)
 #define AWAKE_DURATION_MS   30000   // 30 seconds
 
+// Display "Zzzz" indicator before entering deep sleep
+// 0 = No display update before sleep (saves battery, no flash)
+// 1 = Show "Zzzz" indicator before sleep (visual feedback)
+#define DISPLAY_SLEEP_INDICATOR     0
+
 // ==================== LIS3DH Accelerometer ====================
 
 // GPIO pin for accelerometer interrupt (must be RTC-capable for wake)
@@ -86,8 +91,23 @@ extern uint8_t g_daily_intake_display_mode;
 // #define LIS3DH_TILT_THRESHOLD_70_DEG    0x30  // More sensitive (wakes at 70°)
 // #define LIS3DH_TILT_THRESHOLD_85_DEG    0x40  // Less sensitive (wakes at 85°)
 
+// Threshold calculation: register_value × 0.016g = threshold in g
+// For Z-low interrupt: triggers when Z drops BELOW threshold
+// Based on actual measurements:
+//   Vertical: Z=1.00g  |  Left: Z=0.61g  |  Right: Z=0.77g
+//   Forward: Z=0.47g   |  Backward: Z=0.61g
+#define LIS3DH_TILT_THRESHOLD_0_70G     0x2C  // 44 × 0.016 = 0.70g
+#define LIS3DH_TILT_THRESHOLD_0_60G     0x26  // 38 × 0.016 = 0.61g
+#define LIS3DH_TILT_THRESHOLD_0_50G     0x20  // 32 × 0.016 = 0.51g
+#define LIS3DH_TILT_THRESHOLD_0_45G     0x1C  // 28 × 0.016 = 0.45g
+#define LIS3DH_TILT_THRESHOLD_0_40G     0x19  // 25 × 0.016 = 0.40g
+
 // Active tilt threshold (change this to adjust sensitivity)
-#define LIS3DH_TILT_WAKE_THRESHOLD   LIS3DH_TILT_THRESHOLD_80_DEG
+// Using Z-low only: triggers when Z drops below this value (vertical Z=1.0g)
+// Measured Z values: Vertical=1.00g, Right=0.77g, Forward=0.47g, Backward=0.61g, Left=0.61g
+// Threshold must be between highest tilt (0.77g) and lowest vertical reading (~0.96g)
+// 0x32 (0.80g) catches all tilts while avoiding false triggers from minor vibrations
+#define LIS3DH_TILT_WAKE_THRESHOLD   0x32  // 50 × 0.016 = 0.80g
 
 // ==================== Battery Monitoring ====================
 

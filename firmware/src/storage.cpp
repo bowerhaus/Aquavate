@@ -21,6 +21,7 @@ static const char* KEY_TIMEZONE = "timezone";
 static const char* KEY_TIME_VALID = "time_valid";
 static const char* KEY_LAST_BOOT_TIME = "last_boot_time";
 static const char* KEY_DISPLAY_MODE = "display_mode";
+static const char* KEY_SLEEP_TIMEOUT = "sleep_timeout";
 
 bool storageInit() {
     if (g_initialized) {
@@ -228,4 +229,30 @@ uint8_t storageLoadDisplayMode() {
     Serial.print("Storage: Loaded display_mode = ");
     Serial.println(mode);
     return mode;
+}
+
+bool storageSaveSleepTimeout(uint32_t seconds) {
+    if (!g_initialized) {
+        Serial.println("Storage: Not initialized");
+        return false;
+    }
+
+    g_preferences.putUInt(KEY_SLEEP_TIMEOUT, seconds);
+    Serial.print("Storage: Saved sleep_timeout = ");
+    Serial.print(seconds);
+    Serial.println(" seconds");
+    return true;
+}
+
+uint32_t storageLoadSleepTimeout() {
+    if (!g_initialized) {
+        Serial.println("Storage: Not initialized, using default sleep_timeout 30");
+        return 30; // Default 30 seconds
+    }
+
+    uint32_t seconds = g_preferences.getUInt(KEY_SLEEP_TIMEOUT, 30); // Default 30 seconds
+    Serial.print("Storage: Loaded sleep_timeout = ");
+    Serial.print(seconds);
+    Serial.println(" seconds");
+    return seconds;
 }

@@ -59,4 +59,10 @@ bool storageSaveDisplayMode(uint8_t mode);
 // Load daily intake display mode from NVS (default: 0=human figure)
 uint8_t storageLoadDisplayMode();
 
+// Save sleep timeout to NVS in seconds (0=disabled, 1-300 seconds)
+bool storageSaveSleepTimeout(uint32_t seconds);
+
+// Load sleep timeout from NVS in seconds (default: 30 seconds from AWAKE_DURATION_MS)
+uint32_t storageLoadSleepTimeout();
+
 #endif // STORAGE_H

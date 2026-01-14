@@ -1,0 +1,901 @@
+--- Terminal on /dev/cu.usbserial-59680112221 | 115200 8-N-1
+--- Available filters and text transformations: colorize, debug, default, direct, esp32_exception_decoder, hexlify, log2file, nocontrol, printable, send_on_enter, time
+--- More details at https://bit.ly/pio-monitor-filters
+--- Quit: Ctrl+C | Menu: Ctrl+T | Help: Ctrl+T followed by Ctrl+H
+Gestures: UPRIGHT and weight stable - duration=1037ms (need 2000ms)
+Water level: 640.16 ml
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 639.73 ml
+Accel X: -0.05g  Y: -0.01g  Z: 1.00g  Gesture: NONE  Cal State: IDLE  (sleep in 21s)
+Water level: 639.61 ml
+Water level: 639.17 ml
+Water level: 638.82 ml
+Water level: 639.59 ml
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 639.29 ml
+Accel X: -0.05g  Y: -0.01g  Z: 0.99g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 20s)
+Water level: 639.45 ml
+Water level: 639.44 ml
+Water level: 639.45 ml
+Water level: 639.27 ml
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 639.11 ml
+Display: Not initialized - forcing update
+Display: Daily intake changed (0ml -> 1559ml)
+Display: Time changed (0:00 -> 10:04)
+Display: Updating screen (water=639.1ml, daily=1559ml, sleeping=0)
+Drawing main screen...
+Accel X: -0.05g  Y: -0.01g  Z: 0.99g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 15s)
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 639.25 ml
+Water level: 639.71 ml
+Water level: 639.14 ml
+Water level: 639.77 ml
+Water level: 639.66 ml
+Accel X: -0.05g  Y: -0.01g  Z: 1.00g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 14s)
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 639.68 ml
+Water level: 639.93 ml
+Water level: 639.36 ml
+Water level: 639.45 ml
+Water level: 639.14 ml
+Accel X: -0.05g  Y: -0.01g  Z: 0.99g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 13s)
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 639.60 ml
+Water level: 639.75 ml
+Water level: 639.94 ml
+Water level: 639.87 ml
+Water level: 640.45 ml
+Accel X: -0.05g  Y: -0.01g  Z: 1.00g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 12s)
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 640.26 ml
+Water level: 639.87 ml
+Water level: 639.57 ml
+Water level: 639.35 ml
+Water level: 639.47 ml
+Accel X: -0.05g  Y: -0.01g  Z: 0.99g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 11s)
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 638.81 ml
+Water level: 638.95 ml
+Water level: 638.97 ml
+Water level: 638.92 ml
+Water level: 638.79 ml
+Accel X: -0.05g  Y: -0.01g  Z: 0.99g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 10s)
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 639.16 ml
+Water level: 638.70 ml
+Water level: 639.33 ml
+Water level: 640.24 ml
+Water level: 641.08 ml
+Accel X: -0.05g  Y: -0.00g  Z: 1.00g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 9s)
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 639.77 ml
+Water level: 640.28 ml
+Water level: 640.87 ml
+Water level: 639.55 ml
+Water level: 640.14 ml
+Accel X: -0.05g  Y: -0.01g  Z: 0.99g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 8s)
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 640.13 ml
+Water level: 639.67 ml
+Water level: 639.64 ml
+Water level: 639.46 ml
+Water level: 639.68 ml
+Accel X: -0.05g  Y: -0.00g  Z: 0.99g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 7s)
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 639.64 ml
+Water level: 639.55 ml
+Water level: 639.69 ml
+Water level: 639.82 ml
+Water level: 639.79 ml
+Accel X: -0.05g  Y: -0.01g  Z: 0.99g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 6s)
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 639.67 ml
+Water level: 640.13 ml
+Water level: 639.93 ml
+Water level: 639.74 ml
+Water level: 639.83 ml
+Accel X: -0.05g  Y: -0.01g  Z: 1.00g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 5s)
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 640.16 ml
+Water level: 640.25 ml
+Water level: 640.09 ml
+Water level: 640.17 ml
+Water level: 639.84 ml
+Accel X: -0.05g  Y: -0.01g  Z: 0.99g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 4s)
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 640.19 ml
+Water level: 639.72 ml
+Water level: 639.87 ml
+Water level: 639.67 ml
+Water level: 639.76 ml
+Accel X: -0.05g  Y: -0.01g  Z: 0.99g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 3s)
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 640.14 ml
+Water level: 639.64 ml
+Water level: 640.10 ml
+Water level: 639.99 ml
+Water level: 640.23 ml
+Accel X: -0.05g  Y: -0.01g  Z: 0.99g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 2s)
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 639.87 ml
+Water level: 639.90 ml
+Water level: 640.00 ml
+Water level: 640.31 ml
+Water level: 640.24 ml
+Accel X: -0.05g  Y: -0.01g  Z: 0.99g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 1s)
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 640.17 ml
+Water level: 640.15 ml
+Water level: 640.04 ml
+Water level: 639.83 ml
+Water level: 639.98 ml
+Accel X: -0.05g  Y: -0.00g  Z: 0.99g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 0s)
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 640.03 ml
+Water level: 640.14 ml
+Water level: 640.05 ml
+Entering sleep without display update (DISPLAY_SLEEP_INDICATOR=0)
+INT pin before sleep: 1
+Entering deep sleep...
+Display: Saved to RTC (wake #1) - 639ml, 1559ml daily, 10:04, 99% batt
+Storage: Loading calibration...
+Storage: Loaded scale_factor = 432.20
+Storage: Loaded empty_adc = 17744
+Storage: Loaded full_adc = 376467
+Storage: Valid = 1
+Drinks: Saved to RTC - baseline ADC=294430 (640ml)
+[DEBUG] main.cpp:enterDeepSleep: Before interrupt clear - accelerometer reading | Data: {"z_axis":0.995,"x_axis":-0.050,"y_axis":-0.007,"hypothesisId":"A"}
+[DEBUG] main.cpp:enterDeepSleep: Interrupt clear attempt | Data: {"attempt":1,"int1_src":"0x25","pin_state":0,"hypothesisId":"A"}
+Clear attempt 1: INT1_SRC=0x25, pin=LOW
+Interrupt cleared successfully
+[DEBUG] main.cpp:enterDeepSleep: Final state before sleep | Data: {"final_pin_state":0,"int1_src":"0x25","int1_cfg":"0x04","int1_ths":"0x32","z_axis":0.995,"threshold_g":0.800,"hypothesisId":"A"}
+[DEBUG] main.cpp:enterDeepSleep: Wake configuration set | Data: {"wake_pin":27,"wake_level":1,"hypothesisId":"E"}
+ets Jul 29 2019 12:21:46
+
+rst:0x5 (DEEPSLEEP_RESET),boot:0x13 (SPI_FAST_FLASH_BOOT)
+configsip: 271414342, SPIWP:0xee
+clk_drv:0x00,q_drv:0x00,d_drv:0x00,cs0_drv:0x00,hd_drv:0x00,wp_drv:0x00
+mode:DIO, clock div:1
+load:0x3fff0030,len:4688
+load:0x40078000,len:15460
+ho 0 tail 12 room 4
+load:0x40080400,len:4
+load:0x40080404,len:3196
+entry 0x400805a4
+[     9][I][esp32-hal-psram.c:102] psramAddToHeap(): PSRAM added to the heap.
+[DEBUG] main.cpp:setup: Wake reason detected | Data: {"wakeup_reason":2,"hypothesisId":"A"}
+=================================
+Woke up from EXT0 (tilt/motion interrupt!)
+GPIO 27 triggered wake
+[  1264][E][esp32-hal-gpio.c:190] __digitalRead(): IO 27 is not set as GPIO.
+[DEBUG] main.cpp:setup: Pin state immediately after EXT0 wake | Data: {"wake_pin":27,"pin_state_after_wake":0,"hypothesisId":"A"}
+=================================
+Aquavate v0.1.0
+=================================
+Board: Adafruit ESP32 Feather V2
+Display: 2.13" E-Paper FeatherWing
+
+Initializing E-Paper display...
+Battery: 4.20V (99%)
+E-Paper display initialized!
+Initializing...
+[  2308][I][esp32-hal-i2c.c:125] i2cInit(): Initializing I2C Master: sda=22 scl=20 freq=100000
+Initializing NAU7802...
+[  2322][W][Wire.cpp:296] begin(): Bus already started in Master Mode.
+NAU7802 found!
+Initializing LIS3DH...
+[  2955][W][Wire.cpp:296] begin(): Bus already started in Master Mode.
+LIS3DH found!
+Checking accelerometer state after wake...
+  Current orientation: X=-0.05g Y=-0.01g Z=0.98g
+[  2988][E][esp32-hal-gpio.c:190] __digitalRead(): IO 27 is not set as GPIO.
+[DEBUG] main.cpp:setup: Accelerometer state after EXT0 wake | Data: {"z_axis":0.984,"x_axis":-0.052,"y_axis":-0.009,"int1_src":"0x65","int1_cfg":"0x04","int1_ths":"0x32","pin_state":0,"threshold_g":0.800,"hypothesisId":"B"}
+  INT1_SRC: 0x65 (cleared)
+Configuring LIS3DH interrupt for wake-on-tilt...
+  REFERENCE register cleared: 0x0
+LIS3DH interrupt configuration:
+  CTRL_REG1: 0x27 (ODR=2, Xen=1, Yen=1, Zen=1)
+  CTRL_REG2: 0x0 (HP filter)
+  CTRL_REG3: 0x40 (INT1 routing)
+  CTRL_REG4: 0x8 (scale/resolution)
+  CTRL_REG5: 0x8 (latch enable)
+  CTRL_REG6: 0x0 (INT polarity)
+  INT1_CFG: 0x4 (ZLIE=0, AOI=0)
+  INT1_THS: 0x32 (50 LSB = 0.800g)
+  INT1_DUR: 0x3
+  INT1_SRC: 0x65 (ZL=1, IA=1)
+  INT pin state: LOW
+  Current accel: X=-0.045g, Y=-0.005g, Z=0.991g
+Wake condition: Z-axis drops below threshold (tilt in any direction)
+[DEBUG] main.cpp:configureLIS3DHInterrupt: Interrupt configuration complete | Data: {"ctrl1":"0x27","ctrl2":"0x00","ctrl3":"0x40","ctrl4":"0x08","ctrl5":"0x08","ctrl6":"0x00","int1_cfg":"0x04","int1_ths":"0x32","int1_dur":"0x03","int1_src":"0x65","pin_state":0,"z_axis":0.991,"threshold_g":0.800,"hypothesisId":"C"}
+Initializing calibration system...
+Storage: NVS initialized
+Storage initialized
+Storage: Loading calibration...
+Storage: Loaded scale_factor = 432.20
+Storage: Loaded empty_adc = 17744
+Storage: Loaded full_adc = 376467
+Storage: Valid = 1
+Calibration loaded from NVS:
+  Scale factor: 432.20 ADC/g
+  Empty ADC: 17744
+  Full ADC: 376467
+Storage: Loaded timezone = 0
+Storage: Loaded time_valid = true
+Storage: Loaded display_mode = 0
+Display mode loaded: 0 (Human figure)
+Storage: Loaded sleep_timeout = 30 seconds
+Sleep timeout: 30 seconds
+Time configuration loaded:
+  Timezone offset: 0
+Storage: Loaded last_boot_time = 1768385086
+  RTC restored from last boot timestamp
+  WARNING: Time may be inaccurate (DS3231 RTC recommended)
+  Current time: Wed 10am
+Serial command handler initialized
+Gesture detection initialized
+Weight measurement initialized
+Calibration state machine initialized
+Calibration UI initialized
+Loaded daily state from NVS:
+  Daily total: 1559ml
+  Drink count: 13
+  Last drink: 1768385071
+Drink tracking system initialized
+Display: Initialized state tracking
+Display: Restored from RTC (wake #1) - 639ml, 1559ml daily, 10:04, 99% batt
+Drinks: Restored from RTC - baseline ADC=294430 (640ml)
+State restored from RTC memory (wake from sleep)
+Display: Marked as initialized (wake from sleep - display image preserved)
+Setup complete!
+Will sleep in 30 seconds...
+Gestures: Upright conditions met but NOT STABLE - variance=999.0000 (need <0.0200)
+Water level: 9369.52 ml
+Accel X: -0.05g  Y: -0.00g  Z: 0.99g  Gesture: NONE  Cal State: IDLE  (sleep in 27s)
+Water level: 640.41 ml
+Water level: 640.14 ml
+Water level: 639.97 ml
+Water level: 640.23 ml
+Gestures: Upright conditions met but NOT STABLE - variance=0.0000 (need <0.0200)
+Water level: 640.16 ml
+Accel X: -0.05g  Y: -0.01g  Z: 0.99g  Gesture: NONE  Cal State: IDLE  (sleep in 26s)
+Water level: 640.27 ml
+Water level: 639.94 ml
+Water level: 640.14 ml
+Gestures: UPRIGHT detected - tracking weight stability
+Gestures: UPRIGHT and weight stable - duration=0ms (need 2000ms)
+Water level: 640.35 ml
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 640.08 ml
+Accel X: -0.05g  Y: -0.01g  Z: 0.99g  Gesture: NONE  Cal State: IDLE  (sleep in 25s)
+Water level: 639.94 ml
+Water level: 640.15 ml
+Water level: 639.98 ml
+Gestures: UPRIGHT and weight stable - duration=1037ms (need 2000ms)
+Water level: 640.29 ml
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 640.39 ml
+Accel X: -0.05g  Y: -0.01g  Z: 0.99g  Gesture: NONE  Cal State: IDLE  (sleep in 24s)
+Water level: 640.31 ml
+Water level: 640.13 ml
+Water level: 640.19 ml
+Water level: 640.13 ml
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 640.27 ml
+Accel X: -0.05g  Y: -0.01g  Z: 0.99g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 23s)
+Water level: 640.17 ml
+Water level: 640.00 ml
+Water level: 640.26 ml
+Water level: 640.08 ml
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 640.17 ml
+Accel X: -0.05g  Y: -0.01g  Z: 1.00g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 22s)
+Water level: 640.15 ml
+Water level: 640.51 ml
+Water level: 640.45 ml
+Water level: 640.01 ml
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 640.28 ml
+Accel X: -0.05g  Y: -0.01g  Z: 1.00g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 21s)
+Water level: 640.22 ml
+Water level: 640.08 ml
+Water level: 640.32 ml
+Water level: 640.05 ml
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 640.26 ml
+Accel X: -0.05g  Y: -0.01g  Z: 0.99g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 20s)
+Water level: 640.42 ml
+Water level: 640.51 ml
+Water level: 640.18 ml
+Water level: 640.42 ml
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 640.27 ml
+Accel X: -0.05g  Y: -0.01g  Z: 0.99g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 19s)
+Water level: 640.14 ml
+Water level: 640.44 ml
+Water level: 640.29 ml
+Water level: 640.17 ml
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 640.15 ml
+Accel X: -0.05g  Y: -0.01g  Z: 0.99g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 18s)
+Water level: 640.04 ml
+Water level: 639.87 ml
+Water level: 640.38 ml
+Water level: 639.91 ml
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 640.38 ml
+Accel X: -0.05g  Y: -0.00g  Z: 1.00g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 17s)
+Water level: 640.42 ml
+Water level: 640.68 ml
+Water level: 640.54 ml
+Water level: 640.42 ml
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 640.55 ml
+Accel X: -0.05g  Y: -0.00g  Z: 0.99g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 16s)
+Water level: 640.23 ml
+Water level: 640.41 ml
+Water level: 640.32 ml
+Water level: 639.80 ml
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 640.04 ml
+Accel X: -0.05g  Y: -0.01g  Z: 0.99g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 15s)
+Water level: 639.93 ml
+Water level: 639.93 ml
+Water level: 639.88 ml
+Water level: 639.96 ml
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 640.07 ml
+Accel X: -0.05g  Y: -0.01g  Z: 0.99g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 14s)
+Water level: 639.91 ml
+Water level: 639.96 ml
+Water level: 640.32 ml
+Water level: 640.42 ml
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 640.32 ml
+Accel X: -0.05g  Y: -0.01g  Z: 1.00g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 13s)
+Water level: 640.53 ml
+Water level: 640.36 ml
+Water level: 640.24 ml
+Water level: 640.21 ml
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 639.99 ml
+Accel X: -0.05g  Y: -0.01g  Z: 0.99g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 12s)
+Water level: 640.01 ml
+Water level: 639.90 ml
+Water level: 639.87 ml
+Water level: 639.97 ml
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 639.58 ml
+Accel X: -0.05g  Y: -0.01g  Z: 0.99g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 11s)
+Water level: 640.38 ml
+Water level: 640.13 ml
+Water level: 639.96 ml
+Water level: 640.33 ml
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 640.48 ml
+Accel X: -0.06g  Y: -0.00g  Z: 0.99g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 10s)
+Water level: 640.26 ml
+Water level: 640.40 ml
+Water level: 640.10 ml
+Water level: 640.07 ml
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 640.60 ml
+Accel X: -0.05g  Y: -0.01g  Z: 0.99g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 9s)
+Water level: 640.34 ml
+Water level: 640.18 ml
+Water level: 639.85 ml
+Water level: 639.54 ml
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 639.39 ml
+Accel X: -0.05g  Y: -0.01g  Z: 0.99g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 8s)
+Water level: 639.56 ml
+Water level: 639.41 ml
+Water level: 639.85 ml
+Water level: 639.96 ml
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 640.25 ml
+Accel X: -0.05g  Y: -0.01g  Z: 0.99g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 7s)
+Water level: 640.03 ml
+Water level: 640.13 ml
+Water level: 640.02 ml
+Water level: 640.28 ml
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 640.45 ml
+Accel X: -0.05g  Y: -0.00g  Z: 0.99g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 6s)
+Water level: 640.20 ml
+Water level: 640.20 ml
+Water level: 640.18 ml
+Water level: 640.26 ml
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 640.24 ml
+Accel X: -0.05g  Y: -0.01g  Z: 0.99g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 5s)
+Water level: 640.16 ml
+Water level: 640.03 ml
+Water level: 640.27 ml
+Water level: 640.10 ml
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 639.98 ml
+Accel X: -0.05g  Y: -0.00g  Z: 0.99g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 4s)
+Water level: 640.27 ml
+Water level: 640.13 ml
+Water level: 640.27 ml
+Water level: 640.49 ml
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 640.41 ml
+Accel X: -0.05g  Y: -0.01g  Z: 0.99g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 3s)
+Water level: 640.07 ml
+Water level: 640.19 ml
+Water level: 640.23 ml
+Water level: 640.20 ml
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 640.32 ml
+Accel X: -0.05g  Y: -0.00g  Z: 0.99g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 2s)
+Water level: 640.48 ml
+Water level: 640.24 ml
+Water level: 640.48 ml
+Water level: 640.41 ml
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 640.46 ml
+Accel X: -0.05g  Y: -0.01g  Z: 0.99g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 1s)
+Water level: 640.43 ml
+Water level: 640.51 ml
+Water level: 641.20 ml
+Water level: 639.75 ml
+Gestures: UPRIGHT_STABLE detected - variance=0.0001 (stable)
+Water level: 639.85 ml
+Accel X: -0.05g  Y: -0.01g  Z: 0.98g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 0s)
+Water level: 640.43 ml
+Entering sleep without display update (DISPLAY_SLEEP_INDICATOR=0)
+INT pin before sleep: 1
+Entering deep sleep...
+Display: Saved to RTC (wake #2) - 639ml, 1559ml daily, 10:04, 99% batt
+Storage: Loading calibration...
+Storage: Loaded scale_factor = 432.20
+Storage: Loaded empty_adc = 17744
+Storage: Loaded full_adc = 376467
+Storage: Valid = 1
+Drinks: Saved to RTC - baseline ADC=294488 (640ml)
+[DEBUG] main.cpp:enterDeepSleep: Before interrupt clear - accelerometer reading | Data: {"z_axis":0.988,"x_axis":-0.051,"y_axis":-0.003,"hypothesisId":"A"}
+[DEBUG] main.cpp:enterDeepSleep: Interrupt clear attempt | Data: {"attempt":1,"int1_src":"0x25","pin_state":0,"hypothesisId":"A"}
+Clear attempt 1: INT1_SRC=0x25, pin=LOW
+Interrupt cleared successfully
+[DEBUG] main.cpp:enterDeepSleep: Final state before sleep | Data: {"final_pin_state":0,"int1_src":"0x25","int1_cfg":"0x04","int1_ths":"0x32","z_axis":0.988,"threshold_g":0.800,"hypothesisId":"A"}
+[DEBUG] main.cpp:enterDeepSleep: Wake configuration set | Data: {"wake_pin":27,"wake_level":1,"hypothesisId":"E"}
+ets Jul 29 2019 12:21:46
+
+rst:0x5 (DEEPSLEEP_RESET),boot:0x13 (SPI_FAST_FLASH_BOOT)
+configsip: 271414342, SPIWP:0xee
+clk_drv:0x00,q_drv:0x00,d_drv:0x00,cs0_drv:0x00,hd_drv:0x00,wp_drv:0x00
+mode:DIO, clock div:1
+load:0x3fff0030,len:4688
+load:0x40078000,len:15460
+ho 0 tail 12 room 4
+load:0x40080400,len:4
+load:0x40080404,len:3196
+entry 0x400805a4
+[     9][I][esp32-hal-psram.c:102] psramAddToHeap(): PSRAM added to the heap.
+[DEBUG] main.cpp:setup: Wake reason detected | Data: {"wakeup_reason":2,"hypothesisId":"A"}
+=================================
+Woke up from EXT0 (tilt/motion interrupt!)
+GPIO 27 triggered wake
+[  1266][E][esp32-hal-gpio.c:190] __digitalRead(): IO 27 is not set as GPIO.
+[DEBUG] main.cpp:setup: Pin state immediately after EXT0 wake | Data: {"wake_pin":27,"pin_state_after_wake":0,"hypothesisId":"A"}
+=================================
+Aquavate v0.1.0
+=================================
+Board: Adafruit ESP32 Feather V2
+Display: 2.13" E-Paper FeatherWing
+
+Initializing E-Paper display...
+Battery: 4.19V (99%)
+E-Paper display initialized!
+Initializing...
+[  2310][I][esp32-hal-i2c.c:125] i2cInit(): Initializing I2C Master: sda=22 scl=20 freq=100000
+Initializing NAU7802...
+[  2324][W][Wire.cpp:296] begin(): Bus already started in Master Mode.
+NAU7802 found!
+Initializing LIS3DH...
+[  2957][W][Wire.cpp:296] begin(): Bus already started in Master Mode.
+LIS3DH found!
+Checking accelerometer state after wake...
+  Current orientation: X=-0.05g Y=-0.01g Z=0.99g
+[  2990][E][esp32-hal-gpio.c:190] __digitalRead(): IO 27 is not set as GPIO.
+[DEBUG] main.cpp:setup: Accelerometer state after EXT0 wake | Data: {"z_axis":0.992,"x_axis":-0.051,"y_axis":-0.012,"int1_src":"0x65","int1_cfg":"0x04","int1_ths":"0x32","pin_state":0,"threshold_g":0.800,"hypothesisId":"B"}
+  INT1_SRC: 0x65 (cleared)
+Configuring LIS3DH interrupt for wake-on-tilt...
+  REFERENCE register cleared: 0x0
+LIS3DH interrupt configuration:
+  CTRL_REG1: 0x27 (ODR=2, Xen=1, Yen=1, Zen=1)
+  CTRL_REG2: 0x0 (HP filter)
+  CTRL_REG3: 0x40 (INT1 routing)
+  CTRL_REG4: 0x8 (scale/resolution)
+  CTRL_REG5: 0x8 (latch enable)
+  CTRL_REG6: 0x0 (INT polarity)
+  INT1_CFG: 0x4 (ZLIE=0, AOI=0)
+  INT1_THS: 0x32 (50 LSB = 0.800g)
+  INT1_DUR: 0x3
+  INT1_SRC: 0x65 (ZL=1, IA=1)
+  INT pin state: LOW
+  Current accel: X=-0.049g, Y=-0.008g, Z=0.992g
+Wake condition: Z-axis drops below threshold (tilt in any direction)
+[DEBUG] main.cpp:configureLIS3DHInterrupt: Interrupt configuration complete | Data: {"ctrl1":"0x27","ctrl2":"0x00","ctrl3":"0x40","ctrl4":"0x08","ctrl5":"0x08","ctrl6":"0x00","int1_cfg":"0x04","int1_ths":"0x32","int1_dur":"0x03","int1_src":"0x65","pin_state":0,"z_axis":0.992,"threshold_g":0.800,"hypothesisId":"C"}
+Initializing calibration system...
+Storage: NVS initialized
+Storage initialized
+Storage: Loading calibration...
+Storage: Loaded scale_factor = 432.20
+Storage: Loaded empty_adc = 17744
+Storage: Loaded full_adc = 376467
+Storage: Valid = 1
+Calibration loaded from NVS:
+  Scale factor: 432.20 ADC/g
+  Empty ADC: 17744
+  Full ADC: 376467
+Storage: Loaded timezone = 0
+Storage: Loaded time_valid = true
+Storage: Loaded display_mode = 0
+Display mode loaded: 0 (Human figure)
+Storage: Loaded sleep_timeout = 30 seconds
+Sleep timeout: 30 seconds
+Time configuration loaded:
+  Timezone offset: 0
+Storage: Loaded last_boot_time = 1768385086
+  RTC restored from last boot timestamp
+  WARNING: Time may be inaccurate (DS3231 RTC recommended)
+  Current time: Wed 10am
+Serial command handler initialized
+Gesture detection initialized
+Weight measurement initialized
+Calibration state machine initialized
+Calibration UI initialized
+Loaded daily state from NVS:
+  Daily total: 1559ml
+  Drink count: 13
+  Last drink: 1768385071
+Drink tracking system initialized
+Display: Initialized state tracking
+Display: Restored from RTC (wake #2) - 639ml, 1559ml daily, 10:04, 99% batt
+Drinks: Restored from RTC - baseline ADC=294488 (640ml)
+State restored from RTC memory (wake from sleep)
+Display: Marked as initialized (wake from sleep - display image preserved)
+Setup complete!
+Will sleep in 30 seconds...
+Gestures: Upright conditions met but NOT STABLE - variance=999.0000 (need <0.0200)
+Water level: 9314.64 ml
+Accel X: -0.05g  Y: -0.01g  Z: 0.99g  Gesture: NONE  Cal State: IDLE  (sleep in 27s)
+Water level: 640.97 ml
+Water level: 641.15 ml
+Water level: 641.24 ml
+Water level: 641.52 ml
+Gestures: Upright conditions met but NOT STABLE - variance=0.0000 (need <0.0200)
+Water level: 641.48 ml
+Accel X: -0.05g  Y: -0.00g  Z: 0.99g  Gesture: NONE  Cal State: IDLE  (sleep in 26s)
+Water level: 641.03 ml
+Water level: 641.20 ml
+Water level: 641.27 ml
+Gestures: UPRIGHT detected - tracking weight stability
+Gestures: UPRIGHT and weight stable - duration=0ms (need 2000ms)
+Water level: 641.35 ml
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 641.25 ml
+Accel X: -0.05g  Y: -0.01g  Z: 0.99g  Gesture: NONE  Cal State: IDLE  (sleep in 25s)
+Water level: 641.12 ml
+Water level: 641.12 ml
+Water level: 641.26 ml
+Gestures: UPRIGHT and weight stable - duration=1037ms (need 2000ms)
+Water level: 641.11 ml
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 641.26 ml
+Accel X: -0.05g  Y: -0.01g  Z: 0.99g  Gesture: NONE  Cal State: IDLE  (sleep in 24s)
+Water level: 641.35 ml
+Water level: 641.25 ml
+Water level: 641.20 ml
+Water level: 641.04 ml
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 641.32 ml
+Accel X: -0.05g  Y: -0.01g  Z: 1.00g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 23s)
+Water level: 641.31 ml
+Water level: 641.23 ml
+Water level: 641.04 ml
+Water level: 641.73 ml
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 641.27 ml
+Accel X: -0.06g  Y: -0.01g  Z: 0.99g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 22s)
+Water level: 641.18 ml
+Water level: 641.28 ml
+Water level: 641.37 ml
+Water level: 641.15 ml
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 641.12 ml
+Accel X: -0.05g  Y: -0.01g  Z: 0.99g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 21s)
+Water level: 641.33 ml
+Water level: 641.50 ml
+Water level: 641.19 ml
+Water level: 641.13 ml
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 641.19 ml
+Accel X: -0.06g  Y: -0.01g  Z: 1.00g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 20s)
+Water level: 642.77 ml
+Water level: 641.87 ml
+Water level: 641.35 ml
+Water level: 641.01 ml
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 641.30 ml
+Accel X: -0.05g  Y: -0.01g  Z: 0.99g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 19s)
+Water level: 641.97 ml
+Water level: 642.16 ml
+Water level: 642.33 ml
+Water level: 642.16 ml
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 642.18 ml
+Accel X: -0.05g  Y: -0.01g  Z: 0.99g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 18s)
+Water level: 642.22 ml
+Water level: 641.90 ml
+Water level: 641.77 ml
+Water level: 641.87 ml
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 641.83 ml
+Accel X: -0.05g  Y: -0.00g  Z: 0.99g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 17s)
+Water level: 641.28 ml
+Water level: 641.16 ml
+Water level: 641.96 ml
+Water level: 642.21 ml
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 641.71 ml
+Accel X: -0.05g  Y: -0.00g  Z: 0.99g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 16s)
+Water level: 641.63 ml
+Water level: 642.00 ml
+Water level: 641.89 ml
+Water level: 641.46 ml
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 641.35 ml
+Accel X: -0.05g  Y: -0.01g  Z: 1.00g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 15s)
+Water level: 641.72 ml
+Water level: 641.94 ml
+Water level: 642.01 ml
+Water level: 642.17 ml
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 642.33 ml
+Accel X: -0.05g  Y: -0.01g  Z: 0.99g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 14s)
+Water level: 642.38 ml
+Water level: 642.15 ml
+Water level: 642.15 ml
+Water level: 642.26 ml
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 642.01 ml
+Accel X: -0.05g  Y: -0.00g  Z: 0.99g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 13s)
+Water level: 642.15 ml
+Water level: 642.04 ml
+Water level: 642.00 ml
+Water level: 642.10 ml
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 642.00 ml
+Accel X: -0.05g  Y: -0.01g  Z: 0.99g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 12s)
+Water level: 642.01 ml
+Water level: 641.69 ml
+Water level: 642.18 ml
+Water level: 641.81 ml
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 642.31 ml
+Accel X: -0.05g  Y: -0.01g  Z: 0.99g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 11s)
+Water level: 642.09 ml
+Water level: 642.20 ml
+Water level: 641.79 ml
+Water level: 641.59 ml
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 641.77 ml
+Accel X: -0.05g  Y: -0.01g  Z: 0.99g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 10s)
+Water level: 641.46 ml
+Water level: 641.93 ml
+Water level: 641.92 ml
+Water level: 642.04 ml
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 641.78 ml
+Accel X: -0.05g  Y: -0.01g  Z: 0.99g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 9s)
+Water level: 641.95 ml
+Water level: 642.19 ml
+Water level: 642.07 ml
+Water level: 641.97 ml
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 641.79 ml
+Accel X: -0.05g  Y: -0.00g  Z: 0.99g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 8s)
+Water level: 641.56 ml
+Water level: 642.08 ml
+Water level: 641.78 ml
+Water level: 641.53 ml
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 641.42 ml
+Accel X: -0.05g  Y: -0.01g  Z: 0.99g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 7s)
+Water level: 641.66 ml
+Water level: 641.88 ml
+Water level: 641.74 ml
+Water level: 641.49 ml
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 641.76 ml
+Accel X: -0.05g  Y: -0.01g  Z: 0.99g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 6s)
+Water level: 641.79 ml
+Water level: 641.43 ml
+Water level: 641.49 ml
+Water level: 641.50 ml
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 641.60 ml
+Accel X: -0.05g  Y: -0.00g  Z: 0.99g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 5s)
+Water level: 641.62 ml
+Water level: 641.80 ml
+Water level: 641.53 ml
+Water level: 641.63 ml
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 641.91 ml
+Accel X: -0.05g  Y: -0.01g  Z: 0.99g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 4s)
+Water level: 641.65 ml
+Water level: 641.44 ml
+Water level: 641.41 ml
+Water level: 641.23 ml
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 641.25 ml
+Accel X: -0.05g  Y: -0.00g  Z: 0.99g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 3s)
+Water level: 640.12 ml
+Water level: 639.64 ml
+Water level: 640.67 ml
+Water level: 640.43 ml
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 640.07 ml
+Accel X: -0.05g  Y: -0.01g  Z: 0.99g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 2s)
+Water level: 639.96 ml
+Water level: 640.06 ml
+Water level: 640.11 ml
+Water level: 640.10 ml
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 640.25 ml
+Accel X: -0.05g  Y: -0.01g  Z: 0.99g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 1s)
+Water level: 640.26 ml
+Water level: 640.09 ml
+Water level: 640.15 ml
+Water level: 640.24 ml
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 640.06 ml
+Accel X: -0.05g  Y: -0.01g  Z: 0.99g  Gesture: UPRIGHT_STABLE  Cal State: IDLE  (sleep in 0s)
+Water level: 640.04 ml
+Entering sleep without display update (DISPLAY_SLEEP_INDICATOR=0)
+INT pin before sleep: 1
+Entering deep sleep...
+Display: Saved to RTC (wake #3) - 639ml, 1559ml daily, 10:04, 99% batt
+Storage: Loading calibration...
+Storage: Loaded scale_factor = 432.20
+Storage: Loaded empty_adc = 17744
+Storage: Loaded full_adc = 376467
+Storage: Valid = 1
+Drinks: Saved to RTC - baseline ADC=294382 (640ml)
+[DEBUG] main.cpp:enterDeepSleep: Before interrupt clear - accelerometer reading | Data: {"z_axis":0.992,"x_axis":-0.056,"y_axis":-0.007,"hypothesisId":"A"}
+[DEBUG] main.cpp:enterDeepSleep: Interrupt clear attempt | Data: {"attempt":1,"int1_src":"0x25","pin_state":0,"hypothesisId":"A"}
+Clear attempt 1: INT1_SRC=0x25, pin=LOW
+Interrupt cleared successfully
+[DEBUG] main.cpp:enterDeepSleep: Final state before sleep | Data: {"final_pin_state":0,"int1_src":"0x25","int1_cfg":"0x04","int1_ths":"0x32","z_axis":0.992,"threshold_g":0.800,"hypothesisId":"A"}
+[DEBUG] main.cpp:enterDeepSleep: Wake configuration set | Data: {"wake_pin":27,"wake_level":1,"hypothesisId":"E"}
+ets Jul 29 2019 12:21:46
+
+rst:0x5 (DEEPSLEEP_RESET),boot:0x13 (SPI_FAST_FLASH_BOOT)
+configsip: 271414342, SPIWP:0xee
+clk_drv:0x00,q_drv:0x00,d_drv:0x00,cs0_drv:0x00,hd_drv:0x00,wp_drv:0x00
+mode:DIO, clock div:1
+load:0x3fff0030,len:4688
+load:0x40078000,len:15460
+ho 0 tail 12 room 4
+load:0x40080400,len:4
+load:0x40080404,len:3196
+entry 0x400805a4
+[     9][I][esp32-hal-psram.c:102] psramAddToHeap(): PSRAM added to the heap.
+[DEBUG] main.cpp:setup: Wake reason detected | Data: {"wakeup_reason":2,"hypothesisId":"A"}
+=================================
+Woke up from EXT0 (tilt/motion interrupt!)
+GPIO 27 triggered wake
+[  1266][E][esp32-hal-gpio.c:190] __digitalRead(): IO 27 is not set as GPIO.
+[DEBUG] main.cpp:setup: Pin state immediately after EXT0 wake | Data: {"wake_pin":27,"pin_state_after_wake":0,"hypothesisId":"A"}
+=================================
+Aquavate v0.1.0
+=================================
+Board: Adafruit ESP32 Feather V2
+Display: 2.13" E-Paper FeatherWing
+
+Initializing E-Paper display...
+Battery: 4.19V (99%)
+E-Paper display initialized!
+Initializing...
+[  2310][I][esp32-hal-i2c.c:125] i2cInit(): Initializing I2C Master: sda=22 scl=20 freq=100000
+Initializing NAU7802...
+[  2324][W][Wire.cpp:296] begin(): Bus already started in Master Mode.
+NAU7802 found!
+Initializing LIS3DH...
+[  2957][W][Wire.cpp:296] begin(): Bus already started in Master Mode.
+LIS3DH found!
+Checking accelerometer state after wake...
+  Current orientation: X=-0.05g Y=-0.01g Z=1.00g
+[  2990][E][esp32-hal-gpio.c:190] __digitalRead(): IO 27 is not set as GPIO.
+[DEBUG] main.cpp:setup: Accelerometer state after EXT0 wake | Data: {"z_axis":0.999,"x_axis":-0.054,"y_axis":-0.009,"int1_src":"0x65","int1_cfg":"0x04","int1_ths":"0x32","pin_state":0,"threshold_g":0.800,"hypothesisId":"B"}
+  INT1_SRC: 0x65 (cleared)
+Configuring LIS3DH interrupt for wake-on-tilt...
+  REFERENCE register cleared: 0x0
+LIS3DH interrupt configuration:
+  CTRL_REG1: 0x27 (ODR=2, Xen=1, Yen=1, Zen=1)
+  CTRL_REG2: 0x0 (HP filter)
+  CTRL_REG3: 0x40 (INT1 routing)
+  CTRL_REG4: 0x8 (scale/resolution)
+  CTRL_REG5: 0x8 (latch enable)
+  CTRL_REG6: 0x0 (INT polarity)
+  INT1_CFG: 0x4 (ZLIE=0, AOI=0)
+  INT1_THS: 0x32 (50 LSB = 0.800g)
+  INT1_DUR: 0x3
+  INT1_SRC: 0x65 (ZL=1, IA=1)
+  INT pin state: LOW
+  Current accel: X=-0.048g, Y=-0.006g, Z=0.997g
+Wake condition: Z-axis drops below threshold (tilt in any direction)
+[DEBUG] main.cpp:configureLIS3DHInterrupt: Interrupt configuration complete | Data: {"ctrl1":"0x27","ctrl2":"0x00","ctrl3":"0x40","ctrl4":"0x08","ctrl5":"0x08","ctrl6":"0x00","int1_cfg":"0x04","int1_ths":"0x32","int1_dur":"0x03","int1_src":"0x65","pin_state":0,"z_axis":0.997,"threshold_g":0.800,"hypothesisId":"C"}
+Initializing calibration system...
+Storage: NVS initialized
+Storage initialized
+Storage: Loading calibration...
+Storage: Loaded scale_factor = 432.20
+Storage: Loaded empty_adc = 17744
+Storage: Loaded full_adc = 376467
+Storage: Valid = 1
+Calibration loaded from NVS:
+  Scale factor: 432.20 ADC/g
+  Empty ADC: 17744
+  Full ADC: 376467
+Storage: Loaded timezone = 0
+Storage: Loaded time_valid = true
+Storage: Loaded display_mode = 0
+Display mode loaded: 0 (Human figure)
+Storage: Loaded sleep_timeout = 30 seconds
+Sleep timeout: 30 seconds
+Time configuration loaded:
+  Timezone offset: 0
+Storage: Loaded last_boot_time = 1768385086
+  RTC restored from last boot timestamp
+  WARNING: Time may be inaccurate (DS3231 RTC recommended)
+  Current time: Wed 10am
+Serial command handler initialized
+Gesture detection initialized
+Weight measurement initialized
+Calibration state machine initialized
+Calibration UI initialized
+Loaded daily state from NVS:
+  Daily total: 1559ml
+  Drink count: 13
+  Last drink: 1768385071
+Drink tracking system initialized
+Display: Initialized state tracking
+Display: Restored from RTC (wake #3) - 639ml, 1559ml daily, 10:04, 99% batt
+Drinks: Restored from RTC - baseline ADC=294382 (640ml)
+State restored from RTC memory (wake from sleep)
+Display: Marked as initialized (wake from sleep - display image preserved)
+Setup complete!
+Will sleep in 30 seconds...
+Gestures: Upright conditions met but NOT STABLE - variance=999.0000 (need <0.0200)
+Water level: 9360.69 ml
+Accel X: -0.05g  Y: -0.01g  Z: 0.99g  Gesture: NONE  Cal State: IDLE  (sleep in 27s)
+Water level: 640.62 ml
+Water level: 640.61 ml
+Water level: 640.71 ml
+Water level: 640.53 ml
+Gestures: Upright conditions met but NOT STABLE - variance=0.0000 (need <0.0200)
+Water level: 640.61 ml
+Accel X: -0.05g  Y: -0.01g  Z: 0.99g  Gesture: NONE  Cal State: IDLE  (sleep in 26s)
+Water level: 640.48 ml
+Water level: 640.32 ml
+Water level: 640.39 ml
+Gestures: UPRIGHT detected - tracking weight stability
+Gestures: UPRIGHT and weight stable - duration=0ms (need 2000ms)
+Water level: 640.27 ml
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 640.68 ml
+Accel X: -0.05g  Y: -0.01g  Z: 0.99g  Gesture: NONE  Cal State: IDLE  (sleep in 25s)
+Water level: 640.32 ml
+Water level: 640.51 ml
+Water level: 640.26 ml
+Gestures: UPRIGHT and weight stable - duration=1037ms (need 2000ms)
+Water level: 640.66 ml
+Gestures: UPRIGHT_STABLE detected - variance=0.0000 (stable)
+Water level: 640.59 ml
+Accel X: -0.05g  Y: -0.01g  Z: 0.99g  Gesture: NONE  Cal State: IDLE  (sleep in 24s)

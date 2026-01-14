@@ -17,6 +17,13 @@ extern bool g_rtc_ds3231_present; // DS3231 RTC detected
 static DailyState g_daily_state;
 static bool g_drinks_initialized = false;
 
+// RTC memory for drink detection baseline across deep sleep
+// Persists last stable ADC reading to prevent false drink detection on wake
+#define RTC_MAGIC_DRINKS 0x44524E4B  // "DRNK" in hex
+RTC_DATA_ATTR uint32_t rtc_drinks_magic = 0;
+RTC_DATA_ATTR int32_t rtc_last_stable_adc = 0;
+RTC_DATA_ATTR float rtc_last_stable_water_ml = 0.0f;
+
 // Helper: Get current Unix timestamp with timezone offset
 uint32_t getCurrentUnixTime() {
     struct timeval tv;
@@ -245,4 +252,39 @@ void drinksClearAll() {
     storageSaveBufferMetadata(meta);
 
     Serial.println("All drink records cleared");
+}
+
+// Save drink detection baseline to RTC memory before deep sleep
+void drinksSaveToRTC() {
+    rtc_last_stable_adc = g_daily_state.last_recorded_adc;
+
+    // Load calibration to convert ADC to ml for logging
+    CalibrationData cal;
+    if (storageLoadCalibration(cal)) {
+        rtc_last_stable_water_ml = calibrationGetWaterWeight(g_daily_state.last_recorded_adc, cal);
+    } else {
+        rtc_last_stable_water_ml = 0.0f;
+    }
+
+    rtc_drinks_magic = RTC_MAGIC_DRINKS;  // Mark as valid
+
+    Serial.printf("Drinks: Saved to RTC - baseline ADC=%d (%.0fml)\n",
+                  rtc_last_stable_adc, rtc_last_stable_water_ml);
+}
+
+// Restore drink detection baseline from RTC memory after waking from deep sleep
+// Returns true if valid state was restored, false if power cycle (magic invalid)
+bool drinksRestoreFromRTC() {
+    if (rtc_drinks_magic != RTC_MAGIC_DRINKS) {
+        Serial.println("Drinks: No valid RTC state (power cycle)");
+        return false;
+    }
+
+    // Restore baseline - this prevents false drink detection on wake
+    g_daily_state.last_recorded_adc = rtc_last_stable_adc;
+
+    Serial.printf("Drinks: Restored from RTC - baseline ADC=%d (%.0fml)\n",
+                  rtc_last_stable_adc, rtc_last_stable_water_ml);
+
+    return true;
 }

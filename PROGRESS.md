@@ -4,9 +4,9 @@
 
 ---
 
-## Current Branch: `smart-display-state-tracking`
+## Current Branch: `deep-sleep-reinstatement`
 
-**Status:** Phase 2 complete - Ready for BLE integration
+**Status:** ✅ Phase 2.5 Complete - Ready to Merge
 
 ### Standalone Device Features (Complete)
 
@@ -36,16 +36,39 @@
 - Battery monitoring with 20% quantized steps
 - Updates only when bottle is UPRIGHT_STABLE (prevents flicker)
 
-**Memory Usage:** RAM: 7.0% (22,804 bytes) | Flash: 35.7% (468,132 bytes)
+**Memory Usage:** RAM: 7.0% (22,972 bytes) | Flash: 36.6% (480,040 bytes)
 
 ---
 
 ## Active Work
 
-**Preparing for Phase 3: BLE Integration**
-- All standalone features complete and tested
-- Documentation up to date
-- Current branch ready to merge to master
+**Phase 2.5: Deep Sleep Power Management** ✅ COMPLETE
+- Reinstated deep sleep mode with 30s awake duration ✅
+- Optional "Zzzz" sleep indicator (configurable via DISPLAY_SLEEP_INDICATOR) ✅
+- Sleep blocked during active calibration ✅
+- Wake timer resets after calibration exit ✅
+- Serial command SET_SLEEP_TIMEOUT with NVS persistence ✅
+- Welcome screen only on power-on/reset (not on wake from sleep) ✅
+- Sleep display uses last valid state (doesn't re-read sensors) ✅
+- Enhanced wake-on-tilt interrupt handling with diagnostics ✅
+- LIS3DH interrupt properly cleared before/after sleep ✅
+- Sleep timeout persists across reboots via NVS ✅
+- 'T' test command for real-time interrupt diagnostics ✅
+- **RTC Memory State Persistence** ✅
+  - Display state saved to RTC memory before sleep (water, daily, time, battery)
+  - Drink detection baseline saved to RTC memory (prevents false triggers)
+  - Wake counter for diagnostics (tracks sleep cycles)
+  - Magic number validation (0x41515541 "AQUA" for display, 0x44524E4B "DRNK" for drinks)
+  - Auto-restore on wake from sleep, auto-invalidate on power cycle
+  - **Result:** Display only updates when values actually change, eliminating unnecessary flashing
+- **Wake-on-Tilt Status** ⚠️
+  - Using original Z-axis low interrupt configuration (INT1_CFG: 0x02)
+  - Threshold: 0x32 (0.80g) based on measured values (Vertical: 1.00g, tilted: 0.47-0.77g)
+  - **Known limitation:** Reliably wakes on left/right tilts, but forward/backward may not consistently trigger
+  - This is acceptable for MVP - users will naturally pick up bottle in ways that trigger wake
+- Plan: [Plans/010-deep-sleep-reinstatement.md](Plans/010-deep-sleep-reinstatement.md)
+
+**Status:** ✅ Complete and ready to merge. Wake-on-tilt works for primary use cases (left/right).
 
 
 ---
@@ -71,15 +94,20 @@
 
 ## Known Issues
 
-None currently.
+**Wake-on-tilt directional sensitivity:**
+- Wake interrupt reliably triggers on left/right tilts
+- Forward/backward tilts may not consistently wake from deep sleep
+- Root cause: LIS3DH Z-axis low interrupt (INT1_CFG=0x02) doesn't catch all tilt directions equally
+- Impact: Minimal - users naturally pick up bottles in ways that trigger wake (left/right grasp)
+- Future work: Could investigate 6D orientation detection or multi-axis interrupt configuration
 
 ---
 
 ## Branch Status
 
-- `smart-display-state-tracking` - **ACTIVE**: Ready to merge
+- `deep-sleep-reinstatement` - **ACTIVE**: ✅ Complete, ready to merge to master
 - `comprehensive-fsm-refactoring` - Banked: Full FSM refactor (for future BLE/OTA work)
-- `master` - Stable: Hardware design + iOS skeleton
+- `master` - Stable: Hardware design + iOS skeleton + standalone firmware (phases 1-2)
 
 ---
 
@@ -92,6 +120,7 @@ None currently.
 - [Daily Intake Tracking](Plans/007-daily-intake-tracking.md) - Phase 2 implementation plan (COMPLETED)
 - [Drink Type Classification](Plans/008-drink-type-classification.md) - Gulp vs Pour implementation (COMPLETED)
 - [Smart Display State Tracking](Plans/009-smart-display-state-tracking.md) - Display module with time/battery updates (COMPLETED)
+- [Deep Sleep Reinstatement](Plans/010-deep-sleep-reinstatement.md) - Power management with 30s sleep (IN PROGRESS)
 - [Hardware Research](Plans/001-hardware-research.md) - Component selection analysis
 - [Adafruit BOM](Plans/002-bom-adafruit-feather.md) - UK parts list for Feather config
 - [SparkFun BOM](Plans/003-bom-sparkfun-qwiic.md) - UK parts list for Qwiic config

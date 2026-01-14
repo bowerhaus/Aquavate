@@ -30,6 +30,17 @@ extern int getBatteryPercent(float voltage);
 static DisplayState g_display_state;
 static ThinkInk_213_Mono_GDEY0213B74* g_display_ptr = nullptr;
 
+// RTC memory for display state persistence across deep sleep
+// RTC_DATA_ATTR keeps data in RTC slow memory (survives deep sleep, lost on power cycle)
+#define RTC_MAGIC_DISPLAY 0x41515541  // "AQUA" in hex
+RTC_DATA_ATTR uint32_t rtc_display_magic = 0;
+RTC_DATA_ATTR float rtc_display_water_ml = 0.0f;
+RTC_DATA_ATTR uint16_t rtc_display_daily_ml = 0;
+RTC_DATA_ATTR uint8_t rtc_display_hour = 0;
+RTC_DATA_ATTR uint8_t rtc_display_minute = 0;
+RTC_DATA_ATTR uint8_t rtc_display_battery = 0;
+RTC_DATA_ATTR uint32_t rtc_wake_count = 0;
+
 // Bitmap data (moved from main.cpp)
 // Water drop icon bitmap (60x60 pixels)
 const unsigned char water_drop_bitmap[] PROGMEM = {
@@ -331,6 +342,16 @@ static void drawBatteryIcon(int x, int y, int percent) {
     }
 }
 
+// Helper: Draw sleep indicator (Zzzz.. text)
+static void drawSleepIndicator(int x, int y, bool sleeping) {
+    if (sleeping) {
+        g_display_ptr->setTextSize(1);
+        g_display_ptr->setTextColor(EPD_BLACK);
+        g_display_ptr->setCursor(x, y);
+        g_display_ptr->print("Zzzz..");
+    }
+}
+
 // Helper: Draw bottle graphic
 static void drawBottleGraphic(int x, int y, float fill_percent) {
     int bottle_width = 40;
@@ -444,7 +465,7 @@ static void drawGlassGrid(int x, int y, float fill_percent) {
 void displayInit(ThinkInk_213_Mono_GDEY0213B74& display_ref) {
     g_display_ptr = &display_ref;
     g_display_state.initialized = false;
-    g_display_state.water_ml = -1.0f;
+    g_display_state.water_ml = 0.0f;
     g_display_state.daily_total_ml = 0;
     g_display_state.hour = 0;
     g_display_state.minute = 0;
@@ -463,8 +484,10 @@ bool displayNeedsUpdate(float current_water_ml,
     bool needs_update = false;
 
     // 1. Water level check (5ml threshold)
-    if (!g_display_state.initialized ||
-        fabs(current_water_ml - g_display_state.water_ml) >= DISPLAY_UPDATE_THRESHOLD_ML) {
+    if (!g_display_state.initialized) {
+        DEBUG_PRINTF(1, "Display: Not initialized - forcing update\n");
+        needs_update = true;
+    } else if (fabs(current_water_ml - g_display_state.water_ml) >= DISPLAY_UPDATE_THRESHOLD_ML) {
         DEBUG_PRINTF(1, "Display: Water level changed (%.1fml -> %.1fml)\n",
                      g_display_state.water_ml, current_water_ml);
         needs_update = true;
@@ -515,60 +538,102 @@ bool displayNeedsUpdate(float current_water_ml,
     return needs_update;
 }
 
-void displayUpdate(float water_ml, uint16_t daily_total_ml) {
+void displayUpdate(float water_ml, uint16_t daily_total_ml,
+                   uint8_t hour, uint8_t minute,
+                   uint8_t battery_percent, bool sleeping) {
     if (g_display_ptr == nullptr) {
         Serial.println("Display ERROR: Not initialized!");
         return;
     }
 
-    DEBUG_PRINTF(1, "Display: Updating screen (water=%.1fml, daily=%dml)\n",
-                 water_ml, daily_total_ml);
+    DEBUG_PRINTF(1, "Display: Updating screen (water=%.1fml, daily=%dml, sleeping=%d)\n",
+                 water_ml, daily_total_ml, sleeping);
 
     // Update display state BEFORE rendering
     g_display_state.water_ml = water_ml;
     g_display_state.daily_total_ml = daily_total_ml;
+    g_display_state.hour = hour;
+    g_display_state.minute = minute;
+    g_display_state.battery_percent = battery_percent;
+    g_display_state.sleeping = sleeping;
     g_display_state.last_update_ms = millis();
-
-    // Update time state
-    if (g_time_valid) {
-        struct timeval tv;
-        gettimeofday(&tv, NULL);
-        time_t now = tv.tv_sec + (g_timezone_offset * 3600);
-        struct tm timeinfo;
-        gmtime_r(&now, &timeinfo);
-        g_display_state.hour = timeinfo.tm_hour;
-        g_display_state.minute = timeinfo.tm_min;
-    }
-
-    // Update battery state
-#if defined(BOARD_ADAFRUIT_FEATHER)
-    float voltage = getBatteryVoltage();
-    int raw_percent = getBatteryPercent(voltage);
-    g_display_state.battery_percent = quantizeBatteryPercent(raw_percent);
-#endif
-
     g_display_state.initialized = true;
 
     // Render the main screen
     drawMainScreen();
 }
 
-void displayForceUpdate() {
+void displayForceUpdate(float water_ml, uint16_t daily_total_ml,
+                       uint8_t hour, uint8_t minute,
+                       uint8_t battery_percent, bool sleeping) {
     DEBUG_PRINTF(1, "Display: Force update triggered\n");
     g_display_state.initialized = false;
+    displayUpdate(water_ml, daily_total_ml, hour, minute, battery_percent, sleeping);
+}
 
-    // Get current values and update
-    float water_ml = 0.0f;
-    if (g_calibrated && nauReady && nau.available()) {
-        int32_t current_adc = nau.read();
-        water_ml = calibrationGetWaterWeight(current_adc, g_calibration);
-        if (water_ml < 0) water_ml = 0;
-        if (water_ml > 830) water_ml = 830;
+// Get current display state (for sleep mode to reuse last valid values)
+DisplayState displayGetState() {
+    return g_display_state;
+}
+
+// Mark display as initialized without reading sensors
+// Used when waking from deep sleep - e-paper retains image, so no update needed
+// IMPORTANT: We don't read sensors here because bottle may be tilted/unstable during wake
+// The display will update naturally once the bottle is placed upright and values actually change
+void displayMarkInitialized() {
+    // Mark as initialized - this prevents the "!initialized" check from triggering
+    g_display_state.initialized = true;
+
+    // Set timestamps to current time to prevent interval-based updates from triggering immediately
+    g_display_state.last_update_ms = millis();
+    g_display_state.last_time_check_ms = millis();
+    g_display_state.last_battery_check_ms = millis();
+
+    // Keep the existing state values (they're already initialized to defaults in displayInit)
+    // This is safe because:
+    // 1. The first UPRIGHT_STABLE reading will compare against these defaults
+    // 2. If values truly changed (water consumed, time passed), the thresholds will detect it
+    // 3. If nothing changed, the thresholds prevent unnecessary updates
+
+    Serial.println("Display: Marked as initialized (wake from sleep - display image preserved)");
+}
+
+// Save display state to RTC memory before entering deep sleep
+void displaySaveToRTC() {
+    rtc_display_water_ml = g_display_state.water_ml;
+    rtc_display_daily_ml = g_display_state.daily_total_ml;
+    rtc_display_hour = g_display_state.hour;
+    rtc_display_minute = g_display_state.minute;
+    rtc_display_battery = g_display_state.battery_percent;
+    rtc_display_magic = RTC_MAGIC_DISPLAY;  // Mark as valid
+    rtc_wake_count++;  // Increment wake counter
+
+    Serial.printf("Display: Saved to RTC (wake #%lu) - %.0fml, %uml daily, %02u:%02u, %u%% batt\n",
+                  rtc_wake_count, rtc_display_water_ml, rtc_display_daily_ml,
+                  rtc_display_hour, rtc_display_minute, rtc_display_battery);
+}
+
+// Restore display state from RTC memory after waking from deep sleep
+// Returns true if valid state was restored, false if power cycle (magic invalid)
+bool displayRestoreFromRTC() {
+    if (rtc_display_magic != RTC_MAGIC_DISPLAY) {
+        Serial.println("Display: No valid RTC state (power cycle) - wake count reset");
+        rtc_wake_count = 0;
+        return false;
     }
 
-    DailyState daily_state;
-    drinksGetState(daily_state);
-    displayUpdate(water_ml, daily_state.daily_total_ml);
+    // Restore display state
+    g_display_state.water_ml = rtc_display_water_ml;
+    g_display_state.daily_total_ml = rtc_display_daily_ml;
+    g_display_state.hour = rtc_display_hour;
+    g_display_state.minute = rtc_display_minute;
+    g_display_state.battery_percent = rtc_display_battery;
+
+    Serial.printf("Display: Restored from RTC (wake #%lu) - %.0fml, %uml daily, %02u:%02u, %u%% batt\n",
+                  rtc_wake_count, rtc_display_water_ml, rtc_display_daily_ml,
+                  rtc_display_hour, rtc_display_minute, rtc_display_battery);
+
+    return true;
 }
 
 #if defined(BOARD_ADAFRUIT_FEATHER)
@@ -610,6 +675,9 @@ void drawMainScreen() {
 
     // Draw battery status in top-right corner
     drawBatteryIcon(220, 5, g_display_state.battery_percent);
+
+    // Draw sleep indicator in top-left corner
+    drawSleepIndicator(5, 5, g_display_state.sleeping);
 
     // Draw time centered at top
     char time_text[16];

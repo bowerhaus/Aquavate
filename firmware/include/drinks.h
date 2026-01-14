@@ -70,4 +70,11 @@ void drinksResetDaily();
  */
 void drinksClearAll();
 
+/**
+ * RTC memory persistence for deep sleep
+ * Save/restore drink detection baseline to prevent false triggers on wake
+ */
+void drinksSaveToRTC();
+bool drinksRestoreFromRTC();
+
 #endif // DRINKS_H

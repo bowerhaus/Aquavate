@@ -27,6 +27,7 @@
 // Display state tracking
 #include "display.h"
 
+
 // FIX Bug #4: Sensor snapshot to prevent multiple reads per loop
 struct SensorSnapshot {
     uint32_t timestamp;
@@ -67,6 +68,9 @@ bool g_debug_ble = DEBUG_BLE;
 
 // Runtime display mode (persistent via NVS)
 uint8_t g_daily_intake_display_mode = DAILY_INTAKE_DISPLAY_MODE;
+
+// Runtime sleep timeout control (0 = disabled, non-persistent)
+uint32_t g_sleep_timeout_ms = AWAKE_DURATION_MS;  // Default 30 seconds
 
 #if defined(BOARD_ADAFRUIT_FEATHER)
 #include "Adafruit_ThinkInk.h"
@@ -113,8 +117,95 @@ uint8_t readAccelReg(uint8_t reg) {
     return Wire.read();
 }
 
+void testInterruptState() {
+    // Manual test function - call this while bottle is tilted to see if interrupt triggers
+    if (!lisReady) {
+        Serial.println("LIS3DH not ready");
+        return;
+    }
+
+    Serial.println("\n=== INTERRUPT STATE TEST ===");
+
+    // Read current accelerometer values
+    lis.read();
+    float x_g = lis.x / 16000.0f;
+    float y_g = lis.y / 16000.0f;
+    float z_g = lis.z / 16000.0f;
+
+    Serial.print("Current orientation: X=");
+    Serial.print(x_g, 3);
+    Serial.print("g, Y=");
+    Serial.print(y_g, 3);
+    Serial.print("g, Z=");
+    Serial.print(z_g, 3);
+    Serial.println("g");
+
+    // Read interrupt registers (reading INT1_SRC clears the latch)
+    uint8_t int_src = readAccelReg(LIS3DH_REG_INT1SRC);
+    delay(10);  // Wait for latch to clear
+
+    // Read again to get current state after clearing
+    int_src = readAccelReg(LIS3DH_REG_INT1SRC);
+    uint8_t int_cfg = readAccelReg(LIS3DH_REG_INT1CFG);
+    uint8_t int_ths = readAccelReg(LIS3DH_REG_INT1THS);
+    int pin_state = digitalRead(LIS3DH_INT_PIN);
+
+    Serial.print("INT1_SRC: 0x");
+    Serial.print(int_src, HEX);
+    Serial.print(" - IA=");
+    Serial.print((int_src & 0x40) ? "1" : "0");
+    Serial.print(", ZH=");
+    Serial.print((int_src & 0x20) ? "1" : "0");
+    Serial.print(", ZL=");
+    Serial.print((int_src & 0x04) ? "1" : "0");
+    Serial.print(", YH=");
+    Serial.print((int_src & 0x10) ? "1" : "0");
+    Serial.print(", YL=");
+    Serial.print((int_src & 0x02) ? "1" : "0");
+    Serial.print(", XH=");
+    Serial.print((int_src & 0x08) ? "1" : "0");
+    Serial.print(", XL=");
+    Serial.println((int_src & 0x01) ? "1" : "0");
+
+    Serial.print("INT1_CFG: 0x");
+    Serial.print(int_cfg, HEX);
+    Serial.print(" (AOI=");
+    Serial.print((int_cfg & 0x80) ? "1" : "0");
+    Serial.print(", enabled: ");
+    if (int_cfg & 0x20) Serial.print("ZHIE ");
+    if (int_cfg & 0x04) Serial.print("ZLIE ");
+    if (int_cfg & 0x10) Serial.print("YHIE ");
+    if (int_cfg & 0x02) Serial.print("YLIE ");
+    if (int_cfg & 0x08) Serial.print("XHIE ");
+    if (int_cfg & 0x01) Serial.print("XLIE ");
+    Serial.println(")");
+
+    Serial.print("Threshold: 0x");
+    Serial.print(int_ths, HEX);
+    Serial.print(" = ");
+    Serial.print(int_ths * 0.016f, 3);
+    Serial.println("g");
+
+    Serial.print("INT pin state: ");
+    Serial.println(pin_state ? "HIGH (interrupt active)" : "LOW (no interrupt)");
+
+    Serial.print("Expected: Z=");
+    Serial.print(z_g, 3);
+    Serial.print("g should be ");
+    Serial.print((z_g < (int_ths * 0.016f)) ? "BELOW" : "ABOVE");
+    Serial.print(" threshold ");
+    Serial.print(int_ths * 0.016f, 3);
+    Serial.print("g -> ");
+    Serial.println((z_g < (int_ths * 0.016f)) ? "SHOULD TRIGGER" : "should NOT trigger");
+
+    Serial.println("=========================\n");
+}
+
 void configureLIS3DHInterrupt() {
     // Configure LIS3DH to wake when Z-axis < threshold (tilted >80° from vertical)
+    // ORIGINAL CONFIGURATION - reverted from experimental multi-axis interrupt
+
+    Serial.println("Configuring LIS3DH interrupt for wake-on-tilt...");
 
     // Configure interrupt pin with pulldown (INT is push-pull active high)
     pinMode(LIS3DH_INT_PIN, INPUT_PULLDOWN);
@@ -151,19 +242,101 @@ void configureLIS3DHInterrupt() {
     delay(50);
 
     // Clear any pending interrupt
-    readAccelReg(LIS3DH_REG_INT1SRC);
+    uint8_t int_src = readAccelReg(LIS3DH_REG_INT1SRC);
+    delay(10);
 
-    Serial.print("INT pin state: ");
-    Serial.println(digitalRead(LIS3DH_INT_PIN));
-    Serial.println("LIS3DH configured: wake when Z < ~4000 (tilt >75°)");
+    // Read current accelerometer values for diagnostics
+    lis.read();
+    float x_g = lis.x / 16000.0f;
+    float y_g = lis.y / 16000.0f;
+    float z_g = lis.z / 16000.0f;
+
+    // Verify interrupt configuration
+    uint8_t ctrl1 = readAccelReg(LIS3DH_REG_CTRL1);
+    uint8_t ctrl2 = readAccelReg(LIS3DH_REG_CTRL2);
+    uint8_t ctrl3 = readAccelReg(LIS3DH_REG_CTRL3);
+    uint8_t ctrl4 = readAccelReg(LIS3DH_REG_CTRL4);
+    uint8_t ctrl5 = readAccelReg(LIS3DH_REG_CTRL5);
+    uint8_t ctrl6 = readAccelReg(LIS3DH_REG_CTRL6);
+    uint8_t int_cfg = readAccelReg(LIS3DH_REG_INT1CFG);
+    uint8_t int_ths = readAccelReg(LIS3DH_REG_INT1THS);
+    uint8_t int_dur = readAccelReg(LIS3DH_REG_INT1DUR);
+    int pin_state = digitalRead(LIS3DH_INT_PIN);
+
+    Serial.println("LIS3DH interrupt configuration:");
+    Serial.print("  CTRL_REG1: 0x");
+    Serial.print(ctrl1, HEX);
+    Serial.print(" (ODR=");
+    Serial.print((ctrl1 >> 4) & 0x0F);
+    Serial.print(", Xen=");
+    Serial.print((ctrl1 & 0x01) ? "1" : "0");
+    Serial.print(", Yen=");
+    Serial.print((ctrl1 & 0x02) ? "1" : "0");
+    Serial.print(", Zen=");
+    Serial.print((ctrl1 & 0x04) ? "1" : "0");
+    Serial.println(")");
+    Serial.print("  CTRL_REG2: 0x");
+    Serial.print(ctrl2, HEX);
+    Serial.println(" (HP filter)");
+    Serial.print("  CTRL_REG3: 0x");
+    Serial.print(ctrl3, HEX);
+    Serial.println(" (INT1 routing)");
+    Serial.print("  CTRL_REG4: 0x");
+    Serial.print(ctrl4, HEX);
+    Serial.println(" (scale/resolution)");
+    Serial.print("  CTRL_REG5: 0x");
+    Serial.print(ctrl5, HEX);
+    Serial.println(" (latch enable)");
+    Serial.print("  CTRL_REG6: 0x");
+    Serial.print(ctrl6, HEX);
+    Serial.println(" (INT polarity)");
+    Serial.print("  INT1_CFG: 0x");
+    Serial.print(int_cfg, HEX);
+    Serial.print(" (ZLIE=");
+    Serial.print((int_cfg & 0x02) ? "1" : "0");
+    Serial.print(", AOI=");
+    Serial.print((int_cfg & 0x80) ? "1" : "0");
+    Serial.println(")");
+    Serial.print("  INT1_THS: 0x");
+    Serial.print(int_ths, HEX);
+    Serial.print(" (");
+    Serial.print(int_ths);
+    Serial.print(" LSB = ");
+    Serial.print(int_ths * 0.016f, 3);
+    Serial.println("g)");
+    Serial.print("  INT1_DUR: 0x");
+    Serial.println(int_dur, HEX);
+    Serial.print("  INT1_SRC: 0x");
+    Serial.print(int_src, HEX);
+    Serial.print(" (ZL=");
+    Serial.print((int_src & 0x04) ? "1" : "0");
+    Serial.print(", IA=");
+    Serial.print((int_src & 0x40) ? "1" : "0");
+    Serial.println(")");
+    Serial.print("  INT pin state: ");
+    Serial.println(pin_state ? "HIGH" : "LOW");
+    Serial.print("  Current accel: X=");
+    Serial.print(x_g, 3);
+    Serial.print("g, Y=");
+    Serial.print(y_g, 3);
+    Serial.print("g, Z=");
+    Serial.print(z_g, 3);
+    Serial.println("g");
+    Serial.println("Wake condition: Z-axis drops below threshold (tilt in any direction)");
 }
 
 void enterDeepSleep() {
     Serial.println("Entering deep sleep...");
+
+    // Save state to RTC memory before sleeping
+    displaySaveToRTC();
+    drinksSaveToRTC();
+
     Serial.flush();
 
     // Configure wake-up interrupt from LIS3DH INT1 pin
-    esp_sleep_enable_ext0_wakeup((gpio_num_t)LIS3DH_INT_PIN, 1);  // Wake on HIGH
+    // Wake on HIGH level (interrupt pin goes HIGH when tilted)
+    esp_sleep_enable_ext0_wakeup((gpio_num_t)LIS3DH_INT_PIN, 1);
 
     // Enter deep sleep
     esp_deep_sleep_start();
@@ -245,18 +418,25 @@ void setup() {
     pinMode(PIN_LED, OUTPUT);
     digitalWrite(PIN_LED, LOW);
 
-    // Print wake reason
+    // Print wake reason with detailed diagnostics
     esp_sleep_wakeup_cause_t wakeup_reason = esp_sleep_get_wakeup_cause();
     Serial.println("=================================");
     switch(wakeup_reason) {
         case ESP_SLEEP_WAKEUP_EXT0:
-            Serial.println("Woke up from tilt/motion!");
+            Serial.println("Woke up from EXT0 (tilt/motion interrupt!)");
+            Serial.print("GPIO ");
+            Serial.print(LIS3DH_INT_PIN);
+            Serial.println(" triggered wake");
             break;
         case ESP_SLEEP_WAKEUP_TIMER:
             Serial.println("Woke up from timer");
             break;
+        case ESP_SLEEP_WAKEUP_UNDEFINED:
+            Serial.println("Not from deep sleep (power on/reset/upload)");
+            break;
         default:
-            Serial.println("Normal boot (power on/reset)");
+            Serial.print("Woke up from unknown cause: ");
+            Serial.println(wakeup_reason);
             break;
     }
     Serial.println("=================================");
@@ -285,8 +465,10 @@ void setup() {
     display.begin();
     display.setRotation(2);  // Rotate 180 degrees
 
-    // Draw welcome screen on first boot
-    drawWelcomeScreen();
+    // Draw welcome screen only on power-on/reset (not on wake from sleep)
+    if (wakeup_reason != ESP_SLEEP_WAKEUP_EXT0 && wakeup_reason != ESP_SLEEP_WAKEUP_TIMER) {
+        drawWelcomeScreen();
+    }
 
     // Print battery info
     float batteryV = getBatteryVoltage();
@@ -322,6 +504,28 @@ void setup() {
         lis.setRange(LIS3DH_RANGE_2_G);
         lis.setDataRate(LIS3DH_DATARATE_10_HZ);
         lisReady = true;
+
+        // If we woke from EXT0, read current accelerometer state and clear interrupt
+        if (wakeup_reason == ESP_SLEEP_WAKEUP_EXT0) {
+            Serial.println("Checking accelerometer state after wake...");
+            lis.read();
+            float x = lis.x / 16000.0f;
+            float y = lis.y / 16000.0f;
+            float z = lis.z / 16000.0f;
+            Serial.print("  Current orientation: X=");
+            Serial.print(x, 2);
+            Serial.print("g Y=");
+            Serial.print(y, 2);
+            Serial.print("g Z=");
+            Serial.print(z, 2);
+            Serial.println("g");
+
+            // Read INT1_SRC to clear the interrupt latch
+            uint8_t int_src = readAccelReg(LIS3DH_REG_INT1SRC);
+            Serial.print("  INT1_SRC: 0x");
+            Serial.print(int_src, HEX);
+            Serial.println(" (cleared)");
+        }
 
         // Configure interrupt for wake-on-tilt
         configureLIS3DHInterrupt();
@@ -364,6 +568,17 @@ void setup() {
         Serial.print(" (");
         Serial.print(mode_name);
         Serial.println(")");
+
+        // Load sleep timeout from NVS
+        uint32_t sleep_timeout_seconds = storageLoadSleepTimeout();
+        g_sleep_timeout_ms = sleep_timeout_seconds * 1000;
+        if (sleep_timeout_seconds == 0) {
+            Serial.println("Sleep timeout: DISABLED (debug mode)");
+        } else {
+            Serial.print("Sleep timeout: ");
+            Serial.print(sleep_timeout_seconds);
+            Serial.println(" seconds");
+        }
 
         if (g_time_valid) {
             Serial.println("Time configuration loaded:");
@@ -450,7 +665,25 @@ void setup() {
     // Initialize display state tracking module
 #if defined(BOARD_ADAFRUIT_FEATHER)
     displayInit(display);
-    Serial.println("Display state tracking initialized");
+
+    // Restore state from RTC memory if waking from deep sleep
+    if (wakeup_reason == ESP_SLEEP_WAKEUP_EXT0 || wakeup_reason == ESP_SLEEP_WAKEUP_TIMER) {
+        // Attempt to restore display state from RTC memory
+        bool display_restored = displayRestoreFromRTC();
+        bool drinks_restored = drinksRestoreFromRTC();
+
+        if (display_restored && drinks_restored) {
+            Serial.println("State restored from RTC memory (wake from sleep)");
+            // Mark display as initialized to prevent unnecessary updates
+            displayMarkInitialized();
+        } else {
+            Serial.println("No valid RTC state (power cycle) - will force display update");
+        }
+    } else {
+        Serial.println("Display state tracking initialized (power on/reset)");
+    }
+
+    // Note: Display will update on first stable check to ensure correct values shown
 #endif
 
     Serial.println("Setup complete!");
@@ -552,9 +785,38 @@ void loop() {
                 // Return to IDLE and redraw main screen
                 calibrationCancel();
                 g_last_cal_state = CAL_IDLE;
+                wakeTime = millis();  // Reset sleep timer - give user 30 more seconds
                 Serial.println("Main: Returning to main screen");
 #if defined(BOARD_ADAFRUIT_FEATHER)
-                displayForceUpdate();  // Force display refresh after calibration
+                // Get current values for force update
+                float water_ml = 0.0f;
+                if (nauReady && nau.available()) {
+                    int32_t adc = nau.read();
+                    water_ml = calibrationGetWaterWeight(adc, g_calibration);
+                    if (water_ml < 0) water_ml = 0;
+                    if (water_ml > 830) water_ml = 830;
+                }
+
+                DailyState daily_state;
+                drinksGetState(daily_state);
+
+                uint8_t time_hour = 0, time_minute = 0;
+                if (g_time_valid) {
+                    struct timeval tv;
+                    gettimeofday(&tv, NULL);
+                    time_t now = tv.tv_sec + (g_timezone_offset * 3600);
+                    struct tm timeinfo;
+                    gmtime_r(&now, &timeinfo);
+                    time_hour = timeinfo.tm_hour;
+                    time_minute = timeinfo.tm_min;
+                }
+
+                uint8_t battery_pct = 50;
+                float voltage = getBatteryVoltage();
+                battery_pct = getBatteryPercent(voltage);
+
+                displayForceUpdate(water_ml, daily_state.daily_total_ml,
+                                  time_hour, time_minute, battery_pct, false);
 #endif
             }
         }
@@ -571,9 +833,38 @@ void loop() {
             // Return to IDLE and redraw main screen
             calibrationCancel();
             g_last_cal_state = CAL_IDLE;
+            wakeTime = millis();  // Reset sleep timer - give user 30 more seconds
             Serial.println("Main: Returning to main screen after error");
 #if defined(BOARD_ADAFRUIT_FEATHER)
-            displayForceUpdate();  // Force display refresh after error
+            // Get current values for force update
+            float water_ml = 0.0f;
+            if (nauReady && nau.available()) {
+                int32_t adc = nau.read();
+                water_ml = calibrationGetWaterWeight(adc, g_calibration);
+                if (water_ml < 0) water_ml = 0;
+                if (water_ml > 830) water_ml = 830;
+            }
+
+            DailyState daily_state;
+            drinksGetState(daily_state);
+
+            uint8_t time_hour = 0, time_minute = 0;
+            if (g_time_valid) {
+                struct timeval tv;
+                gettimeofday(&tv, NULL);
+                time_t now = tv.tv_sec + (g_timezone_offset * 3600);
+                struct tm timeinfo;
+                gmtime_r(&now, &timeinfo);
+                time_hour = timeinfo.tm_hour;
+                time_minute = timeinfo.tm_min;
+            }
+
+            uint8_t battery_pct = 50;
+            float voltage = getBatteryVoltage();
+            battery_pct = getBatteryPercent(voltage);
+
+            displayForceUpdate(water_ml, daily_state.daily_total_ml,
+                              time_hour, time_minute, battery_pct, false);
 #endif
         }
     }
@@ -582,6 +873,16 @@ void loop() {
     static unsigned long last_level_check = 0;
     static unsigned long last_time_check = 0;
     static unsigned long last_battery_check = 0;
+    static bool interval_timers_initialized = false;
+
+    // Initialize interval timers on first loop after boot/wake
+    // This prevents false "interval elapsed" triggers immediately after wake
+    if (!interval_timers_initialized) {
+        last_level_check = millis();
+        last_time_check = millis();
+        last_battery_check = millis();
+        interval_timers_initialized = true;
+    }
 
     // Check display ONLY when bottle is upright stable (prevents flicker during movement)
     if (cal_state == CAL_IDLE && g_calibrated && gesture == GESTURE_UPRIGHT_STABLE) {
@@ -612,10 +913,28 @@ void loop() {
                 DailyState daily_state;
                 drinksGetState(daily_state);
 
+                // Get current time
+                uint8_t time_hour = 0, time_minute = 0;
+                if (g_time_valid) {
+                    struct timeval tv;
+                    gettimeofday(&tv, NULL);
+                    time_t now = tv.tv_sec + (g_timezone_offset * 3600);
+                    struct tm timeinfo;
+                    gmtime_r(&now, &timeinfo);
+                    time_hour = timeinfo.tm_hour;
+                    time_minute = timeinfo.tm_min;
+                }
+
+                // Get battery percent
+                uint8_t battery_pct = 50;  // Default
+                float voltage = getBatteryVoltage();
+                battery_pct = getBatteryPercent(voltage);
+
                 // Check if display needs update (water, daily intake, time, or battery changed)
                 if (displayNeedsUpdate(display_water_ml, daily_state.daily_total_ml,
                                       time_interval_elapsed, battery_interval_elapsed)) {
-                    displayUpdate(display_water_ml, daily_state.daily_total_ml);
+                    displayUpdate(display_water_ml, daily_state.daily_total_ml,
+                                 time_hour, time_minute, battery_pct, false);
 
                     // Reset interval timers if they triggered the update
                     if (time_interval_elapsed) last_time_check = millis();
@@ -681,20 +1000,40 @@ void loop() {
         }
     }
 
-    // Check if it's time to sleep
-    // DISABLED FOR CALIBRATION TESTING
-    /*
-    if (millis() - wakeTime >= AWAKE_DURATION_MS) {
-        if (lisReady) {
-            // Clear any pending interrupt before sleep
-            readAccelReg(LIS3DH_REG_INT1SRC);
+    // Check if it's time to sleep (only if sleep enabled)
+    if (g_sleep_timeout_ms > 0 && millis() - wakeTime >= g_sleep_timeout_ms) {
+        // Prevent sleep during active calibration
+        if (calibrationIsActive()) {
+            Serial.println("Sleep blocked - calibration in progress");
+            wakeTime = millis(); // Reset timer to prevent immediate sleep after calibration
+        } else {
+#if DISPLAY_SLEEP_INDICATOR
+            // Show Zzzz indicator before sleeping
+            Serial.println("Displaying Zzzz indicator...");
 
-            Serial.print("INT pin before sleep: ");
-            Serial.println(digitalRead(LIS3DH_INT_PIN));
+            // Use last valid display state values (don't re-read sensors at sleep time
+            // as bottle may be in invalid orientation)
+            DisplayState last_state = displayGetState();
+
+            // Display with Zzzz indicator (sleeping = true), reusing last valid state
+            displayUpdate(last_state.water_ml, last_state.daily_total_ml,
+                         last_state.hour, last_state.minute,
+                         last_state.battery_percent, true);
+
+            delay(1000); // Brief pause to ensure display updates
+#else
+            Serial.println("Entering sleep without display update (DISPLAY_SLEEP_INDICATOR=0)");
+#endif
+
+            if (lisReady) {
+                // Clear any pending interrupt before sleep
+                readAccelReg(LIS3DH_REG_INT1SRC);
+                Serial.print("INT pin before sleep: ");
+                Serial.println(digitalRead(LIS3DH_INT_PIN));
+            }
+            enterDeepSleep();
         }
-        enterDeepSleep();
     }
-    */
 
     // Reduced delay for more responsive gesture detection
     delay(200);

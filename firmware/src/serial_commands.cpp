@@ -34,6 +34,9 @@ extern bool g_debug_ble;
 // Runtime display mode variable (managed in main.cpp)
 extern uint8_t g_daily_intake_display_mode;
 
+// Runtime sleep timeout variable (managed in main.cpp)
+extern uint32_t g_sleep_timeout_ms;
+
 // Initialize serial command handler
 void serialCommandsInit() {
     cmdBufferPos = 0;
@@ -603,10 +606,44 @@ static void handleSetDisplayMode(char* args) {
     Serial.printf("Display mode set: %d (%s)\n", mode, mode_name);
     Serial.println("Saved to NVS");
 
-    // Force immediate display update
-    extern void displayForceUpdate();
-    displayForceUpdate();
     Serial.println("Display updated");
+}
+
+// Handle SET_SLEEP_TIMEOUT command
+// Format: SET_SLEEP_TIMEOUT seconds (0 = disable sleep)
+static void handleSetSleepTimeout(char* args) {
+    int seconds;
+    if (!parseInt(args, seconds)) {
+        Serial.println("ERROR: Invalid timeout");
+        Serial.println("Usage: SET_SLEEP_TIMEOUT seconds");
+        Serial.println("  0 = Disable sleep (debug mode)");
+        Serial.println("  1-300 = Sleep after N seconds");
+        Serial.println("Examples:");
+        Serial.println("  SET_SLEEP_TIMEOUT 30  \xE2\x86\x92 Sleep after 30 seconds (default)");
+        Serial.println("  SET_SLEEP_TIMEOUT 0   \xE2\x86\x92 Never sleep (for debugging)");
+        return;
+    }
+
+    if (seconds < 0 || seconds > 300) {
+        Serial.println("ERROR: Timeout must be 0-300 seconds");
+        return;
+    }
+
+    g_sleep_timeout_ms = (uint32_t)seconds * 1000;
+
+    // Save to NVS for persistence
+    if (storageSaveSleepTimeout((uint32_t)seconds)) {
+        if (seconds == 0) {
+            Serial.println("Sleep DISABLED (debug mode)");
+            Serial.println("Device will never enter deep sleep");
+            Serial.println("Setting saved to NVS - persists across reboots");
+        } else {
+            Serial.printf("Sleep timeout set: %d seconds\n", seconds);
+            Serial.println("Setting saved to NVS - persists across reboots");
+        }
+    } else {
+        Serial.println("WARNING: Failed to save to NVS - will reset to default on reboot");
+    }
 }
 
 // Handle debug level change (single character '0'-'4')
@@ -704,6 +741,13 @@ static void processCommand(char* cmd) {
         return;
     }
 
+    // Check for single-character test interrupt command ('T' or 't')
+    if (strlen(cmd) == 1 && (cmd[0] == 'T' || cmd[0] == 't')) {
+        extern void testInterruptState();
+        testInterruptState();
+        return;
+    }
+
     // Find command and arguments
     char* args = strchr(cmd, ' ');
     if (args != nullptr) {
@@ -743,6 +787,8 @@ static void processCommand(char* cmd) {
         handleClearDrinks();
     } else if (strcmp(cmd, "SET_DISPLAY_MODE") == 0) {
         handleSetDisplayMode(args);
+    } else if (strcmp(cmd, "SET_SLEEP_TIMEOUT") == 0) {
+        handleSetSleepTimeout(args);
     } else {
         Serial.print("ERROR: Unknown command: ");
         Serial.println(cmd);
@@ -751,6 +797,7 @@ static void processCommand(char* cmd) {
         Serial.println("  0-4, 9                - Set debug level (single character)");
         Serial.println("                          0=OFF, 1=Events, 2=+Gestures,");
         Serial.println("                          3=+Weight, 4=+Accel, 9=All ON");
+        Serial.println("  T                     - Test interrupt state (shows INT1_SRC)");
         Serial.println("\nTime/Timezone:");
         Serial.println("  SET_DATETIME YYYY-MM-DD HH:MM:SS [tz]    - Set date, time, and timezone");
         Serial.println("  SET_DATE YYYY-MM-DD                       - Set date only");
@@ -765,6 +812,8 @@ static void processCommand(char* cmd) {
         Serial.println("  CLEAR_DRINKS          - Clear all drink records (WARNING: erases data)");
         Serial.println("\nDisplay Settings:");
         Serial.println("  SET_DISPLAY_MODE mode - Switch intake visualization (0=human, 1=tumblers)");
+        Serial.println("\nPower Management:");
+        Serial.println("  SET_SLEEP_TIMEOUT sec - Set sleep timeout (0=disable, default=30)");
     }
 }
 
