@@ -159,6 +159,12 @@ extern bool g_debug_ble;
 #define DRINK_TYPE_POUR                 1       // Large drink (≥100ml)
 #define DRINK_GULP_THRESHOLD_ML         100     // Threshold for gulp vs pour classification
 
+// Display update parameters
+#define DISPLAY_TIME_UPDATE_INTERVAL_MS     900000  // Check time every 15 minutes (900000ms)
+#define DISPLAY_TIME_UPDATE_THRESHOLD_MIN   15      // Update display if time changed by ≥15 minutes
+#define DISPLAY_BATTERY_UPDATE_INTERVAL_MS  900000  // Check battery every 15 minutes
+#define DISPLAY_BATTERY_UPDATE_THRESHOLD    20      // Update display if battery changed by ≥20%
+
 // NVS Storage
 #define NVS_NAMESPACE                   "aquavate"  // NVS namespace for calibration data
 
