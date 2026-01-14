@@ -874,6 +874,7 @@ void loop() {
     static unsigned long last_time_check = 0;
     static unsigned long last_battery_check = 0;
     static bool interval_timers_initialized = false;
+    static GestureType last_gesture = GESTURE_NONE;
 
     // Initialize interval timers on first loop after boot/wake
     // This prevents false "interval elapsed" triggers immediately after wake
@@ -883,6 +884,21 @@ void loop() {
         last_battery_check = millis();
         interval_timers_initialized = true;
     }
+
+    // Deep sleep timer management - reset timer whenever gesture changes
+    if (gesture != last_gesture) {
+        wakeTime = millis();
+        Serial.print("Sleep timer: Reset (gesture changed to ");
+        switch (gesture) {
+            case GESTURE_INVERTED_HOLD: Serial.print("INVERTED_HOLD"); break;
+            case GESTURE_UPRIGHT_STABLE: Serial.print("UPRIGHT_STABLE"); break;
+            case GESTURE_SIDEWAYS_TILT: Serial.print("SIDEWAYS_TILT"); break;
+            case GESTURE_UPRIGHT: Serial.print("UPRIGHT"); break;
+            default: Serial.print("NONE"); break;
+        }
+        Serial.println(")");
+    }
+    last_gesture = gesture;
 
     // Check display ONLY when bottle is upright stable (prevents flicker during movement)
     if (cal_state == CAL_IDLE && g_calibrated && gesture == GESTURE_UPRIGHT_STABLE) {
@@ -971,10 +987,17 @@ void loop() {
             Serial.print("  Cal State: ");
             Serial.print(calibrationGetStateName(cal_state));
 
-            unsigned long remaining = (AWAKE_DURATION_MS - (millis() - wakeTime)) / 1000;
-            Serial.print("  (sleep in ");
-            Serial.print(remaining);
-            Serial.println("s)");
+            // Only show sleep countdown if sleep is enabled
+            if (g_sleep_timeout_ms > 0) {
+                unsigned long elapsed = millis() - wakeTime;
+                if (elapsed < g_sleep_timeout_ms) {
+                    unsigned long remaining = (g_sleep_timeout_ms - elapsed) / 1000;
+                    Serial.print("  (sleep in ");
+                    Serial.print(remaining);
+                    Serial.print("s)");
+                }
+            }
+            Serial.println();
         }
     }
 
