@@ -1,0 +1,152 @@
+// Aquavate Firmware State Machine
+digraph {
+	bgcolor=white fontname=Arial fontsize=12 nodesep=0.8 rankdir=TB ranksep=1.0 splines=spline
+	node [fontname=Arial fontsize=11 margin="0.3,0.2" shape=rectangle style="rounded,filled"]
+	edge [color="#333333" fontname=Arial fontsize=10]
+	subgraph cluster_system {
+		color="#2C5F7C" fillcolor="#E8F4F8" fontname="Arial Bold" fontsize=14 label="System State Machine (Master FSM)" penwidth=2 style="rounded,filled"
+		STARTUP [label="SYSTEM_STARTUP
+(Boot & Init)" color="#2C5F7C" fillcolor="#B8E6F0" penwidth=2]
+		NORMAL [label="SYSTEM_NORMAL_OPERATION
+(Drink Tracking)" color="#228B22" fillcolor="#90EE90" penwidth=2]
+		CALIBRATION [label="SYSTEM_CALIBRATION
+(Two-Point Cal)" color="#B8860B" fillcolor="#FFD700" penwidth=2]
+		DEEP_SLEEP [label="SYSTEM_DEEP_SLEEP
+(Future)" color="#696969" fillcolor="#D3D3D3" penwidth=2 style="rounded,filled,dashed"]
+	}
+	STARTUP -> NORMAL [label="setup() complete" color="#2C5F7C" penwidth=2]
+	NORMAL -> CALIBRATION [label="INVERTED_HOLD
+(5s)" color="#B8860B" penwidth=2]
+	CALIBRATION -> NORMAL [label="CAL_COMPLETE
+or CAL_ERROR" color="#228B22" penwidth=2]
+	NORMAL -> DEEP_SLEEP [label="inactivity timeout
+(future)" color="#696969" style=dashed]
+	DEEP_SLEEP -> NORMAL [label="wake interrupt
+(future)" color="#696969" style=dashed]
+	subgraph cluster_calibration {
+		color="#B8860B" fillcolor="#FFF8DC" fontname="Arial Bold" fontsize=13 label="Calibration State Machine" penwidth=2 style="rounded,filled"
+		CAL_IDLE [label=CAL_IDLE color="#B8860B" fillcolor="#FFFACD"]
+		CAL_TRIGGERED [label=CAL_TRIGGERED color="#B8860B" fillcolor="#FFE4B5"]
+		CAL_WAIT_EMPTY [label="CAL_WAIT_EMPTY
+(Place empty bottle)" color="#B8860B" fillcolor="#FFE4B5"]
+		CAL_MEASURE_EMPTY [label="CAL_MEASURE_EMPTY
+(10s)" color="#B8860B" fillcolor="#FFE4B5"]
+		CAL_CONFIRM_EMPTY [label="CAL_CONFIRM_EMPTY
+(Tilt sideways)" color="#B8860B" fillcolor="#FFE4B5"]
+		CAL_WAIT_FULL [label="CAL_WAIT_FULL
+(Fill to 830ml)" color="#B8860B" fillcolor="#FFE4B5"]
+		CAL_MEASURE_FULL [label="CAL_MEASURE_FULL
+(10s)" color="#B8860B" fillcolor="#FFE4B5"]
+		CAL_CONFIRM_FULL [label="CAL_CONFIRM_FULL
+(Tilt sideways)" color="#B8860B" fillcolor="#FFE4B5"]
+		CAL_COMPLETE [label="CAL_COMPLETE
+✓" color="#228B22" fillcolor="#90EE90" penwidth=2]
+		CAL_ERROR [label="CAL_ERROR
+✗" color="#DC143C" fillcolor="#FFB6C1" penwidth=2]
+	}
+	CAL_IDLE -> CAL_TRIGGERED [label="calibrationStart()" fontsize=9]
+	CAL_TRIGGERED -> CAL_WAIT_EMPTY [label=entry fontsize=9]
+	CAL_WAIT_EMPTY -> CAL_MEASURE_EMPTY [label=UPRIGHT_STABLE fontsize=9]
+	CAL_MEASURE_EMPTY -> CAL_CONFIRM_EMPTY [label="10s elapsed" fontsize=9]
+	CAL_CONFIRM_EMPTY -> CAL_WAIT_FULL [label=SIDEWAYS_TILT fontsize=9]
+	CAL_WAIT_FULL -> CAL_MEASURE_FULL [label=UPRIGHT_STABLE fontsize=9]
+	CAL_MEASURE_FULL -> CAL_CONFIRM_FULL [label="10s elapsed" fontsize=9]
+	CAL_CONFIRM_FULL -> CAL_COMPLETE [label=SIDEWAYS_TILT fontsize=9]
+	CAL_COMPLETE -> CAL_IDLE [label="save & return" fontsize=9]
+	CAL_WAIT_EMPTY -> CAL_ERROR [label=timeout color="#DC143C" fontsize=9 style=dashed]
+	CAL_MEASURE_EMPTY -> CAL_ERROR [label=unstable color="#DC143C" fontsize=9 style=dashed]
+	CAL_WAIT_FULL -> CAL_ERROR [label=timeout color="#DC143C" fontsize=9 style=dashed]
+	CAL_MEASURE_FULL -> CAL_ERROR [label=unstable color="#DC143C" fontsize=9 style=dashed]
+	CAL_ERROR -> CAL_IDLE [label="5s delay" fontsize=9]
+	subgraph cluster_drinks {
+		color="#228B22" fillcolor="#E8F5E9" fontname="Arial Bold" fontsize=13 label="Drink Tracking State Machine (drinksUpdate)" penwidth=2 style="rounded,filled"
+		DRINK_UNINIT [label="DRINK_UNINITIALIZED
+(time not set)
+
+Waiting for SET_TIME" color="#DC143C" fillcolor="#FFB6C1"]
+		DRINK_BASELINE [label="DRINK_ESTABLISHING_BASELINE
+(waiting for first stable reading)
+
+last_recorded_adc = 0" color="#228B22" fillcolor="#C8E6C9"]
+		DRINK_MONITOR [label="DRINK_MONITORING
+(normal state)
+
+Calculate delta_ml
+baseline_ml - current_ml" color="#228B22" fillcolor="#90EE90" penwidth=2]
+		DRINK_AGGREGATE [label="DRINK_AGGREGATING
+(5-minute aggregation window)
+
+Window active, accumulating sips
+Display updates every ≥50ml
+Save records to NVS circular buffer" color="#1B5E20" fillcolor="#66BB6A"]
+		DECISION_DELTA [label="Evaluate
+delta_ml" color="#228B22" fillcolor="#C8E6C9" height=1.2 shape=diamond width=1.2]
+	}
+	DRINK_UNINIT -> DRINK_BASELINE [label="drinksOnTimeSet()
+[time becomes valid]" color="#228B22" fontsize=9 penwidth=1.5]
+	DRINK_BASELINE -> DRINK_MONITOR [label="UPRIGHT_STABLE
+[first baseline captured]
+last_recorded_adc = current_adc" color="#228B22" fontsize=9 penwidth=1.5]
+	DRINK_MONITOR -> DECISION_DELTA [label=UPRIGHT_STABLE color="#228B22" fontsize=9 penwidth=1.5]
+	DECISION_DELTA -> DRINK_AGGREGATE [label="[delta ≥ 30ml]
+Drink detected
+Create drink record
+daily_total_ml += amount
+Start 5-min window" color="#228B22" fontsize=9 penwidth=1.5]
+	DECISION_DELTA -> DRINK_MONITOR [label="[delta ≤ -100ml]
+Refill detected
+Update baseline
+No state change" color="#2E7D32" fontsize=9 penwidth=1.5]
+	DECISION_DELTA -> DRINK_MONITOR [label="[|delta| < 30ml]
+Drift compensation
+Update baseline
+No state change" color="#66BB6A" fontsize=8 penwidth=1.5 style=dotted]
+	DRINK_AGGREGATE -> DRINK_MONITOR [label="5 minutes elapsed
+[window closes]
+Save final drink record" color="#228B22" fontsize=9 penwidth=1.5]
+	DRINK_AGGREGATE -> DRINK_AGGREGATE [label="UPRIGHT_STABLE
+[delta ≥ 30ml within window]
+Aggregate into existing record
+daily_total_ml += amount" color="#1B5E20" fontsize=9 penwidth=1.5]
+	DRINK_AGGREGATE -> DRINK_AGGREGATE [label="UPRIGHT_STABLE
+[delta ≤ -100ml]
+Refill detected
+Update baseline" color="#2E7D32" constraint=false fontsize=9]
+	DRINK_MONITOR -> DRINK_BASELINE [label="First drink after 4am
+[handleDailyReset()]
+Reset counters atomically
+Clear aggregation window
+last_recorded_adc = 0" color="#DC143C" constraint=false fontsize=9 penwidth=1.5 style=dashed]
+	DRINK_AGGREGATE -> DRINK_BASELINE [label="First drink after 4am
+[handleDailyReset()]
+Reset counters atomically
+Clear aggregation window
+last_recorded_adc = 0" color="#DC143C" constraint=false fontsize=9 penwidth=1.5 style=dashed]
+	subgraph cluster_gestures {
+		color="#6A1B9A" fillcolor="#F3E5F5" fontname="Arial Bold" fontsize=13 label="Gesture Detection (Event Source)" penwidth=2 style="rounded,filled"
+		GEST_NONE [label="GESTURE_NONE
+(default)" color="#6A1B9A" fillcolor="#E1BEE7" shape=oval]
+		GEST_INVERTED [label="GESTURE_INVERTED_HOLD
+(Z < -0.8g, 5s)
++ 2s cooldown" color="#6A1B9A" fillcolor="#CE93D8" penwidth=2 shape=oval]
+		GEST_UPRIGHT [label="GESTURE_UPRIGHT
+(Z > 0.97g)" color="#6A1B9A" fillcolor="#CE93D8" shape=oval]
+		GEST_STABLE [label="GESTURE_UPRIGHT_STABLE
+(upright + weight stable 2s)" color="#6A1B9A" fillcolor="#BA68C8" penwidth=2 shape=oval]
+		GEST_SIDEWAYS [label="GESTURE_SIDEWAYS_TILT
+(|X| or |Y| > 0.5g)" color="#6A1B9A" fillcolor="#CE93D8" shape=oval]
+	}
+	ACCEL_INPUT -> GEST_NONE [label="gesturesUpdate()" color="#6A1B9A" fontsize=9]
+	subgraph cluster_legend {
+		color="#999999" fontname="Arial Bold" fontsize=12 label=Legend style=rounded
+		leg_system [label="System State" color="#2C5F7C" fillcolor="#B8E6F0" shape=rectangle style="rounded,filled"]
+		leg_cal [label="Calibration State" color="#B8860B" fillcolor="#FFE4B5" shape=rectangle style="rounded,filled"]
+		leg_drink [label="Drink Tracking State" color="#228B22" fillcolor="#90EE90" shape=rectangle style="rounded,filled"]
+		leg_gesture [label="Gesture Event" color="#6A1B9A" fillcolor="#CE93D8" shape=oval style=filled]
+		leg_future [label="Future Feature" color="#696969" fillcolor="#D3D3D3" shape=rectangle style="rounded,filled,dashed"]
+		leg_system -> leg_cal [style=invis]
+		leg_cal -> leg_drink [style=invis]
+		leg_drink -> leg_gesture [style=invis]
+		leg_gesture -> leg_future [style=invis]
+	}
+}
