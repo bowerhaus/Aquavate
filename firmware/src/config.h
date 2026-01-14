@@ -149,11 +149,15 @@ extern bool g_debug_ble;
 // Drink detection parameters
 #define DRINK_MIN_THRESHOLD_ML          30      // Minimum ml decrease to detect a drink
 #define DRINK_REFILL_THRESHOLD_ML       100     // Minimum ml increase to detect a refill
-#define DRINK_AGGREGATION_WINDOW_SEC    300     // Aggregate drinks within 5-minute window
 #define DRINK_DAILY_RESET_HOUR          4       // Reset daily counter at 4am local time
 #define DRINK_DISPLAY_UPDATE_THRESHOLD_ML 50    // Only refresh display if daily total changed by ≥50ml
-#define DRINK_MAX_RECORDS               200     // Circular buffer capacity (7+ days at 20 drinks/day)
+#define DRINK_MAX_RECORDS               600     // Circular buffer capacity (30 days at 20 drinks/day)
 #define DRINK_DAILY_GOAL_ML             2500    // Hardcoded daily goal for MVP
+
+// Drink type classification
+#define DRINK_TYPE_GULP                 0       // Small drink (<100ml)
+#define DRINK_TYPE_POUR                 1       // Large drink (≥100ml)
+#define DRINK_GULP_THRESHOLD_ML         100     // Threshold for gulp vs pour classification
 
 // NVS Storage
 #define NVS_NAMESPACE                   "aquavate"  // NVS namespace for calibration data

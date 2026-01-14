@@ -1,6 +1,6 @@
 # Aquavate - Active Development Progress
 
-**Last Updated:** 2026-01-14 (Daily Water Intake Tracking - Bug Fixes Complete)
+**Last Updated:** 2026-01-14 (Drink Type Classification - Implementation Complete)
 
 ---
 
@@ -266,19 +266,52 @@ Time Persistence Strategy:
 - NVS saves act as checkpoints for power cycle recovery
 - Strategy balances accuracy vs. flash wear (100,000 write cycles per sector)
 
+Progress - Day 8 Drink Type Classification (2026-01-14):
+- ✅ Removed 5-minute drink aggregation logic (simplified state machine)
+- ✅ Added drink type classification: GULP (<100ml) vs POUR (≥100ml)
+- ✅ Increased circular buffer capacity from 200 to 600 records (30 days @ 20 drinks/day)
+- ✅ Updated DrinkRecord structure: Added type field (10 bytes total, was 9 bytes)
+- ✅ Updated DailyState structure: Removed aggregation fields (18 bytes, was 26 bytes)
+- ✅ Removed storageUpdateLastDrinkRecord() function (no longer needed)
+- ✅ Updated serial commands to display drink types:
+  - GET_DAILY_STATE: Shows daily total as percentage of goal
+  - GET_LAST_DRINK: Shows drink type (GULP or POUR) and formatted flags
+  - DUMP_DRINKS: Shows drink type for all records
+- ✅ Storage optimization: 600 records × 10 bytes = 6 KB (~50% of NVS capacity)
+- ✅ Code simplification: ~80 lines removed (aggregation window logic)
+- ✅ Firmware compiles successfully
+
+Files Modified:
+- firmware/include/drinks.h - Added type field to DrinkRecord, removed aggregation fields from DailyState
+- firmware/src/config.h - Updated DRINK_MAX_RECORDS to 600, added drink type constants
+- firmware/src/drinks.cpp - Removed aggregation logic, added type classification
+- firmware/src/storage_drinks.cpp - Removed storageUpdateLastDrinkRecord()
+- firmware/include/storage_drinks.h - Removed function declaration, updated comments
+- firmware/src/serial_commands.cpp - Updated debug commands to show drink types
+
+Benefits:
+- Simpler code (no aggregation state machine)
+- Granular data (every drink recorded separately with exact timestamp)
+- 30 days of history on device
+- Flash wear still negligible (13+ year lifespan)
+- Enables richer future app features (drinking pattern analysis)
+
+Plan Document: [Plans/008-drink-type-classification.md](Plans/008-drink-type-classification.md)
+
 Next Steps:
-1. Validate daily intake visualization updates on display
-2. Test daily reset at 4am boundary
-3. Test full day simulation scenarios
+1. Test firmware on hardware (gulp vs pour detection)
+2. Validate storage wraparound at 600 records
+3. Test daily reset at 4am boundary
 4. Begin BLE integration planning
 
 Key Features Implemented:
-- ✅ Drink event detection with 5-minute aggregation window
+- ✅ Drink event detection with type classification (GULP vs POUR)
 - ✅ Daily reset at 4am boundary with fallback logic
-- ✅ NVS circular buffer storage (200 records)
+- ✅ NVS circular buffer storage (600 records = 30 days history)
 - ✅ Dual visualization modes (human figure or tumbler grid)
 - ✅ Hardcoded 2500ml daily goal
 - ✅ Baseline drift compensation working correctly
+- ✅ Every drink recorded separately (no aggregation)
 
 ---
 
@@ -327,7 +360,8 @@ None currently.
 - [Sensor Puck Design](Plans/004-sensor-puck-design.md) - Mechanical design v3.0
 - [Standalone Calibration Mode](Plans/005-standalone-calibration-mode.md) - Two-point calibration implementation plan
 - [USB Time Setting](Plans/006-usb-time-setting.md) - Serial time configuration for standalone operation
-- [Daily Intake Tracking](Plans/007-daily-intake-tracking.md) - Phase 2 implementation plan (IN PROGRESS)
+- [Daily Intake Tracking](Plans/007-daily-intake-tracking.md) - Phase 2 implementation plan
+- [Drink Type Classification](Plans/008-drink-type-classification.md) - Gulp vs Pour implementation (COMPLETED)
 - [Hardware Research](Plans/001-hardware-research.md) - Component selection analysis
 - [Adafruit BOM](Plans/002-bom-adafruit-feather.md) - UK parts list for Feather config
 - [SparkFun BOM](Plans/003-bom-sparkfun-qwiic.md) - UK parts list for Qwiic config

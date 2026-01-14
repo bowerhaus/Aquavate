@@ -78,25 +78,18 @@ static bool shouldResetDailyCounter(uint32_t current_time) {
 }
 
 // Helper: Perform atomic daily reset
-// FIX Bug #1 & #2: Reset all counters and state atomically in one place
 static void performAtomicDailyReset(uint32_t current_time) {
     Serial.println("\n=== ATOMIC DAILY RESET ===");
     Serial.printf("Previous total: %dml (%d drinks)\n",
                  g_daily_state.daily_total_ml,
                  g_daily_state.drink_count_today);
 
-    // Reset all daily counters atomically (all in one place)
+    // Reset all daily counters atomically
     g_daily_state.daily_total_ml = 0;
     g_daily_state.drink_count_today = 0;
     g_daily_state.last_displayed_total_ml = 0;
     g_daily_state.last_reset_timestamp = current_time;
-
-    // FIX Bug #1: Reset baseline ADC so first drink uses fresh baseline
-    g_daily_state.last_recorded_adc = 0;
-
-    // FIX Bug #2: Clear aggregation window state
-    g_daily_state.aggregation_window_active = 0;
-    g_daily_state.aggregation_window_start = 0;
+    g_daily_state.last_recorded_adc = 0;  // Reset baseline ADC
 
     storageSaveDailyState(g_daily_state);
     Serial.println("Daily counter reset complete");
@@ -159,47 +152,23 @@ void drinksUpdate(int32_t current_adc, const CalibrationData& cal) {
 
     // Detect drink event (≥30ml decrease)
     if (delta_ml >= DRINK_MIN_THRESHOLD_ML) {
-        Serial.printf("\n=== DRINK DETECTED: %.1fml ===\n", delta_ml);
+        // Classify drink type based on volume
+        uint8_t drink_type = (delta_ml >= DRINK_GULP_THRESHOLD_ML)
+                             ? DRINK_TYPE_POUR
+                             : DRINK_TYPE_GULP;
+        const char* type_str = (drink_type == DRINK_TYPE_POUR) ? "POUR" : "GULP";
 
-        // Check if within aggregation window (5 minutes)
-        bool within_window = false;
-        if (g_daily_state.aggregation_window_active) {
-            uint32_t window_elapsed = current_time - g_daily_state.aggregation_window_start;
-            within_window = (window_elapsed < DRINK_AGGREGATION_WINDOW_SEC);
-            Serial.printf("Aggregation window: %us elapsed (window: %us)\n",
-                         window_elapsed, DRINK_AGGREGATION_WINDOW_SEC);
-        }
+        Serial.printf("\n=== DRINK DETECTED: %.1fml (%s) ===\n", delta_ml, type_str);
 
-        if (within_window) {
-            // Aggregate with last drink record
-            Serial.println("Within 5-min window - aggregating with last drink");
+        // Create new drink record (no aggregation)
+        DrinkRecord record;
+        record.timestamp = current_time;
+        record.amount_ml = (int16_t)delta_ml;
+        record.bottle_level_ml = (uint16_t)current_ml;
+        record.flags = 0;
+        record.type = drink_type;
 
-            DrinkRecord last_record;
-            if (storageLoadLastDrinkRecord(last_record)) {
-                last_record.amount_ml += (int16_t)delta_ml;
-                last_record.bottle_level_ml = (uint16_t)current_ml;
-                last_record.timestamp = current_time;
-
-                if (storageUpdateLastDrinkRecord(last_record)) {
-                    Serial.printf("Aggregated drink: %dml total\n", last_record.amount_ml);
-                }
-            }
-        } else {
-            // Create new drink record
-            Serial.println("New drink record");
-
-            DrinkRecord record;
-            record.timestamp = current_time;
-            record.amount_ml = (int16_t)delta_ml;
-            record.bottle_level_ml = (uint16_t)current_ml;
-            record.flags = 0;
-
-            storageSaveDrinkRecord(record);
-
-            // Start new aggregation window
-            g_daily_state.aggregation_window_active = 1;
-            g_daily_state.aggregation_window_start = current_time;
-        }
+        storageSaveDrinkRecord(record);
 
         // Update daily total
         g_daily_state.daily_total_ml += (uint16_t)delta_ml;
@@ -223,20 +192,16 @@ void drinksUpdate(int32_t current_adc, const CalibrationData& cal) {
             Serial.println("Display update threshold reached - should refresh");
             g_daily_state.last_displayed_total_ml = g_daily_state.daily_total_ml;
             storageSaveDailyState(g_daily_state);
-            // TODO: Trigger display refresh (will be added in Day 4)
+            // TODO: Trigger display refresh
         }
     }
     // Detect refill event (≥100ml increase)
     else if (delta_ml <= -DRINK_REFILL_THRESHOLD_ML) {
         Serial.printf("\n=== REFILL DETECTED: %.1fml ===\n", -delta_ml);
 
-        // NOTE: Refills are not saved as drink records since they don't represent
-        // water consumption. We only update the baseline ADC and close the aggregation window.
-
-        // Close aggregation window on refill
-        g_daily_state.aggregation_window_active = 0;
+        // Refills are not saved as drink records
+        // Only update the baseline ADC
         g_daily_state.last_recorded_adc = current_adc;
-
         storageSaveDailyState(g_daily_state);
 
         // Save timestamp to NVS on refill event (for time persistence)
@@ -244,20 +209,9 @@ void drinksUpdate(int32_t current_adc, const CalibrationData& cal) {
 
         Serial.println("Daily total unchanged (refill)");
     }
-    // No significant change - update baseline if not in window
-    else if (!g_daily_state.aggregation_window_active) {
-        // Update baseline for drift compensation
+    // No significant change - update baseline for drift compensation
+    else {
         g_daily_state.last_recorded_adc = current_adc;
-    }
-
-    // Check if aggregation window expired
-    if (g_daily_state.aggregation_window_active) {
-        uint32_t window_elapsed = current_time - g_daily_state.aggregation_window_start;
-        if (window_elapsed >= DRINK_AGGREGATION_WINDOW_SEC) {
-            Serial.println("Aggregation window closed (5 min elapsed)");
-            g_daily_state.aggregation_window_active = 0;
-            storageSaveDailyState(g_daily_state);
-        }
     }
 }
 

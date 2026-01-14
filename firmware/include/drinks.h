@@ -7,15 +7,16 @@
 #include <Arduino.h>
 #include "storage.h"
 
-// DrinkRecord structure: Stores individual drink/refill events (9 bytes)
+// DrinkRecord structure: Stores individual drink/refill events (10 bytes)
 struct DrinkRecord {
     uint32_t timestamp;         // Unix timestamp (seconds since epoch)
     int16_t  amount_ml;         // Consumed (+) or refilled (-) amount in ml
     uint16_t bottle_level_ml;   // Bottle water level after event (0-830ml)
     uint8_t  flags;             // Bit flags: 0x01=synced to app, 0x02=day_boundary
+    uint8_t  type;              // Drink type: 0=gulp (<100ml), 1=pour (≥100ml)
 };
 
-// DailyState structure: Tracks current day's drinking state (26 bytes)
+// DailyState structure: Tracks current day's drinking state (18 bytes)
 struct DailyState {
     uint32_t last_reset_timestamp;      // Last 4am daily reset (Unix time)
     uint32_t last_drink_timestamp;      // Most recent drink event (Unix time)
@@ -23,8 +24,6 @@ struct DailyState {
     uint16_t daily_total_ml;            // Today's cumulative water intake (ml)
     uint16_t drink_count_today;         // Number of drink events today
     uint16_t last_displayed_total_ml;   // Last displayed total (for hysteresis)
-    uint8_t  aggregation_window_active; // 0=closed, 1=active
-    uint32_t aggregation_window_start;  // Start time of current 5-min window
 };
 
 // Public API functions

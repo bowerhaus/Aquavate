@@ -9,8 +9,8 @@
 
 // CircularBufferMetadata: Tracks circular buffer state in NVS (10 bytes)
 struct CircularBufferMetadata {
-    uint16_t write_index;      // Next write position (0-199)
-    uint16_t record_count;     // Number of records stored (0-200)
+    uint16_t write_index;      // Next write position (0-599)
+    uint16_t record_count;     // Number of records stored (0-600)
     uint32_t total_writes;     // Total lifetime writes (for debugging)
     uint16_t _reserved;        // Padding for future use
 };
@@ -19,7 +19,7 @@ struct CircularBufferMetadata {
 
 /**
  * Save a drink record to the circular buffer
- * Automatically wraps around after 200 records
+ * Automatically wraps around after 600 records
  *
  * @param record DrinkRecord to save
  * @return true if saved successfully
@@ -33,14 +33,6 @@ bool storageSaveDrinkRecord(const DrinkRecord& record);
  * @return true if record loaded successfully
  */
 bool storageLoadLastDrinkRecord(DrinkRecord& record);
-
-/**
- * Update the last drink record (for aggregation within 5-min window)
- *
- * @param record Updated DrinkRecord with aggregated values
- * @return true if updated successfully
- */
-bool storageUpdateLastDrinkRecord(const DrinkRecord& record);
 
 /**
  * Load daily state from NVS

@@ -95,43 +95,6 @@ bool storageLoadLastDrinkRecord(DrinkRecord& record) {
     return true;
 }
 
-bool storageUpdateLastDrinkRecord(const DrinkRecord& record) {
-    // Load metadata to find last written index
-    CircularBufferMetadata meta;
-    if (!storageLoadBufferMetadata(meta) || meta.record_count == 0) {
-        Serial.println("ERROR: Cannot update - no records exist");
-        return false;
-    }
-
-    // Calculate last written index
-    uint16_t last_index = (meta.write_index == 0)
-        ? (DRINK_MAX_RECORDS - 1)
-        : (meta.write_index - 1);
-
-    // Generate key and update record
-    char key[16];
-    getDrinkRecordKey(last_index, key, sizeof(key));
-
-    Preferences prefs;
-    if (!prefs.begin(NVS_NAMESPACE, false)) {
-        Serial.println("ERROR: Failed to open NVS for drink record update");
-        return false;
-    }
-
-    size_t written = prefs.putBytes(key, &record, sizeof(DrinkRecord));
-    prefs.end();
-
-    if (written != sizeof(DrinkRecord)) {
-        Serial.println("ERROR: Failed to update last drink record");
-        return false;
-    }
-
-    Serial.print("Updated last drink record: ");
-    Serial.println(key);
-
-    return true;
-}
-
 bool storageLoadDailyState(DailyState& state) {
     Preferences prefs;
     if (!prefs.begin(NVS_NAMESPACE, true)) {

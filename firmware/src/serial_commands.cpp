@@ -454,19 +454,15 @@ static void handleGetDailyState() {
     drinksGetState(state);
 
     Serial.println("\n=== DAILY STATE ===");
-    Serial.printf("Daily total: %dml\n", state.daily_total_ml);
-    Serial.printf("Drink count: %d\n", state.drink_count_today);
+    Serial.printf("Daily total: %dml / %dml (%d%%)\n",
+                 state.daily_total_ml,
+                 DRINK_DAILY_GOAL_ML,
+                 (state.daily_total_ml * 100) / DRINK_DAILY_GOAL_ML);
+    Serial.printf("Drink count: %d drinks today\n", state.drink_count_today);
     Serial.printf("Last reset: %u\n", state.last_reset_timestamp);
     Serial.printf("Last drink: %u\n", state.last_drink_timestamp);
     Serial.printf("Last baseline ADC: %d\n", state.last_recorded_adc);
     Serial.printf("Last displayed: %dml\n", state.last_displayed_total_ml);
-    Serial.printf("Aggregation window: %s\n",
-                 state.aggregation_window_active ? "ACTIVE" : "closed");
-    if (state.aggregation_window_active) {
-        Serial.printf("Window started: %u\n", state.aggregation_window_start);
-        uint32_t elapsed = getCurrentUnixTime() - state.aggregation_window_start;
-        Serial.printf("Window elapsed: %us\n", elapsed);
-    }
     Serial.println("==================\n");
 }
 
@@ -478,11 +474,9 @@ static void handleGetLastDrink() {
         return;
     }
 
+    const char* drink_type = (record.type == DRINK_TYPE_POUR) ? "POUR" : "GULP";
+
     Serial.println("\n=== LAST DRINK RECORD ===");
-    Serial.printf("Timestamp: %u\n", record.timestamp);
-    Serial.printf("Amount: %dml\n", record.amount_ml);
-    Serial.printf("Bottle level: %dml\n", record.bottle_level_ml);
-    Serial.printf("Flags: 0x%02X\n", record.flags);
 
     // Format timestamp
     time_t t = record.timestamp;
@@ -491,6 +485,14 @@ static void handleGetLastDrink() {
     Serial.printf("Time: %04d-%02d-%02d %02d:%02d:%02d\n",
                  tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
                  tm.tm_hour, tm.tm_min, tm.tm_sec);
+
+    Serial.printf("Amount: %dml (%s)\n", record.amount_ml, drink_type);
+    Serial.printf("Bottle level: %dml\n", record.bottle_level_ml);
+    Serial.printf("Flags: 0x%02X (", record.flags);
+    if (record.flags & 0x01) Serial.print("synced ");
+    if (record.flags & 0x02) Serial.print("day_boundary");
+    if (record.flags == 0) Serial.print("not synced");
+    Serial.println(")");
     Serial.println("=========================\n");
 }
 
@@ -539,11 +541,14 @@ static void handleDumpDrinks() {
                 struct tm tm;
                 gmtime_r(&t, &tm);
 
-                Serial.printf("%3d: %04d-%02d-%02d %02d:%02d:%02d | %+5dml | level: %4dml | flags: 0x%02X\n",
-                             i + 1,
+                const char* drink_type = (record.type == DRINK_TYPE_POUR) ? "POUR" : "GULP";
+
+                Serial.printf("[%03d] %04d-%02d-%02d %02d:%02d:%02d | %+5dml (%s) | Level: %4dml | Flags: 0x%02X\n",
+                             i,
                              tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
                              tm.tm_hour, tm.tm_min, tm.tm_sec,
                              record.amount_ml,
+                             drink_type,
                              record.bottle_level_ml,
                              record.flags);
             }
