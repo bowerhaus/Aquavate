@@ -1060,15 +1060,17 @@ void loop() {
     // Deep sleep timer management - reset timer whenever gesture changes
     if (gesture != last_gesture) {
         wakeTime = millis();
-        Serial.print("Sleep timer: Reset (gesture changed to ");
-        switch (gesture) {
-            case GESTURE_INVERTED_HOLD: Serial.print("INVERTED_HOLD"); break;
-            case GESTURE_UPRIGHT_STABLE: Serial.print("UPRIGHT_STABLE"); break;
-            case GESTURE_SIDEWAYS_TILT: Serial.print("SIDEWAYS_TILT"); break;
-            case GESTURE_UPRIGHT: Serial.print("UPRIGHT"); break;
-            default: Serial.print("NONE"); break;
+        if (g_debug_enabled && g_debug_display) {
+            Serial.print("Sleep timer: Reset (gesture changed to ");
+            switch (gesture) {
+                case GESTURE_INVERTED_HOLD: Serial.print("INVERTED_HOLD"); break;
+                case GESTURE_UPRIGHT_STABLE: Serial.print("UPRIGHT_STABLE"); break;
+                case GESTURE_SIDEWAYS_TILT: Serial.print("SIDEWAYS_TILT"); break;
+                case GESTURE_UPRIGHT: Serial.print("UPRIGHT"); break;
+                default: Serial.print("NONE"); break;
+            }
+            Serial.println(")");
         }
-        Serial.println(")");
     }
     last_gesture = gesture;
 
