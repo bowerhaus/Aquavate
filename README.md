@@ -7,7 +7,7 @@ A smart water bottle that measures daily water intake using a weight-based senso
 ```
 Aquavate/
 ├── firmware/          # ESP32 PlatformIO project
-├── ios/               # iOS SwiftUI app (coming soon)
+├── ios/               # iOS SwiftUI app (skeleton)
 ├── hardware/          # 3D print files and PCB designs
 └── Plans/             # Hardware research and BOMs
 ```
@@ -66,33 +66,33 @@ Pin definitions are automatically selected based on these flags.
 
 ### Implemented
 - ✅ Weight-based water tracking via NAU7802 load cell ADC
-- ✅ Wake-on-tilt using LIS3DH accelerometer interrupt (80° threshold)
+- ✅ Wake-on-tilt using LIS3DH accelerometer interrupt (0.80g threshold)
 - ✅ E-paper display with battery status, time, and bottle graphic
-- ✅ Deep sleep with EXT0 wake-up for 1-2 week battery life
-- ✅ Battery voltage monitoring and percentage display
+- ✅ Deep sleep with dual modes for 1-2 week battery life:
+  - Normal sleep: 30s timeout with motion wake (EXT0 interrupt)
+  - Extended sleep: 60s timer wake during continuous motion (backpack mode)
+- ✅ Battery voltage monitoring with 20% quantized steps
 - ✅ Two-point calibration system (empty + full bottle)
-- ✅ Gesture-based calibration (inverted hold for 5s triggers calibration)
-- ✅ Real-time water level measurement and display
-- ✅ Daily water intake tracking with drink detection (≥30ml threshold)
-- ✅ Refill detection (≥100ml threshold) with baseline updates
-- ✅ 5-minute drink aggregation window for multiple sips
+- ✅ Gesture-based calibration trigger (inverted hold for 5s)
+- ✅ Real-time water level measurement and display (±10-15ml accuracy)
+- ✅ Daily water intake tracking with drink detection:
+  - GULP: <100ml (individual sips)
+  - POUR: ≥100ml (refills with baseline update)
 - ✅ Daily reset at 4am boundary with 20-hour fallback logic
-- ✅ Drink record storage in NVS (200-record circular buffer)
+- ✅ NVS circular buffer storage (600 records = 30 days history)
 - ✅ Dual visualization modes (human figure or tumbler grid)
-- ✅ USB time setting via granular serial commands:
-  - SET_DATETIME (combined date+time+timezone)
-  - SET_DATE (date only)
-  - SET_TIME (time only with flexible HH[:MM[:SS]] format)
-  - SET_TZ (timezone offset)
-  - GET_TIME (display current time)
-- ✅ Case-insensitive command parsing
+- ✅ Hardcoded 2500ml daily goal
+- ✅ Smart display state tracking (only updates when values change)
+- ✅ RTC memory persistence for display state and drink baseline
+- ✅ USB serial commands for configuration:
+  - Time/Timezone: SET DATETIME, SET DATE, SET TIME, SET TZ, GET TIME
+  - Drink Tracking: GET DAILY STATE, GET LAST DRINK, DUMP DRINKS, SET DAILY INTAKE, RESET DAILY INTAKE, CLEAR DRINKS
+  - Display Settings: SET DISPLAY MODE (0=human, 1=tumblers)
+  - Power Management: SET SLEEP TIMEOUT, SET EXTENDED SLEEP TIMER, SET EXTENDED SLEEP THRESHOLD
+  - System Status: GET STATUS (shows all system settings)
+  - Debug Control: 0-4, 9 (debug levels), T (test interrupt state)
+- ✅ ESP32 internal RTC with NVS-based time persistence
 - ✅ Timezone support with NVS persistence
-- ✅ ESP32 internal RTC with smart time persistence:
-  - Saves on drink/refill events (opportunistic)
-  - Saves hourly on the hour (periodic fallback)
-  - Restores from NVS on boot
-  - Only saves when DS3231 RTC not present (future-proof)
-- ✅ Runtime debug level control (0-4, 9) via single-character commands
 
 ### Planned
 - 📋 BLE communication with iOS app
@@ -111,11 +111,12 @@ Pin definitions are automatically selected based on these flags.
 
 ### Configuration
 - [CLAUDE.md](CLAUDE.md) - Guidance for Claude Code when working on this project
+- [AGENTS.md](AGENTS.md) - Extended development workflow and patterns
 
 ## Current Status
 
-**Branch:** `daily-water-intake-tracking`
-**Phase:** Phase 2 complete - Daily water intake tracking fully implemented
+**Branch:** `extended-deep-sleep-backpack-mode`
+**Phase:** Phase 2.6 complete - Extended deep sleep (backpack mode) implemented
 **Status:** All standalone features working - Ready for BLE integration
 
 See [PROGRESS.md](PROGRESS.md) for detailed status and next steps.
