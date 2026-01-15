@@ -65,4 +65,16 @@ bool storageSaveSleepTimeout(uint32_t seconds);
 // Load sleep timeout from NVS in seconds (default: 30 seconds from AWAKE_DURATION_MS)
 uint32_t storageLoadSleepTimeout();
 
+// Save extended sleep timer duration to NVS in seconds (default: 60 seconds)
+bool storageSaveExtendedSleepTimer(uint32_t seconds);
+
+// Load extended sleep timer duration from NVS in seconds (default: 60 seconds)
+uint32_t storageLoadExtendedSleepTimer();
+
+// Save extended sleep threshold to NVS in seconds (default: 120 seconds)
+bool storageSaveExtendedSleepThreshold(uint32_t seconds);
+
+// Load extended sleep threshold from NVS in seconds (default: 120 seconds)
+uint32_t storageLoadExtendedSleepThreshold();
+
 #endif // STORAGE_H

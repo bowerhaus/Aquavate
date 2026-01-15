@@ -646,6 +646,141 @@ static void handleSetSleepTimeout(char* args) {
     }
 }
 
+// Handle SET_EXTENDED_SLEEP_TIMER command
+// Format: SET_EXTENDED_SLEEP_TIMER seconds
+static void handleSetExtendedSleepTimer(char* args) {
+    int seconds;
+    if (!parseInt(args, seconds)) {
+        Serial.println("ERROR: Invalid timer duration");
+        Serial.println("Usage: SET_EXTENDED_SLEEP_TIMER seconds");
+        Serial.println("  1-3600 = Timer wake interval in extended mode");
+        Serial.println("Examples:");
+        Serial.println("  SET_EXTENDED_SLEEP_TIMER 60   - 1 minute timer wake (default)");
+        Serial.println("  SET_EXTENDED_SLEEP_TIMER 120  - 2 minute timer wake");
+        return;
+    }
+
+    if (seconds < 1 || seconds > 3600) {
+        Serial.println("ERROR: Timer duration must be 1-3600 seconds");
+        return;
+    }
+
+    extern uint32_t g_extended_sleep_timer_sec;
+    g_extended_sleep_timer_sec = (uint32_t)seconds;
+
+    // Save to NVS for persistence
+    if (storageSaveExtendedSleepTimer((uint32_t)seconds)) {
+        Serial.printf("Extended sleep timer set: %d seconds\n", seconds);
+        Serial.println("Setting saved to NVS - persists across reboots");
+    } else {
+        Serial.println("WARNING: Failed to save to NVS - will reset to default on reboot");
+    }
+}
+
+// Handle SET_EXTENDED_SLEEP_THRESHOLD command
+// Format: SET_EXTENDED_SLEEP_THRESHOLD seconds
+static void handleSetExtendedSleepThreshold(char* args) {
+    int seconds;
+    if (!parseInt(args, seconds)) {
+        Serial.println("ERROR: Invalid threshold");
+        Serial.println("Usage: SET_EXTENDED_SLEEP_THRESHOLD seconds");
+        Serial.println("  30-600 = Continuous awake threshold before extended mode");
+        Serial.println("Examples:");
+        Serial.println("  SET_EXTENDED_SLEEP_THRESHOLD 120  - 2 minutes (default)");
+        Serial.println("  SET_EXTENDED_SLEEP_THRESHOLD 60   - 1 minute");
+        return;
+    }
+
+    if (seconds < 30 || seconds > 600) {
+        Serial.println("ERROR: Threshold must be 30-600 seconds");
+        return;
+    }
+
+    extern uint32_t g_extended_sleep_threshold_sec;
+    g_extended_sleep_threshold_sec = (uint32_t)seconds;
+
+    // Save to NVS for persistence
+    if (storageSaveExtendedSleepThreshold((uint32_t)seconds)) {
+        Serial.printf("Extended sleep threshold set: %d seconds\n", seconds);
+        Serial.println("Setting saved to NVS - persists across reboots");
+    } else {
+        Serial.println("WARNING: Failed to save to NVS - will reset to default on reboot");
+    }
+}
+
+// Handle GET_STATUS command - show all system status
+static void handleGetStatus() {
+    extern bool g_calibrated;
+    extern int8_t g_timezone_offset;
+    extern bool g_time_valid;
+    extern uint8_t g_daily_intake_display_mode;
+    extern uint32_t g_sleep_timeout_ms;
+    extern uint32_t g_extended_sleep_timer_sec;
+    extern uint32_t g_extended_sleep_threshold_sec;
+    extern bool g_in_extended_sleep_mode;
+    extern unsigned long g_continuous_awake_start;
+
+    Serial.println("\n=== SYSTEM STATUS ===");
+
+    // Calibration status
+    Serial.print("Calibration: ");
+    Serial.println(g_calibrated ? "VALID" : "NOT CALIBRATED");
+
+    // Time configuration
+    Serial.print("Time valid: ");
+    Serial.println(g_time_valid ? "YES" : "NO");
+    if (g_time_valid) {
+        Serial.print("Timezone offset: ");
+        Serial.println(g_timezone_offset);
+
+        // Show current time
+        struct timeval tv;
+        gettimeofday(&tv, NULL);
+        time_t now = tv.tv_sec + (g_timezone_offset * 3600);
+        struct tm timeinfo;
+        gmtime_r(&now, &timeinfo);
+        Serial.printf("Current time: %04d-%02d-%02d %02d:%02d:%02d\n",
+                     timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday,
+                     timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
+    }
+
+    // Display mode
+    Serial.print("Display mode: ");
+    Serial.print(g_daily_intake_display_mode);
+    Serial.print(" (");
+    Serial.print((g_daily_intake_display_mode == 0) ? "Human figure" : "Tumbler grid");
+    Serial.println(")");
+
+    // Sleep settings
+    Serial.print("Normal sleep timeout: ");
+    if (g_sleep_timeout_ms == 0) {
+        Serial.println("DISABLED");
+    } else {
+        Serial.print(g_sleep_timeout_ms / 1000);
+        Serial.println(" seconds");
+    }
+
+    Serial.print("Extended sleep timer: ");
+    Serial.print(g_extended_sleep_timer_sec);
+    Serial.println(" seconds");
+
+    Serial.print("Extended sleep threshold: ");
+    Serial.print(g_extended_sleep_threshold_sec);
+    Serial.println(" seconds");
+
+    Serial.print("Extended sleep mode: ");
+    Serial.println(g_in_extended_sleep_mode ? "ACTIVE" : "INACTIVE");
+
+    if (g_continuous_awake_start > 0) {
+        unsigned long awake_time = (millis() - g_continuous_awake_start) / 1000;
+        Serial.print("Continuous awake time: ");
+        Serial.print(awake_time);
+        Serial.println(" seconds");
+    }
+
+    Serial.println("=====================\n");
+}
+
 // Handle debug level change (single character '0'-'4')
 static void handleDebugLevel(char level) {
     switch (level) {
@@ -787,8 +922,14 @@ static void processCommand(char* cmd) {
         handleClearDrinks();
     } else if (strcmp(cmd, "SET_DISPLAY_MODE") == 0) {
         handleSetDisplayMode(args);
-    } else if (strcmp(cmd, "SET_SLEEP_TIMEOUT") == 0) {
+    } else if (strcmp(cmd, "SET_SLEEP_TIMEOUT") == 0 || strcmp(cmd, "SET_NORMAL_SLEEP_TIMEOUT") == 0) {
         handleSetSleepTimeout(args);
+    } else if (strcmp(cmd, "SET_EXTENDED_SLEEP_TIMER") == 0) {
+        handleSetExtendedSleepTimer(args);
+    } else if (strcmp(cmd, "SET_EXTENDED_SLEEP_THRESHOLD") == 0) {
+        handleSetExtendedSleepThreshold(args);
+    } else if (strcmp(cmd, "GET_STATUS") == 0) {
+        handleGetStatus();
     } else {
         Serial.print("ERROR: Unknown command: ");
         Serial.println(cmd);
@@ -813,7 +954,11 @@ static void processCommand(char* cmd) {
         Serial.println("\nDisplay Settings:");
         Serial.println("  SET_DISPLAY_MODE mode - Switch intake visualization (0=human, 1=tumblers)");
         Serial.println("\nPower Management:");
-        Serial.println("  SET_SLEEP_TIMEOUT sec - Set sleep timeout (0=disable, default=30)");
+        Serial.println("  SET_SLEEP_TIMEOUT sec         - Normal sleep timeout (0=disable, default=30)");
+        Serial.println("  SET_EXTENDED_SLEEP_TIMER sec  - Extended sleep timer wake (default=60)");
+        Serial.println("  SET_EXTENDED_SLEEP_THRESHOLD sec - Awake threshold for extended mode (default=120)");
+        Serial.println("\nSystem Status:");
+        Serial.println("  GET_STATUS            - Show all system status and settings");
     }
 }
 

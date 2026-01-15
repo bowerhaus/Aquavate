@@ -43,6 +43,21 @@ bool lisReady = false;
 
 unsigned long wakeTime = 0;
 
+// Extended deep sleep tracking
+unsigned long g_continuous_awake_start = 0;     // When current awake period started
+bool g_in_extended_sleep_mode = false;          // Currently using extended sleep
+uint32_t g_extended_sleep_timer_sec = EXTENDED_SLEEP_TIMER_SEC;       // Timer wake duration (default 60s)
+uint32_t g_extended_sleep_threshold_sec = EXTENDED_SLEEP_THRESHOLD_SEC; // Awake threshold (default 120s)
+bool g_force_display_clear_sleep = false;       // Flag to clear Zzzz indicator on wake from extended sleep
+
+// RTC memory persistence (survives deep sleep)
+RTC_DATA_ATTR uint32_t rtc_extended_sleep_magic = 0;
+RTC_DATA_ATTR bool rtc_in_extended_sleep_mode = false;
+RTC_DATA_ATTR unsigned long rtc_continuous_awake_start = 0;
+
+// Magic number for validating RTC memory after deep sleep
+#define RTC_EXTENDED_SLEEP_MAGIC 0x45585400  // "EXT\0" in ASCII
+
 // Bitmap data and drawing functions moved to display.cpp
 
 // Calibration state
@@ -325,12 +340,120 @@ void configureLIS3DHInterrupt() {
     Serial.println("Wake condition: Z-axis drops below threshold (tilt in any direction)");
 }
 
-void enterDeepSleep() {
-    Serial.println("Entering deep sleep...");
+// Save extended sleep state to RTC memory
+void extendedSleepSaveToRTC() {
+    rtc_extended_sleep_magic = RTC_EXTENDED_SLEEP_MAGIC;
+    rtc_in_extended_sleep_mode = g_in_extended_sleep_mode;
+    rtc_continuous_awake_start = g_continuous_awake_start;
+}
+
+// Restore extended sleep state from RTC memory
+// Returns true if RTC memory was valid, false if power cycle
+bool extendedSleepRestoreFromRTC() {
+    if (rtc_extended_sleep_magic != RTC_EXTENDED_SLEEP_MAGIC) {
+        Serial.println("Extended sleep: RTC memory invalid (power cycle)");
+        // Reset to defaults
+        g_in_extended_sleep_mode = false;
+        g_continuous_awake_start = millis();
+        return false;
+    }
+
+    Serial.println("Extended sleep: Restoring state from RTC memory");
+    g_in_extended_sleep_mode = rtc_in_extended_sleep_mode;
+    g_continuous_awake_start = rtc_continuous_awake_start;
+
+    Serial.print("  in_extended_sleep_mode: ");
+    Serial.println(g_in_extended_sleep_mode ? "true" : "false");
+    Serial.print("  continuous_awake_start: ");
+    Serial.println(g_continuous_awake_start);
+
+    return true;
+}
+
+// Check if device is still experiencing constant motion (backpack scenario)
+bool isStillMovingConstantly() {
+    if (!lisReady) {
+        Serial.println("Extended sleep: LIS3DH not ready, assuming stationary");
+        return false;
+    }
+
+    Serial.println("Extended sleep: Checking motion state...");
+
+    // Sample accelerometer for brief period (~500ms)
+    GestureType initial_gesture = gesturesUpdate();
+    delay(500);
+    GestureType final_gesture = gesturesUpdate();
+
+    // If gesture changed or is unstable (sideways tilt), still moving
+    bool still_moving = (initial_gesture != final_gesture ||
+                        initial_gesture == GESTURE_SIDEWAYS_TILT ||
+                        final_gesture == GESTURE_SIDEWAYS_TILT);
+
+    Serial.print("  Initial gesture: ");
+    switch (initial_gesture) {
+        case GESTURE_INVERTED_HOLD: Serial.print("INVERTED_HOLD"); break;
+        case GESTURE_UPRIGHT_STABLE: Serial.print("UPRIGHT_STABLE"); break;
+        case GESTURE_SIDEWAYS_TILT: Serial.print("SIDEWAYS_TILT"); break;
+        case GESTURE_UPRIGHT: Serial.print("UPRIGHT"); break;
+        default: Serial.print("NONE"); break;
+    }
+    Serial.print(", Final gesture: ");
+    switch (final_gesture) {
+        case GESTURE_INVERTED_HOLD: Serial.print("INVERTED_HOLD"); break;
+        case GESTURE_UPRIGHT_STABLE: Serial.print("UPRIGHT_STABLE"); break;
+        case GESTURE_SIDEWAYS_TILT: Serial.print("SIDEWAYS_TILT"); break;
+        case GESTURE_UPRIGHT: Serial.print("UPRIGHT"); break;
+        default: Serial.print("NONE"); break;
+    }
+    Serial.println();
+    Serial.print("  Still moving: ");
+    Serial.println(still_moving ? "YES" : "NO");
+
+    return still_moving;
+}
+
+// Enter extended deep sleep mode (timer wake instead of motion wake)
+void enterExtendedDeepSleep() {
+    Serial.print("Entering extended deep sleep (timer wake: ");
+    Serial.print(g_extended_sleep_timer_sec);
+    Serial.println("s)...");
+
+#if EXTENDED_SLEEP_INDICATOR
+    // Show Zzzz indicator before sleeping (if enabled)
+    Serial.println("Displaying Zzzz indicator (extended sleep)...");
+
+    // Use last valid display state values
+    DisplayState last_state = displayGetState();
+
+    // Display with Zzzz indicator (sleeping = true)
+    displayUpdate(last_state.water_ml, last_state.daily_total_ml,
+                 last_state.hour, last_state.minute,
+                 last_state.battery_percent, true);
+
+    delay(1000); // Brief pause to ensure display updates
+#endif
 
     // Save state to RTC memory before sleeping
     displaySaveToRTC();
     drinksSaveToRTC();
+    extendedSleepSaveToRTC();
+
+    Serial.flush();
+
+    // Configure timer wake (NO motion wake in extended mode)
+    esp_sleep_enable_timer_wakeup(g_extended_sleep_timer_sec * 1000000ULL);
+
+    // Enter deep sleep
+    esp_deep_sleep_start();
+}
+
+void enterDeepSleep() {
+    Serial.println("Entering normal deep sleep (motion wake)...");
+
+    // Save state to RTC memory before sleeping
+    displaySaveToRTC();
+    drinksSaveToRTC();
+    extendedSleepSaveToRTC();
 
     Serial.flush();
 
@@ -429,7 +552,7 @@ void setup() {
             Serial.println(" triggered wake");
             break;
         case ESP_SLEEP_WAKEUP_TIMER:
-            Serial.println("Woke up from timer");
+            Serial.println("Woke up from timer (extended sleep mode)");
             break;
         case ESP_SLEEP_WAKEUP_UNDEFINED:
             Serial.println("Not from deep sleep (power on/reset/upload)");
@@ -440,6 +563,22 @@ void setup() {
             break;
     }
     Serial.println("=================================");
+
+    // Handle extended sleep mode wake logic
+    if (wakeup_reason == ESP_SLEEP_WAKEUP_TIMER) {
+        // Woke from timer - was in extended sleep mode
+        // Note: Will check motion state and decide mode after sensors initialized
+        Serial.println("Extended sleep: Timer wake detected, will check motion state after init");
+    } else if (wakeup_reason == ESP_SLEEP_WAKEUP_EXT0) {
+        // Woke from motion - was in normal sleep, return to normal mode
+        Serial.println("Extended sleep: Motion wake detected, returning to normal mode");
+        g_in_extended_sleep_mode = false;
+        g_continuous_awake_start = millis();
+    } else {
+        // Power on/reset - initialize continuous awake tracking
+        g_continuous_awake_start = millis();
+        g_in_extended_sleep_mode = false;
+    }
 
     Serial.print("Aquavate v");
     Serial.print(AQUAVATE_VERSION_MAJOR);
@@ -580,6 +719,16 @@ void setup() {
             Serial.println(" seconds");
         }
 
+        // Load extended sleep settings from NVS
+        g_extended_sleep_timer_sec = storageLoadExtendedSleepTimer();
+        g_extended_sleep_threshold_sec = storageLoadExtendedSleepThreshold();
+        Serial.print("Extended sleep timer: ");
+        Serial.print(g_extended_sleep_timer_sec);
+        Serial.println(" seconds");
+        Serial.print("Extended sleep threshold: ");
+        Serial.print(g_extended_sleep_threshold_sec);
+        Serial.println(" seconds");
+
         if (g_time_valid) {
             Serial.println("Time configuration loaded:");
             Serial.print("  Timezone offset: ");
@@ -625,6 +774,29 @@ void setup() {
     if (nauReady) {
         weightInit(nau);
         Serial.println("Weight measurement initialized");
+    }
+
+    // Handle timer wake from extended sleep (now that sensors are initialized)
+    if (wakeup_reason == ESP_SLEEP_WAKEUP_TIMER) {
+        // Restore extended sleep state from RTC memory
+        extendedSleepRestoreFromRTC();
+
+        // Check if still experiencing constant motion
+        if (isStillMovingConstantly()) {
+            // Continue extended sleep
+            Serial.println("Extended sleep: Still moving - re-entering extended sleep");
+            enterExtendedDeepSleep();
+            // Will not return from deep sleep
+        } else {
+            // Return to normal mode
+            Serial.println("Extended sleep: Motion stopped - returning to normal mode");
+            g_in_extended_sleep_mode = false;
+            g_continuous_awake_start = millis();  // Reset tracking
+
+            // Set flag to force display update to clear Zzzz indicator
+            g_force_display_clear_sleep = true;
+            Serial.println("Extended sleep: Will clear Zzzz indicator on first stable update");
+        }
     }
 
     // Initialize calibration state machine
@@ -947,8 +1119,16 @@ void loop() {
                 battery_pct = getBatteryPercent(voltage);
 
                 // Check if display needs update (water, daily intake, time, or battery changed)
-                if (displayNeedsUpdate(display_water_ml, daily_state.daily_total_ml,
+                // OR if we need to clear Zzzz indicator after extended sleep
+                if (g_force_display_clear_sleep ||
+                    displayNeedsUpdate(display_water_ml, daily_state.daily_total_ml,
                                       time_interval_elapsed, battery_interval_elapsed)) {
+
+                    if (g_force_display_clear_sleep) {
+                        Serial.println("Extended sleep: Clearing Zzzz indicator");
+                        g_force_display_clear_sleep = false;
+                    }
+
                     displayUpdate(display_water_ml, daily_state.daily_total_ml,
                                  time_hour, time_minute, battery_pct, false);
 
@@ -1020,6 +1200,22 @@ void loop() {
             storageSaveLastBootTime(tv.tv_sec);
             last_saved_hour = timeinfo.tm_hour;
             Serial.println("Time: Hourly timestamp saved to NVS");
+        }
+    }
+
+    // Check for extended sleep trigger (backpack mode - continuous motion prevents normal sleep)
+    if (!g_in_extended_sleep_mode && !calibrationIsActive()) {
+        unsigned long total_awake_time = millis() - g_continuous_awake_start;
+        if (total_awake_time >= (g_extended_sleep_threshold_sec * 1000)) {
+            Serial.print("Extended sleep: Continuous awake threshold exceeded (");
+            Serial.print(total_awake_time / 1000);
+            Serial.print("s >= ");
+            Serial.print(g_extended_sleep_threshold_sec);
+            Serial.println("s)");
+            Serial.println("Extended sleep: Switching to extended sleep mode");
+            g_in_extended_sleep_mode = true;
+            enterExtendedDeepSleep();
+            // Will not return from deep sleep
         }
     }
 

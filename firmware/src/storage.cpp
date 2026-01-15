@@ -22,6 +22,8 @@ static const char* KEY_TIME_VALID = "time_valid";
 static const char* KEY_LAST_BOOT_TIME = "last_boot_time";
 static const char* KEY_DISPLAY_MODE = "display_mode";
 static const char* KEY_SLEEP_TIMEOUT = "sleep_timeout";
+static const char* KEY_EXT_SLEEP_TMR = "ext_sleep_tmr";
+static const char* KEY_EXT_SLEEP_THR = "ext_sleep_thr";
 
 bool storageInit() {
     if (g_initialized) {
@@ -252,6 +254,58 @@ uint32_t storageLoadSleepTimeout() {
 
     uint32_t seconds = g_preferences.getUInt(KEY_SLEEP_TIMEOUT, 30); // Default 30 seconds
     Serial.print("Storage: Loaded sleep_timeout = ");
+    Serial.print(seconds);
+    Serial.println(" seconds");
+    return seconds;
+}
+
+bool storageSaveExtendedSleepTimer(uint32_t seconds) {
+    if (!g_initialized) {
+        Serial.println("Storage: Not initialized");
+        return false;
+    }
+
+    g_preferences.putUInt(KEY_EXT_SLEEP_TMR, seconds);
+    Serial.print("Storage: Saved extended_sleep_timer = ");
+    Serial.print(seconds);
+    Serial.println(" seconds");
+    return true;
+}
+
+uint32_t storageLoadExtendedSleepTimer() {
+    if (!g_initialized) {
+        Serial.println("Storage: Not initialized, using default extended_sleep_timer 60");
+        return 60; // Default 60 seconds
+    }
+
+    uint32_t seconds = g_preferences.getUInt(KEY_EXT_SLEEP_TMR, 60); // Default 60 seconds
+    Serial.print("Storage: Loaded extended_sleep_timer = ");
+    Serial.print(seconds);
+    Serial.println(" seconds");
+    return seconds;
+}
+
+bool storageSaveExtendedSleepThreshold(uint32_t seconds) {
+    if (!g_initialized) {
+        Serial.println("Storage: Not initialized");
+        return false;
+    }
+
+    g_preferences.putUInt(KEY_EXT_SLEEP_THR, seconds);
+    Serial.print("Storage: Saved extended_sleep_threshold = ");
+    Serial.print(seconds);
+    Serial.println(" seconds");
+    return true;
+}
+
+uint32_t storageLoadExtendedSleepThreshold() {
+    if (!g_initialized) {
+        Serial.println("Storage: Not initialized, using default extended_sleep_threshold 120");
+        return 120; // Default 120 seconds
+    }
+
+    uint32_t seconds = g_preferences.getUInt(KEY_EXT_SLEEP_THR, 120); // Default 120 seconds
+    Serial.print("Storage: Loaded extended_sleep_threshold = ");
     Serial.print(seconds);
     Serial.println(" seconds");
     return seconds;

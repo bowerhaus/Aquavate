@@ -65,12 +65,19 @@ extern uint8_t g_daily_intake_display_mode;
 // ==================== Power Management ====================
 
 // How long to stay awake after waking from deep sleep (milliseconds)
-#define AWAKE_DURATION_MS   30000   // 30 seconds
+#define AWAKE_DURATION_MS   30000   // 30 seconds (normal sleep timeout)
+
+// Extended deep sleep configuration (backpack mode)
+// When device is continuously awake for threshold duration (e.g., in backpack),
+// switch to timer-based wake instead of motion wake to conserve battery
+#define EXTENDED_SLEEP_THRESHOLD_SEC    120     // 2 minutes continuous awake triggers extended sleep
+#define EXTENDED_SLEEP_TIMER_SEC        60      // 1 minute timer wake in extended mode
 
 // Display "Zzzz" indicator before entering deep sleep
 // 0 = No display update before sleep (saves battery, no flash)
 // 1 = Show "Zzzz" indicator before sleep (visual feedback)
 #define DISPLAY_SLEEP_INDICATOR     0
+#define EXTENDED_SLEEP_INDICATOR    1           // Show "Zzzz" before extended sleep (1=enabled)
 
 // ==================== LIS3DH Accelerometer ====================
 
