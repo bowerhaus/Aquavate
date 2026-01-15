@@ -127,8 +127,8 @@ static const char* getTimezoneName(int offset) {
     }
 }
 
-// Handle SET_DATETIME command
-// Format: SET_DATETIME 2026-01-13 14:30:00 -5
+// Handle SET DATETIME command
+// Format: SET DATETIME 2026-01-13 14:30:00 -5
 static void handleSetDateTime(char* args) {
     // Parse date and time
     int year, month, day, hour, minute, second;
@@ -140,8 +140,8 @@ static void handleSetDateTime(char* args) {
 
     if (parsed < 6) {
         Serial.println("ERROR: Invalid format");
-        Serial.println("Usage: SET_DATETIME YYYY-MM-DD HH:MM:SS [timezone_offset]");
-        Serial.println("Example: SET_DATETIME 2026-01-13 14:30:00 -5");
+        Serial.println("Usage: SET DATETIME YYYY-MM-DD HH:MM:SS [timezone_offset]");
+        Serial.println("Example: SET DATETIME 2026-01-13 14:30:00 -5");
         return;
     }
 
@@ -225,7 +225,7 @@ static void handleSetDateTime(char* args) {
     }
 }
 
-// Handle GET_TIME command
+// Handle GET TIME command
 static void handleGetTime() {
     // Load time_valid flag
     bool time_valid = storageLoadTimeValid();
@@ -233,8 +233,8 @@ static void handleGetTime() {
     if (!time_valid) {
         Serial.println("WARNING: Time not set!");
         Serial.println("Current RTC: 1970-01-01 00:00:00 (epoch)");
-        Serial.println("Use SET_DATETIME command to set time");
-        Serial.println("Example: SET_DATETIME 2026-01-13 14:30:00 -5");
+        Serial.println("Use SET DATETIME command to set time");
+        Serial.println("Example: SET DATETIME 2026-01-13 14:30:00 -5");
         return;
     }
 
@@ -267,8 +267,8 @@ static void handleGetTime() {
     Serial.println("RTC drift: ~3-5 minutes/day (resync recommended weekly)");
 }
 
-// Handle SET_DATE command
-// Format: SET_DATE 2026-01-13
+// Handle SET DATE command
+// Format: SET DATE 2026-01-13
 static void handleSetDate(char* args) {
     int year, month, day;
 
@@ -277,8 +277,8 @@ static void handleSetDate(char* args) {
 
     if (parsed != 3) {
         Serial.println("ERROR: Invalid format");
-        Serial.println("Usage: SET_DATE YYYY-MM-DD");
-        Serial.println("Example: SET_DATE 2026-01-13");
+        Serial.println("Usage: SET DATE YYYY-MM-DD");
+        Serial.println("Example: SET DATE 2026-01-13");
         return;
     }
 
@@ -344,8 +344,8 @@ static void handleSetDate(char* args) {
                  current_time.tm_hour, current_time.tm_min, current_time.tm_sec);
 }
 
-// Handle SET_TIME command
-// Format: SET_TIME HH[:MM[:SS]]
+// Handle SET TIME command
+// Format: SET TIME HH[:MM[:SS]]
 static void handleSetTime(char* args) {
     int hour, minute = 0, second = 0;
 
@@ -354,11 +354,11 @@ static void handleSetTime(char* args) {
 
     if (parsed < 1) {
         Serial.println("ERROR: Invalid format");
-        Serial.println("Usage: SET_TIME HH[:MM[:SS]]");
+        Serial.println("Usage: SET TIME HH[:MM[:SS]]");
         Serial.println("Examples:");
-        Serial.println("  SET_TIME 14          → 14:00:00");
-        Serial.println("  SET_TIME 14:30       → 14:30:00");
-        Serial.println("  SET_TIME 14:30:45    → 14:30:45");
+        Serial.println("  SET TIME 14          → 14:00:00");
+        Serial.println("  SET TIME 14:30       → 14:30:00");
+        Serial.println("  SET TIME 14:30:45    → 14:30:45");
         return;
     }
 
@@ -424,13 +424,13 @@ static void handleSetTime(char* args) {
                  current_time.tm_year + 1900, current_time.tm_mon + 1, current_time.tm_mday);
 }
 
-// Handle SET_TIMEZONE command (and SET_TZ alias)
+// Handle SET TIMEZONE command (and SET TZ alias)
 static void handleSetTimezone(char* args) {
     int offset;
     if (!parseInt(args, offset)) {
         Serial.println("ERROR: Invalid timezone offset");
-        Serial.println("Usage: SET_TIMEZONE offset  (or SET_TZ offset)");
-        Serial.println("Example: SET_TIMEZONE -8");
+        Serial.println("Usage: SET TIMEZONE offset  (or SET TZ offset)");
+        Serial.println("Example: SET TIMEZONE -8");
         return;
     }
 
@@ -454,7 +454,7 @@ static void handleSetTimezone(char* args) {
     Serial.println("Saved to NVS");
 }
 
-// Handle GET_DAILY_STATE command - display current daily state
+// Handle GET DAILY STATE command - display current daily state
 static void handleGetDailyState() {
     DailyState state;
     drinksGetState(state);
@@ -472,7 +472,7 @@ static void handleGetDailyState() {
     Serial.println("==================\n");
 }
 
-// Handle GET_LAST_DRINK command - display most recent drink record
+// Handle GET LAST DRINK command - display most recent drink record
 static void handleGetLastDrink() {
     DrinkRecord record;
     if (!storageLoadLastDrinkRecord(record)) {
@@ -502,7 +502,7 @@ static void handleGetLastDrink() {
     Serial.println("=========================\n");
 }
 
-// Handle DUMP_DRINKS command - display all drink records
+// Handle DUMP DRINKS command - display all drink records
 static void handleDumpDrinks() {
     CircularBufferMetadata meta;
     if (!storageLoadBufferMetadata(meta)) {
@@ -563,20 +563,20 @@ static void handleDumpDrinks() {
     Serial.println();
 }
 
-// Handle RESET_DAILY_INTAKE command - reset daily counter
+// Handle RESET DAILY INTAKE command - reset daily counter
 static void handleResetDailyIntake() {
     drinksResetDaily();
     Serial.println("OK: Daily intake reset");
 }
 
-// Handle SET_DAILY_INTAKE command - set current daily intake to a specific value
-// Format: SET_DAILY_INTAKE ml
+// Handle SET DAILY INTAKE command - set current daily intake to a specific value
+// Format: SET DAILY INTAKE ml
 static void handleSetDailyIntake(char* args) {
     int ml;
     if (!parseInt(args, ml)) {
         Serial.println("ERROR: Invalid daily intake value");
-        Serial.println("Usage: SET_DAILY_INTAKE ml");
-        Serial.println("Example: SET_DAILY_INTAKE 500");
+        Serial.println("Usage: SET DAILY INTAKE ml");
+        Serial.println("Example: SET DAILY INTAKE 500");
         return;
     }
 
@@ -600,18 +600,18 @@ static void handleSetDailyIntake(char* args) {
                  (state.daily_total_ml * 100) / DRINK_DAILY_GOAL_ML);
 }
 
-// Handle CLEAR_DRINKS command - clear all drink records
+// Handle CLEAR DRINKS command - clear all drink records
 static void handleClearDrinks() {
     drinksClearAll();
     Serial.println("OK: All drink records cleared");
 }
 
-// Handle SET_DISPLAY_MODE command - switch between man and tumblers
+// Handle SET DISPLAY MODE command - switch between man and tumblers
 static void handleSetDisplayMode(char* args) {
     int mode;
     if (!parseInt(args, mode)) {
         Serial.println("ERROR: Invalid display mode");
-        Serial.println("Usage: SET_DISPLAY_MODE mode");
+        Serial.println("Usage: SET DISPLAY MODE mode");
         Serial.println("  0 = Human figure (continuous fill)");
         Serial.println("  1 = Tumbler grid (10 glasses)");
         return;
@@ -640,18 +640,18 @@ static void handleSetDisplayMode(char* args) {
     Serial.println("Display updated");
 }
 
-// Handle SET_SLEEP_TIMEOUT command
-// Format: SET_SLEEP_TIMEOUT seconds (0 = disable sleep)
+// Handle SET SLEEP TIMEOUT command
+// Format: SET SLEEP TIMEOUT seconds (0 = disable sleep)
 static void handleSetSleepTimeout(char* args) {
     int seconds;
     if (!parseInt(args, seconds)) {
         Serial.println("ERROR: Invalid timeout");
-        Serial.println("Usage: SET_SLEEP_TIMEOUT seconds");
+        Serial.println("Usage: SET SLEEP TIMEOUT seconds");
         Serial.println("  0 = Disable sleep (debug mode)");
         Serial.println("  1-300 = Sleep after N seconds");
         Serial.println("Examples:");
-        Serial.println("  SET_SLEEP_TIMEOUT 30  \xE2\x86\x92 Sleep after 30 seconds (default)");
-        Serial.println("  SET_SLEEP_TIMEOUT 0   \xE2\x86\x92 Never sleep (for debugging)");
+        Serial.println("  SET SLEEP TIMEOUT 30  \xE2\x86\x92 Sleep after 30 seconds (default)");
+        Serial.println("  SET SLEEP TIMEOUT 0   \xE2\x86\x92 Never sleep (for debugging)");
         return;
     }
 
@@ -677,17 +677,17 @@ static void handleSetSleepTimeout(char* args) {
     }
 }
 
-// Handle SET_EXTENDED_SLEEP_TIMER command
-// Format: SET_EXTENDED_SLEEP_TIMER seconds
+// Handle SET EXTENDED SLEEP TIMER command
+// Format: SET EXTENDED SLEEP TIMER seconds
 static void handleSetExtendedSleepTimer(char* args) {
     int seconds;
     if (!parseInt(args, seconds)) {
         Serial.println("ERROR: Invalid timer duration");
-        Serial.println("Usage: SET_EXTENDED_SLEEP_TIMER seconds");
+        Serial.println("Usage: SET EXTENDED SLEEP TIMER seconds");
         Serial.println("  1-3600 = Timer wake interval in extended mode");
         Serial.println("Examples:");
-        Serial.println("  SET_EXTENDED_SLEEP_TIMER 60   - 1 minute timer wake (default)");
-        Serial.println("  SET_EXTENDED_SLEEP_TIMER 120  - 2 minute timer wake");
+        Serial.println("  SET EXTENDED SLEEP TIMER 60   - 1 minute timer wake (default)");
+        Serial.println("  SET EXTENDED SLEEP TIMER 120  - 2 minute timer wake");
         return;
     }
 
@@ -708,17 +708,17 @@ static void handleSetExtendedSleepTimer(char* args) {
     }
 }
 
-// Handle SET_EXTENDED_SLEEP_THRESHOLD command
-// Format: SET_EXTENDED_SLEEP_THRESHOLD seconds
+// Handle SET EXTENDED SLEEP THRESHOLD command
+// Format: SET EXTENDED SLEEP THRESHOLD seconds
 static void handleSetExtendedSleepThreshold(char* args) {
     int seconds;
     if (!parseInt(args, seconds)) {
         Serial.println("ERROR: Invalid threshold");
-        Serial.println("Usage: SET_EXTENDED_SLEEP_THRESHOLD seconds");
+        Serial.println("Usage: SET EXTENDED SLEEP THRESHOLD seconds");
         Serial.println("  30-600 = Continuous awake threshold before extended mode");
         Serial.println("Examples:");
-        Serial.println("  SET_EXTENDED_SLEEP_THRESHOLD 120  - 2 minutes (default)");
-        Serial.println("  SET_EXTENDED_SLEEP_THRESHOLD 60   - 1 minute");
+        Serial.println("  SET EXTENDED SLEEP THRESHOLD 120  - 2 minutes (default)");
+        Serial.println("  SET EXTENDED SLEEP THRESHOLD 60   - 1 minute");
         return;
     }
 
@@ -739,7 +739,7 @@ static void handleSetExtendedSleepThreshold(char* args) {
     }
 }
 
-// Handle GET_STATUS command - show all system status
+// Handle GET STATUS command - show all system status
 static void handleGetStatus() {
     extern bool g_calibrated;
     extern int8_t g_timezone_offset;
@@ -893,6 +893,84 @@ static void handleDebugLevel(char level) {
     }
 }
 
+// Helper: Parse command into words (space-separated)
+// Modifies input string in-place, null-terminates words
+// Returns number of words parsed, sets args pointer to remaining string
+static int parseCommandWords(char* input, char* words[], int max_words, char** args) {
+    // Trim leading whitespace
+    while (*input == ' ' || *input == '\t') input++;
+    
+    if (*input == '\0') {
+        *args = input;
+        return 0;
+    }
+
+    // Find end of original string before we modify it
+    char* original_end = input + strlen(input);
+
+    int word_count = 0;
+    char* start = input;
+    bool in_word = false;
+
+    // Parse words and convert to uppercase
+    for (char* p = input; *p && word_count < max_words; p++) {
+        if (*p == ' ' || *p == '\t') {
+            if (in_word) {
+                *p = '\0';  // Null-terminate word
+                words[word_count++] = start;
+                in_word = false;
+            }
+        } else {
+            if (!in_word) {
+                start = p;
+                in_word = true;
+            }
+            *p = toupper((unsigned char)*p);  // Convert to uppercase
+        }
+    }
+
+    // Handle last word
+    if (in_word && word_count < max_words) {
+        words[word_count++] = start;
+    }
+
+    // Find where arguments start (after last word)
+    if (word_count == 0) {
+        *args = input;
+        return 0;
+    }
+
+    // Find end of last word
+    char* last_word_end = words[word_count - 1] + strlen(words[word_count - 1]);
+    
+    // Skip null terminators we added and whitespace to find arguments
+    char* p = last_word_end;
+    while (p < original_end && (*p == '\0' || *p == ' ' || *p == '\t')) {
+        p++;
+    }
+    
+    // If we've reached the original end, there are no args
+    if (p >= original_end || *p == '\0') {
+        *args = original_end;  // Point to end of string (null terminator)
+    } else {
+        *args = p;  // Point to start of arguments
+    }
+
+    return word_count;
+}
+
+// Helper: Check if words match a command pattern
+static bool matchWords(char* words[], int word_count, const char* pattern[], int pattern_count) {
+    if (word_count != pattern_count) return false;
+    for (int i = 0; i < word_count; i++) {
+        if (strcmp(words[i], pattern[i]) != 0) return false;
+    }
+    return true;
+}
+
+// Static empty string for commands with no arguments
+static char empty_args[] = "";
+
 // Process a complete command
 static void processCommand(char* cmd) {
     // Trim leading whitespace
@@ -914,86 +992,154 @@ static void processCommand(char* cmd) {
         return;
     }
 
-    // Find command and arguments
-    char* args = strchr(cmd, ' ');
-    if (args != nullptr) {
-        *args = '\0';  // Null-terminate command
-        args++;        // Point to arguments
-        // Trim leading whitespace from args
-        while (*args == ' ' || *args == '\t') args++;
-    } else {
-        args = cmd + strlen(cmd);  // Point to empty string
+    // Parse command words
+    char* words[8];  // Max 8 words should be enough
+    char* args;
+    int word_count = parseCommandWords(cmd, words, 8, &args);
+    
+    if (word_count == 0) return;
+
+    // Trim leading whitespace from args
+    while (*args == ' ' || *args == '\t') args++;
+    if (*args == '\0') args = nullptr;
+
+    // Match commands by word count and pattern
+    // Two-word commands
+    if (word_count == 2) {
+        const char* pattern1[] = {"SET", "DATE"};
+        if (matchWords(words, 2, pattern1, 2)) {
+            handleSetDate(args ? args : empty_args);
+            return;
+        }
+        const char* pattern2[] = {"SET", "TIME"};
+        if (matchWords(words, 2, pattern2, 2)) {
+            handleSetTime(args ? args : empty_args);
+            return;
+        }
+        const char* pattern3[] = {"GET", "TIME"};
+        if (matchWords(words, 2, pattern3, 2)) {
+            handleGetTime();
+            return;
+        }
+        const char* pattern4[] = {"SET", "TZ"};
+        if (matchWords(words, 2, pattern4, 2)) {
+            handleSetTimezone(args ? args : empty_args);
+            return;
+        }
+        const char* pattern5[] = {"GET", "STATUS"};
+        if (matchWords(words, 2, pattern5, 2)) {
+            handleGetStatus();
+            return;
+        }
+        const char* pattern6[] = {"DUMP", "DRINKS"};
+        if (matchWords(words, 2, pattern6, 2)) {
+            handleDumpDrinks();
+            return;
+        }
+        const char* pattern7[] = {"CLEAR", "DRINKS"};
+        if (matchWords(words, 2, pattern7, 2)) {
+            handleClearDrinks();
+            return;
+        }
+        const char* pattern8[] = {"SET", "DATETIME"};
+        if (matchWords(words, 2, pattern8, 2)) {
+            handleSetDateTime(args ? args : empty_args);
+            return;
+        }
+        const char* pattern9[] = {"SET", "TIMEZONE"};
+        if (matchWords(words, 2, pattern9, 2)) {
+            handleSetTimezone(args ? args : empty_args);
+            return;
+        }
+    }
+    
+    // Three-word commands
+    if (word_count == 3) {
+        const char* pattern3[] = {"GET", "DAILY", "STATE"};
+        if (matchWords(words, 3, pattern3, 3)) {
+            handleGetDailyState();
+            return;
+        }
+        const char* pattern4[] = {"GET", "LAST", "DRINK"};
+        if (matchWords(words, 3, pattern4, 3)) {
+            handleGetLastDrink();
+            return;
+        }
+        const char* pattern5[] = {"SET", "DISPLAY", "MODE"};
+        if (matchWords(words, 3, pattern5, 3)) {
+            handleSetDisplayMode(args ? args : empty_args);
+            return;
+        }
+        const char* pattern6[] = {"SET", "SLEEP", "TIMEOUT"};
+        if (matchWords(words, 3, pattern6, 3)) {
+            handleSetSleepTimeout(args ? args : empty_args);
+            return;
+        }
+        const char* pattern7[] = {"SET", "DAILY", "INTAKE"};
+        if (matchWords(words, 3, pattern7, 3)) {
+            handleSetDailyIntake(args ? args : empty_args);
+            return;
+        }
+        const char* pattern8[] = {"RESET", "DAILY", "INTAKE"};
+        if (matchWords(words, 3, pattern8, 3)) {
+            handleResetDailyIntake();
+            return;
+        }
+    }
+    
+    // Four-word commands
+    if (word_count == 4) {
+        const char* pattern1[] = {"SET", "NORMAL", "SLEEP", "TIMEOUT"};
+        if (matchWords(words, 4, pattern1, 4)) {
+            handleSetSleepTimeout(args ? args : empty_args);
+            return;
+        }
+        const char* pattern2[] = {"SET", "EXTENDED", "SLEEP", "TIMER"};
+        if (matchWords(words, 4, pattern2, 4)) {
+            handleSetExtendedSleepTimer(args ? args : empty_args);
+            return;
+        }
+        const char* pattern3[] = {"SET", "EXTENDED", "SLEEP", "THRESHOLD"};
+        if (matchWords(words, 4, pattern3, 4)) {
+            handleSetExtendedSleepThreshold(args ? args : empty_args);
+            return;
+        }
     }
 
-    // Convert command to uppercase for case-insensitive comparison
-    for (char* p = cmd; *p; p++) {
-        *p = toupper((unsigned char)*p);
+    // Command not found
+    Serial.print("ERROR: Unknown command: ");
+    for (int i = 0; i < word_count; i++) {
+        if (i > 0) Serial.print(" ");
+        Serial.print(words[i]);
     }
-
-    // Process commands
-    if (strcmp(cmd, "SET_DATETIME") == 0) {
-        handleSetDateTime(args);
-    } else if (strcmp(cmd, "SET_DATE") == 0) {
-        handleSetDate(args);
-    } else if (strcmp(cmd, "SET_TIME") == 0) {
-        handleSetTime(args);
-    } else if (strcmp(cmd, "GET_TIME") == 0) {
-        handleGetTime();
-    } else if (strcmp(cmd, "SET_TIMEZONE") == 0 || strcmp(cmd, "SET_TZ") == 0) {
-        handleSetTimezone(args);
-    } else if (strcmp(cmd, "GET_DAILY_STATE") == 0) {
-        handleGetDailyState();
-    } else if (strcmp(cmd, "GET_LAST_DRINK") == 0) {
-        handleGetLastDrink();
-    } else if (strcmp(cmd, "DUMP_DRINKS") == 0) {
-        handleDumpDrinks();
-    } else if (strcmp(cmd, "RESET_DAILY_INTAKE") == 0) {
-        handleResetDailyIntake();
-    } else if (strcmp(cmd, "SET_DAILY_INTAKE") == 0) {
-        handleSetDailyIntake(args);
-    } else if (strcmp(cmd, "CLEAR_DRINKS") == 0) {
-        handleClearDrinks();
-    } else if (strcmp(cmd, "SET_DISPLAY_MODE") == 0) {
-        handleSetDisplayMode(args);
-    } else if (strcmp(cmd, "SET_SLEEP_TIMEOUT") == 0 || strcmp(cmd, "SET_NORMAL_SLEEP_TIMEOUT") == 0) {
-        handleSetSleepTimeout(args);
-    } else if (strcmp(cmd, "SET_EXTENDED_SLEEP_TIMER") == 0) {
-        handleSetExtendedSleepTimer(args);
-    } else if (strcmp(cmd, "SET_EXTENDED_SLEEP_THRESHOLD") == 0) {
-        handleSetExtendedSleepThreshold(args);
-    } else if (strcmp(cmd, "GET_STATUS") == 0) {
-        handleGetStatus();
-    } else {
-        Serial.print("ERROR: Unknown command: ");
-        Serial.println(cmd);
-        Serial.println("\nAvailable commands:");
-        Serial.println("Debug Control:");
-        Serial.println("  0-4, 9                - Set debug level (single character)");
-        Serial.println("                          0=OFF, 1=Events, 2=+Gestures,");
-        Serial.println("                          3=+Weight, 4=+Accel, 9=All ON");
-        Serial.println("  T                     - Test interrupt state (shows INT1_SRC)");
-        Serial.println("\nTime/Timezone:");
-        Serial.println("  SET_DATETIME YYYY-MM-DD HH:MM:SS [tz]    - Set date, time, and timezone");
-        Serial.println("  SET_DATE YYYY-MM-DD                       - Set date only");
-        Serial.println("  SET_TIME HH[:MM[:SS]]                     - Set time (defaults: MM=00, SS=00)");
-        Serial.println("  SET_TZ offset                             - Set timezone (alias: SET_TIMEZONE)");
-        Serial.println("  GET_TIME                                  - Show current time");
-        Serial.println("\nDrink Tracking:");
-        Serial.println("  GET_DAILY_STATE       - Show current daily state");
-        Serial.println("  GET_LAST_DRINK        - Show most recent drink record");
-        Serial.println("  DUMP_DRINKS           - Display all drink records");
-        Serial.println("  SET_DAILY_INTAKE ml    - Set current daily intake to specific value (0-10000ml)");
-        Serial.println("  RESET_DAILY_INTAKE    - Reset daily intake counter to 0");
-        Serial.println("  CLEAR_DRINKS          - Clear all drink records (WARNING: erases data)");
-        Serial.println("\nDisplay Settings:");
-        Serial.println("  SET_DISPLAY_MODE mode - Switch intake visualization (0=human, 1=tumblers)");
-        Serial.println("\nPower Management:");
-        Serial.println("  SET_SLEEP_TIMEOUT sec         - Normal sleep timeout (0=disable, default=30)");
-        Serial.println("  SET_EXTENDED_SLEEP_TIMER sec  - Extended sleep timer wake (default=60)");
-        Serial.println("  SET_EXTENDED_SLEEP_THRESHOLD sec - Awake threshold for extended mode (default=120)");
-        Serial.println("\nSystem Status:");
-        Serial.println("  GET_STATUS            - Show all system status and settings");
-    }
+    Serial.println();
+    Serial.println("\nAvailable commands:");
+    Serial.println("Debug Control:");
+    Serial.println("  0-4, 9                - Set debug level (single character)");
+    Serial.println("                          0=OFF, 1=Events, 2=+Gestures,");
+    Serial.println("                          3=+Weight, 4=+Accel, 9=All ON");
+    Serial.println("  T                     - Test interrupt state (shows INT1_SRC)");
+    Serial.println("\nTime/Timezone:");
+    Serial.println("  SET DATETIME YYYY-MM-DD HH:MM:SS [tz]    - Set date, time, and timezone");
+    Serial.println("  SET DATE YYYY-MM-DD                       - Set date only");
+    Serial.println("  SET TIME HH[:MM[:SS]]                     - Set time (defaults: MM=00, SS=00)");
+    Serial.println("  SET TZ offset                             - Set timezone (alias: SET TIMEZONE)");
+    Serial.println("  GET TIME                                  - Show current time");
+    Serial.println("\nDrink Tracking:");
+    Serial.println("  GET DAILY STATE       - Show current daily state");
+    Serial.println("  GET LAST DRINK        - Show most recent drink record");
+    Serial.println("  DUMP DRINKS           - Display all drink records");
+    Serial.println("  SET DAILY INTAKE ml    - Set current daily intake to specific value (0-10000ml)");
+    Serial.println("  RESET DAILY INTAKE    - Reset daily intake counter to 0");
+    Serial.println("  CLEAR DRINKS          - Clear all drink records (WARNING: erases data)");
+    Serial.println("\nDisplay Settings:");
+    Serial.println("  SET DISPLAY MODE mode - Switch intake visualization (0=human, 1=tumblers)");
+    Serial.println("\nPower Management:");
+    Serial.println("  SET SLEEP TIMEOUT sec         - Normal sleep timeout (0=disable, default=30)");
+    Serial.println("  SET EXTENDED SLEEP TIMER sec  - Extended sleep timer wake (default=60)");
+    Serial.println("  SET EXTENDED SLEEP THRESHOLD sec - Awake threshold for extended mode (default=120)");
+    Serial.println("\nSystem Status:");
+    Serial.println("  GET STATUS            - Show all system status and settings");
 }
 
 // Update serial command handler (call in loop())
