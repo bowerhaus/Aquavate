@@ -968,8 +968,41 @@ static bool matchWords(char* words[], int word_count, const char* pattern[], int
     return true;
 }
 
+// Helper: Check if first N words match a pattern (allows extra words for arguments)
+static bool matchWordsPrefix(char* words[], int word_count, const char* pattern[], int pattern_count) {
+    if (word_count < pattern_count) return false;  // Not enough words
+    for (int i = 0; i < pattern_count; i++) {
+        if (strcmp(words[i], pattern[i]) != 0) return false;
+    }
+    return true;
+}
+
 // Static empty string for commands with no arguments
 static char empty_args[] = "";
+
+// Helper: Reconstruct args string from remaining words (for multi-word arguments)
+// Returns pointer to static buffer containing reconstructed args, or original args if no extra words
+static char* reconstructArgs(char* words[], int word_count, int pattern_count, char* original_args) {
+    if (word_count <= pattern_count) {
+        return (original_args && *original_args != '\0') ? original_args : empty_args;
+    }
+    
+    // Reconstruct args by joining remaining words with spaces
+    static char args_buffer[128];  // Static buffer for reconstructed args
+    int pos = 0;
+    for (int i = pattern_count; i < word_count && pos < sizeof(args_buffer) - 1; i++) {
+        if (i > pattern_count && pos < sizeof(args_buffer) - 1) {
+            args_buffer[pos++] = ' ';  // Add space between words
+        }
+        int len = strlen(words[i]);
+        if (pos + len < sizeof(args_buffer) - 1) {
+            strncpy(args_buffer + pos, words[i], sizeof(args_buffer) - pos - 1);
+            pos += len;
+        }
+    }
+    args_buffer[pos] = '\0';
+    return args_buffer;
+}
 
 // Process a complete command
 static void processCommand(char* cmd) {
@@ -1004,51 +1037,51 @@ static void processCommand(char* cmd) {
     if (*args == '\0') args = nullptr;
 
     // Match commands by word count and pattern
-    // Two-word commands
-    if (word_count == 2) {
+    // Two-word commands (check if first 2 words match, even if more words present for arguments)
+    if (word_count >= 2) {
         const char* pattern1[] = {"SET", "DATE"};
-        if (matchWords(words, 2, pattern1, 2)) {
-            handleSetDate(args ? args : empty_args);
+        if (matchWordsPrefix(words, word_count, pattern1, 2)) {
+            handleSetDate(reconstructArgs(words, word_count, 2, args));
             return;
         }
         const char* pattern2[] = {"SET", "TIME"};
-        if (matchWords(words, 2, pattern2, 2)) {
-            handleSetTime(args ? args : empty_args);
+        if (matchWordsPrefix(words, word_count, pattern2, 2)) {
+            handleSetTime(reconstructArgs(words, word_count, 2, args));
             return;
         }
         const char* pattern3[] = {"GET", "TIME"};
-        if (matchWords(words, 2, pattern3, 2)) {
+        if (matchWordsPrefix(words, word_count, pattern3, 2)) {
             handleGetTime();
             return;
         }
         const char* pattern4[] = {"SET", "TZ"};
-        if (matchWords(words, 2, pattern4, 2)) {
-            handleSetTimezone(args ? args : empty_args);
+        if (matchWordsPrefix(words, word_count, pattern4, 2)) {
+            handleSetTimezone(reconstructArgs(words, word_count, 2, args));
             return;
         }
         const char* pattern5[] = {"GET", "STATUS"};
-        if (matchWords(words, 2, pattern5, 2)) {
+        if (matchWordsPrefix(words, word_count, pattern5, 2)) {
             handleGetStatus();
             return;
         }
         const char* pattern6[] = {"DUMP", "DRINKS"};
-        if (matchWords(words, 2, pattern6, 2)) {
+        if (matchWordsPrefix(words, word_count, pattern6, 2)) {
             handleDumpDrinks();
             return;
         }
         const char* pattern7[] = {"CLEAR", "DRINKS"};
-        if (matchWords(words, 2, pattern7, 2)) {
+        if (matchWordsPrefix(words, word_count, pattern7, 2)) {
             handleClearDrinks();
             return;
         }
         const char* pattern8[] = {"SET", "DATETIME"};
-        if (matchWords(words, 2, pattern8, 2)) {
-            handleSetDateTime(args ? args : empty_args);
+        if (matchWordsPrefix(words, word_count, pattern8, 2)) {
+            handleSetDateTime(reconstructArgs(words, word_count, 2, args));
             return;
         }
         const char* pattern9[] = {"SET", "TIMEZONE"};
-        if (matchWords(words, 2, pattern9, 2)) {
-            handleSetTimezone(args ? args : empty_args);
+        if (matchWordsPrefix(words, word_count, pattern9, 2)) {
+            handleSetTimezone(reconstructArgs(words, word_count, 2, args));
             return;
         }
     }
