@@ -172,13 +172,15 @@ GestureType gesturesUpdate(float weight_ml) {
         return GESTURE_SIDEWAYS_TILT;
     }
 
-    // Check for upright stable (bottle placement on table)
-    // Requirements:
-    // 1. Z-axis close to 1g (within ~12° of vertical: cos(12°) ≈ 0.978)
+    // Check for upright (bottle placement on table)
+    // Requirements for UPRIGHT:
+    // 1. Z-axis close to 1g (within ~25° of vertical: cos(25°) ≈ 0.906)
     // 2. X and Y axes close to 0 (bottle not tilted sideways)
-    // 3. Low variance (bottle not moving)
-    // 4. Weight is positive (bottle is on table, not in the air)
-    const float UPRIGHT_Z_MIN = 0.97f;   // Relaxed threshold for sensor noise tolerance
+    // 3. Weight is positive (bottle is on table, not in the air)
+    // Additional requirement for UPRIGHT_STABLE:
+    // 4. Low variance (bottle not moving - accelerometer stable)
+    // 5. Weight stable for 2+ seconds
+    const float UPRIGHT_Z_MIN = 0.90f;   // Relaxed threshold for table bangs/impacts (allows ~25° tolerance)
     const float TILT_XY_MAX = 0.174f;    // sin(10°) for minimal sideways tilt
 
     bool z_ok = g_current_z >= UPRIGHT_Z_MIN;
@@ -195,15 +197,15 @@ GestureType gesturesUpdate(float weight_ml) {
             last_debug = millis();
             if (z_ok && x_ok && y_ok && weight_ok) {
                 if (!stable) {
-                    Serial.print("Gestures: Upright conditions met but NOT STABLE - variance=");
+                    Serial.print("Gestures: UPRIGHT (not stable) - variance=");
                     Serial.print(variance, 4);
                     Serial.print(" (need <");
                     Serial.print(g_config.stability_variance, 4);
-                    Serial.println(")");
+                    Serial.println(" for STABLE)");
                 } else {
-                    Serial.print("Gestures: UPRIGHT_STABLE detected - variance=");
+                    Serial.print("Gestures: UPRIGHT and stable - variance=");
                     Serial.print(variance, 4);
-                    Serial.println(" (stable)");
+                    Serial.println();
                 }
             } else {
                 Serial.print("Gestures: Conditions check - Z:");
@@ -218,57 +220,72 @@ GestureType gesturesUpdate(float weight_ml) {
         }
     }
 
-    // Check if bottle is upright (meets all conditions)
-    if (z_ok && x_ok && y_ok && weight_ok && stable) {
-        // Track how long bottle has been upright with stable weight
-        if (!g_upright_active) {
-            g_upright_active = true;
-            g_upright_start_time = millis();
-            g_last_stable_weight = weight_ml;
-            if (g_debug_enabled && g_debug_calibration) {
-                Serial.println("Gestures: UPRIGHT detected - tracking weight stability");
-            }
-        }
+    // Check if bottle is upright (orientation check only - stability not required)
+    if (z_ok && x_ok && y_ok && weight_ok) {
+        // For UPRIGHT_STABLE, we need both accelerometer stability AND weight stability
+        // For just UPRIGHT, orientation is enough (allows detection during table bangs, vibrations)
 
-        // Check if weight is stable (not fluctuating)
-        // Allow ~6ml variance (weight_ml is in ml, so direct comparison)
-        float weight_delta = fabs(weight_ml - g_last_stable_weight);
-        bool weight_stable = (weight_delta < 6.0f);
-
-        // If weight is stable, update the baseline (tracks gradual changes)
-        if (weight_stable) {
-            g_last_stable_weight = weight_ml;
-        } else {
-            // Weight changed significantly - reset timer
-            g_upright_start_time = millis();
-            g_last_stable_weight = weight_ml;
-        }
-
-        // Check if held stable long enough
-        uint32_t upright_duration = millis() - g_upright_start_time;
-
-        if (g_debug_enabled && g_debug_calibration) {
-            static unsigned long last_weight_debug = 0;
-            if (millis() - last_weight_debug >= 1000) {
-                last_weight_debug = millis();
-                if (!weight_stable) {
-                    Serial.print("Gestures: UPRIGHT but weight NOT stable - delta=");
-                    Serial.print(weight_delta, 1);
-                    Serial.println("ml (need <6ml)");
-                } else if (upright_duration < 2000) {
-                    Serial.print("Gestures: UPRIGHT and weight stable - duration=");
-                    Serial.print(upright_duration);
-                    Serial.println("ms (need 2000ms)");
+        if (stable) {
+            // Accelerometer is stable - track weight stability for UPRIGHT_STABLE detection
+            if (!g_upright_active) {
+                g_upright_active = true;
+                g_upright_start_time = millis();
+                g_last_stable_weight = weight_ml;
+                if (g_debug_enabled && g_debug_calibration) {
+                    Serial.println("Gestures: UPRIGHT stable detected - tracking weight stability");
                 }
             }
+
+            // Check if weight is stable (not fluctuating)
+            // Allow ~6ml variance (weight_ml is in ml, so direct comparison)
+            float weight_delta = fabs(weight_ml - g_last_stable_weight);
+            bool weight_stable = (weight_delta < 6.0f);
+
+            // If weight is stable, update the baseline (tracks gradual changes)
+            if (weight_stable) {
+                g_last_stable_weight = weight_ml;
+            } else {
+                // Weight changed significantly - reset timer
+                g_upright_start_time = millis();
+                g_last_stable_weight = weight_ml;
+            }
+
+            // Check if held stable long enough
+            uint32_t upright_duration = millis() - g_upright_start_time;
+
+            if (g_debug_enabled && g_debug_calibration) {
+                static unsigned long last_weight_debug = 0;
+                if (millis() - last_weight_debug >= 1000) {
+                    last_weight_debug = millis();
+                    if (!weight_stable) {
+                        Serial.print("Gestures: UPRIGHT stable but weight NOT stable - delta=");
+                        Serial.print(weight_delta, 1);
+                        Serial.println("ml (need <6ml)");
+                    } else if (upright_duration < 2000) {
+                        Serial.print("Gestures: UPRIGHT stable and weight stable - duration=");
+                        Serial.print(upright_duration);
+                        Serial.println("ms (need 2000ms)");
+                    }
+                }
+            }
+
+            // Return UPRIGHT_STABLE if both accelerometer stable AND weight stable for 2+ seconds
+            if (weight_stable && upright_duration >= 2000) {
+                return GESTURE_UPRIGHT_STABLE;
+            }
+        } else {
+            // Not accelerometer stable (e.g., table bang, vibration) - reset tracking
+            if (g_upright_active) {
+                if (g_debug_enabled && g_debug_calibration) {
+                    Serial.println("Gestures: Accelerometer unstable - resetting UPRIGHT_STABLE tracking");
+                }
+            }
+            g_upright_active = false;
+            g_upright_start_time = 0;
+            g_last_stable_weight = 0.0f;
         }
 
-        // Return UPRIGHT_STABLE if weight has been stable for 2+ seconds
-        if (weight_stable && upright_duration >= 2000) {
-            return GESTURE_UPRIGHT_STABLE;
-        }
-
-        // Otherwise just UPRIGHT
+        // Return UPRIGHT (orientation correct, regardless of stability)
         return GESTURE_UPRIGHT;
     } else {
         // Reset upright tracking if conditions no longer met
@@ -280,6 +297,18 @@ GestureType gesturesUpdate(float weight_ml) {
         g_upright_active = false;
         g_upright_start_time = 0;
         g_last_stable_weight = 0.0f;
+
+        // Debug: why returning NONE instead of UPRIGHT
+        if (g_debug_enabled && g_debug_calibration) {
+            Serial.print("Gestures: Returning NONE - weight_ml=");
+            Serial.print(weight_ml, 1);
+            Serial.print(" Z=");
+            Serial.print(g_current_z, 3);
+            Serial.print(" X=");
+            Serial.print(g_current_x, 3);
+            Serial.print(" Y=");
+            Serial.println(g_current_y, 3);
+        }
     }
 
     return GESTURE_NONE;
