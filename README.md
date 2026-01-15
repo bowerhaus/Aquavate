@@ -7,7 +7,7 @@ A smart water bottle that measures daily water intake using a weight-based senso
 ```
 Aquavate/
 ├── firmware/          # ESP32 PlatformIO project
-├── ios/               # iOS SwiftUI app (coming soon)
+├── ios/               # iOS SwiftUI app (skeleton)
 ├── hardware/          # 3D print files and PCB designs
 └── Plans/             # Hardware research and BOMs
 ```
@@ -62,19 +62,64 @@ The firmware uses PlatformIO environments to support both hardware configuration
 
 Pin definitions are automatically selected based on these flags.
 
-## Features (Planned)
+## Features
 
-- Weight-based water tracking via NAU7802 load cell ADC
-- Wake-on-tilt using LIS3DH accelerometer interrupt
-- E-paper display showing current level and daily total
-- BLE communication with iOS app
-- Deep sleep for 1-2 week battery life
-- DS3231 RTC for standalone daily tracking
+### Implemented
+- ✅ Weight-based water tracking via NAU7802 load cell ADC
+- ✅ Wake-on-tilt using LIS3DH accelerometer interrupt (0.80g threshold)
+- ✅ E-paper display with battery status, time, and bottle graphic
+- ✅ Deep sleep with dual modes for 1-2 week battery life:
+  - Normal sleep: 30s timeout with motion wake (EXT0 interrupt)
+  - Extended sleep: 60s timer wake during continuous motion (backpack mode)
+- ✅ Battery voltage monitoring with 20% quantized steps
+- ✅ Two-point calibration system (empty + full bottle)
+- ✅ Gesture-based calibration trigger (inverted hold for 5s)
+- ✅ Real-time water level measurement and display (±10-15ml accuracy)
+- ✅ Daily water intake tracking with drink detection:
+  - GULP: <100ml (individual sips)
+  - POUR: ≥100ml (refills with baseline update)
+- ✅ Daily reset at 4am boundary with 20-hour fallback logic
+- ✅ NVS circular buffer storage (600 records = 30 days history)
+- ✅ Dual visualization modes (human figure or tumbler grid)
+- ✅ Hardcoded 2500ml daily goal
+- ✅ Smart display state tracking (only updates when values change)
+- ✅ RTC memory persistence for display state and drink baseline
+- ✅ USB serial commands for configuration:
+  - Time/Timezone: SET DATETIME, SET DATE, SET TIME, SET TZ, GET TIME
+  - Drink Tracking: GET DAILY STATE, GET LAST DRINK, DUMP DRINKS, SET DAILY INTAKE, RESET DAILY INTAKE, CLEAR DRINKS
+  - Display Settings: SET DISPLAY MODE (0=human, 1=tumblers)
+  - Power Management: SET SLEEP TIMEOUT, SET EXTENDED SLEEP TIMER, SET EXTENDED SLEEP THRESHOLD
+  - System Status: GET STATUS (shows all system settings)
+  - Debug Control: 0-4, 9 (debug levels), T (test interrupt state)
+- ✅ ESP32 internal RTC with NVS-based time persistence
+- ✅ Timezone support with NVS persistence
+
+### Planned
+- 📋 BLE communication with iOS app
+- 📋 Drink history sync protocol
+- 📋 Empty gesture detection (invert + shake)
 
 ## Documentation
 
+### Active Development
+- [PROGRESS.md](PROGRESS.md) - Current work tracker and active tasks
+
+### Product & Design
+- [PRD.md](docs/PRD.md) - Full product requirements document
+- [Sensor Puck Design](Plans/004-sensor-puck-design.md) - Mechanical design v3.0 for 3D printing
 - [Hardware Research](Plans/001-hardware-research.md) - Component selection and analysis
-- [Sensor Puck Design](Plans/004-sensor-puck-design.md) - Mechanical design for 3D printing
+
+### Configuration
+- [CLAUDE.md](CLAUDE.md) - Guidance for Claude Code when working on this project
+- [AGENTS.md](AGENTS.md) - Extended development workflow and patterns
+
+## Current Status
+
+**Branch:** `extended-deep-sleep-backpack-mode`
+**Phase:** Phase 2.6 complete - Extended deep sleep (backpack mode) implemented
+**Status:** All standalone features working - Ready for BLE integration
+
+See [PROGRESS.md](PROGRESS.md) for detailed status and next steps.
 
 ## License
 
