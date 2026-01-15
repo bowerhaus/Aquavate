@@ -1086,55 +1086,55 @@ static void processCommand(char* cmd) {
         }
     }
     
-    // Three-word commands
-    if (word_count == 3) {
+    // Three-word commands (check if first 3 words match, even if more words present for arguments)
+    if (word_count >= 3) {
         const char* pattern3[] = {"GET", "DAILY", "STATE"};
-        if (matchWords(words, 3, pattern3, 3)) {
+        if (matchWordsPrefix(words, word_count, pattern3, 3)) {
             handleGetDailyState();
             return;
         }
         const char* pattern4[] = {"GET", "LAST", "DRINK"};
-        if (matchWords(words, 3, pattern4, 3)) {
+        if (matchWordsPrefix(words, word_count, pattern4, 3)) {
             handleGetLastDrink();
             return;
         }
         const char* pattern5[] = {"SET", "DISPLAY", "MODE"};
-        if (matchWords(words, 3, pattern5, 3)) {
-            handleSetDisplayMode(args ? args : empty_args);
+        if (matchWordsPrefix(words, word_count, pattern5, 3)) {
+            handleSetDisplayMode(reconstructArgs(words, word_count, 3, args));
             return;
         }
         const char* pattern6[] = {"SET", "SLEEP", "TIMEOUT"};
-        if (matchWords(words, 3, pattern6, 3)) {
-            handleSetSleepTimeout(args ? args : empty_args);
+        if (matchWordsPrefix(words, word_count, pattern6, 3)) {
+            handleSetSleepTimeout(reconstructArgs(words, word_count, 3, args));
             return;
         }
         const char* pattern7[] = {"SET", "DAILY", "INTAKE"};
-        if (matchWords(words, 3, pattern7, 3)) {
-            handleSetDailyIntake(args ? args : empty_args);
+        if (matchWordsPrefix(words, word_count, pattern7, 3)) {
+            handleSetDailyIntake(reconstructArgs(words, word_count, 3, args));
             return;
         }
         const char* pattern8[] = {"RESET", "DAILY", "INTAKE"};
-        if (matchWords(words, 3, pattern8, 3)) {
+        if (matchWordsPrefix(words, word_count, pattern8, 3)) {
             handleResetDailyIntake();
             return;
         }
     }
     
-    // Four-word commands
-    if (word_count == 4) {
+    // Four-word commands (check if first 4 words match, even if more words present for arguments)
+    if (word_count >= 4) {
         const char* pattern1[] = {"SET", "NORMAL", "SLEEP", "TIMEOUT"};
-        if (matchWords(words, 4, pattern1, 4)) {
-            handleSetSleepTimeout(args ? args : empty_args);
+        if (matchWordsPrefix(words, word_count, pattern1, 4)) {
+            handleSetSleepTimeout(reconstructArgs(words, word_count, 4, args));
             return;
         }
         const char* pattern2[] = {"SET", "EXTENDED", "SLEEP", "TIMER"};
-        if (matchWords(words, 4, pattern2, 4)) {
-            handleSetExtendedSleepTimer(args ? args : empty_args);
+        if (matchWordsPrefix(words, word_count, pattern2, 4)) {
+            handleSetExtendedSleepTimer(reconstructArgs(words, word_count, 4, args));
             return;
         }
         const char* pattern3[] = {"SET", "EXTENDED", "SLEEP", "THRESHOLD"};
-        if (matchWords(words, 4, pattern3, 4)) {
-            handleSetExtendedSleepThreshold(args ? args : empty_args);
+        if (matchWordsPrefix(words, word_count, pattern3, 4)) {
+            handleSetExtendedSleepThreshold(reconstructArgs(words, word_count, 4, args));
             return;
         }
     }
