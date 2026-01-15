@@ -563,10 +563,41 @@ static void handleDumpDrinks() {
     Serial.println();
 }
 
-// Handle RESET_DAILY_DRINKS command - reset daily counter
-static void handleResetDailyDrinks() {
+// Handle RESET_DAILY_INTAKE command - reset daily counter
+static void handleResetDailyIntake() {
     drinksResetDaily();
-    Serial.println("OK: Daily drinks reset");
+    Serial.println("OK: Daily intake reset");
+}
+
+// Handle SET_DAILY_INTAKE command - set current daily intake to a specific value
+// Format: SET_DAILY_INTAKE ml
+static void handleSetDailyIntake(char* args) {
+    int ml;
+    if (!parseInt(args, ml)) {
+        Serial.println("ERROR: Invalid daily intake value");
+        Serial.println("Usage: SET_DAILY_INTAKE ml");
+        Serial.println("Example: SET_DAILY_INTAKE 500");
+        return;
+    }
+
+    if (ml < 0 || ml > 10000) {
+        Serial.println("ERROR: Daily intake must be 0-10000ml");
+        return;
+    }
+
+    // Set daily intake using drinks module function
+    if (!drinksSetDailyIntake((uint16_t)ml)) {
+        Serial.println("ERROR: Failed to set daily intake");
+        return;
+    }
+
+    // Show updated state
+    DailyState state;
+    drinksGetState(state);
+    Serial.printf("Daily total: %dml / %dml (%d%%)\n",
+                 state.daily_total_ml,
+                 DRINK_DAILY_GOAL_ML,
+                 (state.daily_total_ml * 100) / DRINK_DAILY_GOAL_ML);
 }
 
 // Handle CLEAR_DRINKS command - clear all drink records
@@ -916,8 +947,10 @@ static void processCommand(char* cmd) {
         handleGetLastDrink();
     } else if (strcmp(cmd, "DUMP_DRINKS") == 0) {
         handleDumpDrinks();
-    } else if (strcmp(cmd, "RESET_DAILY_DRINKS") == 0) {
-        handleResetDailyDrinks();
+    } else if (strcmp(cmd, "RESET_DAILY_INTAKE") == 0) {
+        handleResetDailyIntake();
+    } else if (strcmp(cmd, "SET_DAILY_INTAKE") == 0) {
+        handleSetDailyIntake(args);
     } else if (strcmp(cmd, "CLEAR_DRINKS") == 0) {
         handleClearDrinks();
     } else if (strcmp(cmd, "SET_DISPLAY_MODE") == 0) {
@@ -949,7 +982,8 @@ static void processCommand(char* cmd) {
         Serial.println("  GET_DAILY_STATE       - Show current daily state");
         Serial.println("  GET_LAST_DRINK        - Show most recent drink record");
         Serial.println("  DUMP_DRINKS           - Display all drink records");
-        Serial.println("  RESET_DAILY_DRINKS    - Reset daily counter to 0");
+        Serial.println("  SET_DAILY_INTAKE ml    - Set current daily intake to specific value (0-10000ml)");
+        Serial.println("  RESET_DAILY_INTAKE    - Reset daily intake counter to 0");
         Serial.println("  CLEAR_DRINKS          - Clear all drink records (WARNING: erases data)");
         Serial.println("\nDisplay Settings:");
         Serial.println("  SET_DISPLAY_MODE mode - Switch intake visualization (0=human, 1=tumblers)");

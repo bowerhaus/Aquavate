@@ -227,11 +227,35 @@ void drinksGetState(DailyState& state) {
     state = g_daily_state;
 }
 
-// Debug function: Reset daily drinks (for testing)
+// Debug function: Set daily intake to a specific value
+bool drinksSetDailyIntake(uint16_t ml) {
+    if (ml > 10000) {
+        return false;  // Value out of range
+    }
+
+    if (!g_drinks_initialized) {
+        // Initialize if not already done
+        drinksInit();
+    }
+
+    // Update daily total
+    uint16_t previous_total = g_daily_state.daily_total_ml;
+    g_daily_state.daily_total_ml = ml;
+
+    // Save to NVS
+    if (!storageSaveDailyState(g_daily_state)) {
+        return false;
+    }
+
+    Serial.printf("Daily intake set: %dml (was %dml)\n", ml, previous_total);
+    return true;
+}
+
+// Debug function: Reset daily intake (for testing)
 void drinksResetDaily() {
     Serial.println("=== MANUAL DAILY RESET ===");
     performAtomicDailyReset(getCurrentUnixTime());
-    Serial.println("Daily drinks reset to 0ml");
+    Serial.println("Daily intake reset to 0ml");
 }
 
 // Debug function: Clear all drink records (for testing)

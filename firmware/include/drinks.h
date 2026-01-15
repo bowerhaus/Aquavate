@@ -59,7 +59,16 @@ uint32_t getCurrentUnixTime();
 void drinksGetState(DailyState& state);
 
 /**
- * Reset daily drinks counter (for testing)
+ * Set daily intake to a specific value (for testing/manual adjustment)
+ * Updates internal state and saves to NVS
+ *
+ * @param ml Daily intake value in milliliters (0-10000)
+ * @return true if successful, false if value out of range
+ */
+bool drinksSetDailyIntake(uint16_t ml);
+
+/**
+ * Reset daily intake counter (for testing)
  * Clears daily total and drink count, keeps drink records
  */
 void drinksResetDaily();
