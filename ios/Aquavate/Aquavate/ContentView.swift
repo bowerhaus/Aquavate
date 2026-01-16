@@ -9,20 +9,22 @@ import SwiftUI
 
 struct ContentView: View {
     var body: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "drop.fill")
-                .font(.system(size: 60))
-                .foregroundStyle(.blue)
+        TabView {
+            HomeView()
+                .tabItem {
+                    Label("Home", systemImage: "drop.fill")
+                }
 
-            Text("Aquavate")
-                .font(.largeTitle)
-                .fontWeight(.bold)
+            HistoryView()
+                .tabItem {
+                    Label("History", systemImage: "chart.bar.fill")
+                }
 
-            Text("Hello, World!")
-                .font(.title2)
-                .foregroundStyle(.secondary)
+            SettingsView()
+                .tabItem {
+                    Label("Settings", systemImage: "gear")
+                }
         }
-        .padding()
     }
 }
 
