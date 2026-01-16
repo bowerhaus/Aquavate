@@ -10,6 +10,7 @@ import SwiftUI
 @main
 struct AquavateApp: App {
     @State private var showSplash = true
+    @StateObject private var bleManager = BLEManager()
 
     var body: some Scene {
         WindowGroup {
@@ -24,6 +25,7 @@ struct AquavateApp: App {
                     }
             } else {
                 ContentView()
+                    .environmentObject(bleManager)
             }
         }
     }

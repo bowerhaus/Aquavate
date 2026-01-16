@@ -1,6 +1,6 @@
 # Aquavate - Active Development Progress
 
-**Last Updated:** 2026-01-16
+**Last Updated:** 2026-01-16 (Phase 4.1 BLE Foundation Complete)
 
 ---
 
@@ -132,7 +132,7 @@ Dual deep sleep modes (normal motion-wake + extended timer-wake) prevent battery
 ## Next Up
 
 ### iOS App - Phase 4: BLE & Storage (Current Priority)
-**Status:** 📋 Planning Complete (2026-01-16)
+**Status:** 🚧 Phase 4.1 Complete, Phase 4.2 Next (2026-01-16)
 
 Implement iOS BLE client to communicate with ESP32 firmware and sync drink history. Will enable end-to-end testing of Phase 3 BLE implementation. See [Plans/014-ios-ble-coredata-integration.md](Plans/014-ios-ble-coredata-integration.md) for detailed implementation plan.
 
@@ -152,12 +152,28 @@ Implement iOS BLE client to communicate with ESP32 firmware and sync drink histo
 - ✅ Incremental scaffolding (keep existing views, modify not replace)
 
 **Implementation Phases:**
-- Phase 4.1: BLE Foundation (scanning, connection, discovery)
-- Phase 4.2: Current State & Battery Notifications (real-time parsing)
-- Phase 4.3: CoreData Schema & Persistence
-- Phase 4.4: Drink Sync Protocol (chunked transfer, deduplication)
-- Phase 4.5: Commands & Time Sync (TARE, RESET_DAILY, etc.)
-- Phase 4.6: Background Mode & Polish (state restoration, error handling)
+- [x] **Phase 4.1: BLE Foundation** ✅ Complete (2026-01-16)
+  - Created [Services/BLEConstants.swift](ios/Aquavate/Aquavate/Services/BLEConstants.swift) - UUIDs matching firmware
+  - Created [Services/BLEManager.swift](ios/Aquavate/Aquavate/Services/BLEManager.swift) - CBCentralManager delegate
+  - Created [Info.plist](ios/Aquavate/Info.plist) - Bluetooth permissions and background mode
+  - Updated [AquavateApp.swift](ios/Aquavate/Aquavate/AquavateApp.swift) - BLEManager environment object
+  - Updated [SettingsView.swift](ios/Aquavate/Aquavate/Views/SettingsView.swift) - Connection UI with scan/connect/disconnect
+  - Features implemented:
+    - Device scanning with "Aquavate-XXXX" name filter
+    - Auto-connect when single device found
+    - Manual device selection when multiple found
+    - Connection state management (disconnected/scanning/connecting/discovering/connected)
+    - Service and characteristic discovery
+    - Notification subscription for Current State, Drink Data, Battery Level
+    - State restoration for background reconnection
+    - Peripheral identifier persistence for auto-reconnect
+    - Scan/connection timeouts
+  - Build verified successful
+- [ ] Phase 4.2: Current State & Battery Notifications (real-time parsing) **← NEXT**
+- [ ] Phase 4.3: CoreData Schema & Persistence
+- [ ] Phase 4.4: Drink Sync Protocol (chunked transfer, deduplication)
+- [ ] Phase 4.5: Commands & Time Sync (TARE, RESET_DAILY, etc.)
+- [ ] Phase 4.6: Background Mode & Polish (state restoration, error handling)
 
 **Prerequisites:**
 - ✅ Firmware Phase 3A-3D complete (BLE server functional)
@@ -165,11 +181,14 @@ Implement iOS BLE client to communicate with ESP32 firmware and sync drink histo
 - ✅ Binary struct definitions documented in Phase 3 plan
 - ✅ iOS UX PRD complete ([docs/iOS-UX-PRD.md](docs/iOS-UX-PRD.md))
 
-**Implementation Sequence:**
-1. ✅ Technical plan created ([Plans/014-ios-ble-coredata-integration.md](Plans/014-ios-ble-coredata-integration.md))
-2. ✅ UX PRD created ([docs/iOS-UX-PRD.md](docs/iOS-UX-PRD.md))
-3. ⏳ **CURRENT:** User reviews and approves UX PRD
-4. 🔜 Begin Phase 4.1-4.6 implementation with both technical + UX plans
+**Next Step:**
+- Implement Phase 4.2: Current State & Battery Notifications
+- Reference: [Plans/014-ios-ble-coredata-integration.md](Plans/014-ios-ble-coredata-integration.md) Phase 4.2
+- Tasks:
+  - Add BLEStructs.swift with binary struct definitions
+  - Parse 14-byte Current State characteristic
+  - Add @Published properties for weight, level, daily total, battery, flags
+  - Update HomeView to display real-time BLE data
 
 **Handoff Point:**
 - After Phase 4 complete, return to Phase 3E for power optimization and end-to-end validation
@@ -209,7 +228,7 @@ Implement iOS BLE client to communicate with ESP32 firmware and sync drink histo
 - [BLE Integration](Plans/013-ble-integration.md) - Phase 3 firmware BLE implementation plan (COMPLETED - Phase 3A-3D)
 - [iOS BLE & CoreData Integration](Plans/014-ios-ble-coredata-integration.md) - Phase 4 technical implementation plan (READY)
 - [iOS UX PRD Creation](Plans/015-ios-ux-prd-creation.md) - UX specification planning (COMPLETED)
-- [iOS UX PRD](docs/iOS-UX-PRD.md) - Complete UX specifications for iOS app (READY FOR REVIEW)
+- [iOS UX PRD](docs/iOS-UX-PRD.md) - Complete UX specifications for iOS app (APPROVED)
 - [Hardware Research](Plans/001-hardware-research.md) - Component selection analysis
 - [Adafruit BOM](Plans/002-bom-adafruit-feather.md) - UK parts list for Feather config
 - [SparkFun BOM](Plans/003-bom-sparkfun-qwiic.md) - UK parts list for Qwiic config
