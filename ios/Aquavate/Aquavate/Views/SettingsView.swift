@@ -31,6 +31,32 @@ struct SettingsView: View {
         return bleManager.connectionState.rawValue
     }
 
+    private var batteryIconName: String {
+        let percent = bleManager.batteryPercent
+        if percent > 75 {
+            return "battery.100"
+        } else if percent > 50 {
+            return "battery.75"
+        } else if percent > 25 {
+            return "battery.50"
+        } else if percent > 10 {
+            return "battery.25"
+        } else {
+            return "battery.0"
+        }
+    }
+
+    private var batteryColor: Color {
+        let percent = bleManager.batteryPercent
+        if percent > 20 {
+            return .green
+        } else if percent > 10 {
+            return .orange
+        } else {
+            return .red
+        }
+    }
+
     var body: some View {
         NavigationView {
             List {
@@ -144,12 +170,50 @@ struct SettingsView: View {
                 if bleManager.connectionState.isConnected {
                     Section("Device Info") {
                         HStack {
-                            Image(systemName: "battery.75")
-                                .foregroundStyle(.green)
+                            Image(systemName: batteryIconName)
+                                .foregroundStyle(batteryColor)
                             Text("Battery")
                             Spacer()
-                            Text("\(bottle.batteryPercent)%")
+                            Text("\(bleManager.batteryPercent)%")
                                 .foregroundStyle(.secondary)
+                        }
+
+                        HStack {
+                            Image(systemName: "scalemass")
+                                .foregroundStyle(.blue)
+                            Text("Current Weight")
+                            Spacer()
+                            Text("\(bleManager.currentWeightG)g")
+                                .foregroundStyle(.secondary)
+                        }
+
+                        HStack {
+                            Image(systemName: bleManager.isCalibrated ? "checkmark.circle.fill" : "exclamationmark.circle")
+                                .foregroundStyle(bleManager.isCalibrated ? .green : .orange)
+                            Text("Calibrated")
+                            Spacer()
+                            Text(bleManager.isCalibrated ? "Yes" : "No")
+                                .foregroundStyle(.secondary)
+                        }
+
+                        HStack {
+                            Image(systemName: bleManager.isTimeValid ? "clock.fill" : "clock.badge.exclamationmark")
+                                .foregroundStyle(bleManager.isTimeValid ? .green : .orange)
+                            Text("Time Set")
+                            Spacer()
+                            Text(bleManager.isTimeValid ? "Yes" : "No")
+                                .foregroundStyle(.secondary)
+                        }
+
+                        if bleManager.unsyncedCount > 0 {
+                            HStack {
+                                Image(systemName: "arrow.triangle.2.circlepath")
+                                    .foregroundStyle(.orange)
+                                Text("Unsynced Records")
+                                Spacer()
+                                Text("\(bleManager.unsyncedCount)")
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                     }
                 }

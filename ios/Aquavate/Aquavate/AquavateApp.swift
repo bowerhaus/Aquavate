@@ -11,6 +11,7 @@ import SwiftUI
 struct AquavateApp: App {
     @State private var showSplash = true
     @StateObject private var bleManager = BLEManager()
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
@@ -27,6 +28,29 @@ struct AquavateApp: App {
                 ContentView()
                     .environmentObject(bleManager)
             }
+        }
+        .onChange(of: scenePhase) { oldPhase, newPhase in
+            handleScenePhaseChange(from: oldPhase, to: newPhase)
+        }
+    }
+
+    private func handleScenePhaseChange(from oldPhase: ScenePhase, to newPhase: ScenePhase) {
+        switch newPhase {
+        case .background:
+            // Disconnect when app goes to background to allow bottle to sleep
+            if bleManager.connectionState.isConnected {
+                bleManager.disconnect()
+            }
+        case .active:
+            // Reconnect when app returns to foreground
+            if bleManager.connectionState == .disconnected && bleManager.isBluetoothReady {
+                bleManager.reconnectToLastDevice()
+            }
+        case .inactive:
+            // Transitional state, no action needed
+            break
+        @unknown default:
+            break
         }
     }
 }
