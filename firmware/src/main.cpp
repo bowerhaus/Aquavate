@@ -1346,15 +1346,21 @@ void loop() {
     if (!g_in_extended_sleep_mode && !calibrationIsActive()) {
         unsigned long total_awake_time = millis() - g_continuous_awake_start;
         if (total_awake_time >= (g_extended_sleep_threshold_sec * 1000)) {
-            Serial.print("Extended sleep: Continuous awake threshold exceeded (");
-            Serial.print(total_awake_time / 1000);
-            Serial.print("s >= ");
-            Serial.print(g_extended_sleep_threshold_sec);
-            Serial.println("s)");
-            Serial.println("Extended sleep: Switching to extended sleep mode");
-            g_in_extended_sleep_mode = true;
-            enterExtendedDeepSleep();
-            // Will not return from deep sleep
+            // Block extended sleep when BLE is connected (same as normal sleep)
+            if (bleIsConnected()) {
+                Serial.println("Extended sleep blocked - BLE connected");
+                g_continuous_awake_start = millis(); // Reset timer while connected
+            } else {
+                Serial.print("Extended sleep: Continuous awake threshold exceeded (");
+                Serial.print(total_awake_time / 1000);
+                Serial.print("s >= ");
+                Serial.print(g_extended_sleep_threshold_sec);
+                Serial.println("s)");
+                Serial.println("Extended sleep: Switching to extended sleep mode");
+                g_in_extended_sleep_mode = true;
+                enterExtendedDeepSleep();
+                // Will not return from deep sleep
+            }
         }
     }
 
