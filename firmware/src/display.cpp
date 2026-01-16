@@ -443,7 +443,7 @@ static void drawSleepIndicator(int x, int y, bool sleeping) {
 }
 
 // Helper: Draw bottle graphic
-static void drawBottleGraphic(int x, int y, float fill_percent) {
+static void drawBottleGraphic(int x, int y, float fill_percent, bool show_question_mark) {
     int bottle_width = 40;
     int bottle_height = 90;
     int bottle_body_height = 70;
@@ -466,7 +466,15 @@ static void drawBottleGraphic(int x, int y, float fill_percent) {
     int cap_x = neck_x + 2;
     g_display_ptr->fillRect(cap_x, y, cap_width, cap_height, EPD_BLACK);
 
-    if (fill_height > 0) {
+    if (show_question_mark) {
+        // Draw a large question mark in the center of the empty bottle
+        g_display_ptr->setTextSize(3);
+        g_display_ptr->setTextColor(EPD_BLACK);
+        int question_x = x + (bottle_width / 2) - 6;  // Center the "?" (shifted right 3px)
+        int question_y = y + cap_height + neck_height + (bottle_body_height / 2) - 12;
+        g_display_ptr->setCursor(question_x, question_y);
+        g_display_ptr->print("?");
+    } else if (fill_height > 0) {
         int water_y = y + cap_height + neck_height + bottle_body_height - fill_height;
         g_display_ptr->fillRoundRect(x + 4, water_y,
                                      bottle_width - 8, fill_height - 2, 4, EPD_BLACK);
@@ -747,13 +755,21 @@ void drawMainScreen() {
 
     // Get current water level
     float water_ml = g_display_state.water_ml;
-    if (water_ml < 0) water_ml = 0;  // Default if not initialized
+
+    // Check if weight is significantly negative (needs tare or cap is off)
+    // Using same -50ml threshold as gestures.cpp for UPRIGHT_STABLE detection
+    bool show_question_mark = (water_ml < -50.0f);
+
+    // Clamp to valid range for display
+    float display_ml = water_ml;
+    if (display_ml < 0) display_ml = 0;  // Clamp negative values for fill calculation
+    if (display_ml > 830) display_ml = 830;
 
     // Draw vertical bottle graphic on left side (shifted down 3px)
     int bottle_x = 10;
     int bottle_y = 23;
-    float fill_percent = water_ml / 830.0f;
-    drawBottleGraphic(bottle_x, bottle_y, fill_percent);
+    float fill_percent = display_ml / 830.0f;
+    drawBottleGraphic(bottle_x, bottle_y, fill_percent, show_question_mark);
 
     // Draw large text showing daily intake (center, shifted down 3px)
     g_display_ptr->setTextSize(3);

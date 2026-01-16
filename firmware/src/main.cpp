@@ -532,6 +532,45 @@ void drawWelcomeScreen() {
 
     display.display();
 }
+
+// Helper function to force display refresh (called by serial commands like TARE)
+void forceDisplayRefresh() {
+#if defined(BOARD_ADAFRUIT_FEATHER)
+    if (!nauReady || !g_calibrated) {
+        Serial.println("Display refresh skipped - NAU7802 not ready or not calibrated");
+        return;
+    }
+
+    // Read current sensor values
+    int32_t current_adc = nau.read();
+    float water_ml = calibrationGetWaterWeight(current_adc, g_calibration);
+
+    // Get current daily state
+    DailyState daily_state;
+    drinksGetState(daily_state);
+
+    // Get current time
+    uint8_t time_hour = 0, time_minute = 0;
+    if (g_time_valid) {
+        struct timeval tv;
+        gettimeofday(&tv, NULL);
+        time_t now = tv.tv_sec + (g_timezone_offset * 3600);
+        struct tm timeinfo;
+        gmtime_r(&now, &timeinfo);
+        time_hour = timeinfo.tm_hour;
+        time_minute = timeinfo.tm_min;
+    }
+
+    // Get battery percent
+    uint8_t battery_pct = 50;
+    float voltage = getBatteryVoltage();
+    battery_pct = getBatteryPercent(voltage);
+
+    Serial.println("Forcing display refresh...");
+    displayForceUpdate(water_ml, daily_state.daily_total_ml,
+                      time_hour, time_minute, battery_pct, false);
+#endif
+}
 #endif
 
 void setup() {
@@ -1154,24 +1193,34 @@ void loop() {
     }
     last_gesture = gesture;
 
-    // Check display ONLY when bottle is upright stable (prevents flicker during movement)
-    if (cal_state == CAL_IDLE && g_calibrated && gesture == GESTURE_UPRIGHT_STABLE) {
+    // Check display when bottle is upright stable OR if display not yet initialized
+    // This ensures the display updates from splash screen even with negative weight
+    bool display_not_initialized = false;
+#if defined(BOARD_ADAFRUIT_FEATHER)
+    DisplayState display_state = displayGetState();
+    display_not_initialized = !display_state.initialized;
+#endif
+
+    if (cal_state == CAL_IDLE && g_calibrated &&
+        (gesture == GESTURE_UPRIGHT_STABLE || display_not_initialized)) {
 
         // Check every DISPLAY_UPDATE_INTERVAL_MS when bottle is upright stable
-        if (millis() - last_level_check >= DISPLAY_UPDATE_INTERVAL_MS) {
+        // OR immediately if display not initialized
+        if (display_not_initialized || (millis() - last_level_check >= DISPLAY_UPDATE_INTERVAL_MS)) {
             last_level_check = millis();
 
 #if defined(BOARD_ADAFRUIT_FEATHER)
             if (nauReady) {
                 // FIX Bug #4: Use snapshot data instead of reading sensors again
+                // Don't clamp negative values - display needs to see them to show "?" indicator
                 float display_water_ml = current_water_ml;
 
-                // Clamp to valid range
-                if (display_water_ml < 0) display_water_ml = 0;
+                // Only clamp upper bound
                 if (display_water_ml > 830) display_water_ml = 830;
 
                 // Process drink tracking (we're already UPRIGHT_STABLE)
-                if (g_time_valid) {
+                // Only track drinks if weight is valid (>= -50ml threshold)
+                if (g_time_valid && display_water_ml >= -50.0f) {
                     drinksUpdate(current_adc, g_calibration);
                 }
 

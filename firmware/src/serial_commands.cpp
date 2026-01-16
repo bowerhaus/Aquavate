@@ -6,6 +6,7 @@
 #include "storage.h"
 #include "drinks.h"
 #include "storage_drinks.h"
+#include "weight.h"
 #include "config.h"
 #include <Preferences.h>
 #include <sys/time.h>
@@ -739,6 +740,72 @@ static void handleSetExtendedSleepThreshold(char* args) {
     }
 }
 
+// Handle TARE command - zero the scale at current weight
+static void handleTare() {
+    // Check if NAU7802 is ready
+    if (!weightIsReady()) {
+        Serial.println("ERROR: NAU7802 not ready");
+        return;
+    }
+
+    Serial.println("Taking tare reading...");
+
+    // Take a quick weight measurement (2 seconds)
+    WeightConfig quick_config = weightGetDefaultConfig();
+    quick_config.duration_seconds = 2;
+
+    WeightMeasurement tare_measurement = weightMeasureStable(quick_config);
+
+    if (!tare_measurement.valid) {
+        Serial.println("ERROR: Failed to get stable tare reading");
+        return;
+    }
+
+    // Save as tare offset
+    CalibrationData cal;
+    if (storageLoadCalibration(cal)) {
+        // Update the empty bottle reading to current reading (tare)
+        cal.empty_bottle_adc = tare_measurement.raw_adc;
+
+        // Recalculate scale factor (if we have a valid full bottle reading)
+        if (cal.calibration_valid && cal.full_bottle_adc != cal.empty_bottle_adc) {
+            cal.scale_factor = (float)(cal.full_bottle_adc - cal.empty_bottle_adc) / 830.0f;
+        }
+
+        // Save updated calibration
+        if (storageSaveCalibration(cal)) {
+            Serial.println("OK: Tare set successfully");
+            Serial.printf("New tare ADC: %d\n", cal.empty_bottle_adc);
+            if (cal.calibration_valid) {
+                Serial.printf("Updated scale factor: %.2f counts/g\n", cal.scale_factor);
+            }
+
+            // Force display refresh to show updated water level
+            extern void forceDisplayRefresh();
+            forceDisplayRefresh();
+        } else {
+            Serial.println("ERROR: Failed to save tare offset");
+        }
+    } else {
+        // No existing calibration, create a new one with just tare
+        cal = storageGetEmptyCalibration();
+        cal.empty_bottle_adc = tare_measurement.raw_adc;
+        cal.calibration_valid = 0; // Not fully calibrated yet
+
+        if (storageSaveCalibration(cal)) {
+            Serial.println("OK: Tare set successfully");
+            Serial.printf("Tare ADC: %d\n", cal.empty_bottle_adc);
+            Serial.println("Note: Full calibration still required (SET FULL BOTTLE)");
+
+            // Force display refresh to show updated water level
+            extern void forceDisplayRefresh();
+            forceDisplayRefresh();
+        } else {
+            Serial.println("ERROR: Failed to save tare offset");
+        }
+    }
+}
+
 // Handle GET STATUS command - show all system status
 static void handleGetStatus() {
     extern bool g_calibrated;
@@ -1037,6 +1104,15 @@ static void processCommand(char* cmd) {
     if (*args == '\0') args = nullptr;
 
     // Match commands by word count and pattern
+    // One-word commands
+    if (word_count >= 1) {
+        const char* pattern1[] = {"TARE"};
+        if (matchWordsPrefix(words, word_count, pattern1, 1)) {
+            handleTare();
+            return;
+        }
+    }
+
     // Two-word commands (check if first 2 words match, even if more words present for arguments)
     if (word_count >= 2) {
         const char* pattern1[] = {"SET", "DATE"};
@@ -1152,6 +1228,8 @@ static void processCommand(char* cmd) {
     Serial.println("                          0=OFF, 1=Events, 2=+Gestures,");
     Serial.println("                          3=+Weight, 4=+Accel, 9=All ON");
     Serial.println("  T                     - Test interrupt state (shows INT1_SRC)");
+    Serial.println("\nCalibration:");
+    Serial.println("  TARE                  - Zero the scale at current weight");
     Serial.println("\nTime/Timezone:");
     Serial.println("  SET DATETIME YYYY-MM-DD HH:MM:SS [tz]    - Set date, time, and timezone");
     Serial.println("  SET DATE YYYY-MM-DD                       - Set date only");
