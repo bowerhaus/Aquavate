@@ -734,15 +734,22 @@ void setup() {
             Serial.print("  Timezone offset: ");
             Serial.println(g_timezone_offset);
 
-            // Restore time from last boot (approximation until DS3231 added)
-            uint32_t last_boot_time = storageLoadLastBootTime();
-            if (last_boot_time > 0) {
-                struct timeval tv;
-                tv.tv_sec = last_boot_time;
-                tv.tv_usec = 0;
-                settimeofday(&tv, NULL);
-                Serial.println("  RTC restored from last boot timestamp");
-                Serial.println("  WARNING: Time may be inaccurate (DS3231 RTC recommended)");
+            // Only restore from NVS on cold boot (not wake from deep sleep)
+            // On wake from deep sleep, ESP32 RTC continues running and has correct time
+            if (wakeup_reason == ESP_SLEEP_WAKEUP_UNDEFINED) {
+                // Cold boot - restore from NVS (RTC was reset)
+                uint32_t last_boot_time = storageLoadLastBootTime();
+                if (last_boot_time > 0) {
+                    struct timeval tv;
+                    tv.tv_sec = last_boot_time;
+                    tv.tv_usec = 0;
+                    settimeofday(&tv, NULL);
+                    Serial.println("  RTC restored from NVS (cold boot)");
+                    Serial.println("  WARNING: Time may be inaccurate (DS3231 RTC recommended)");
+                }
+            } else {
+                // Wake from deep sleep - RTC time is still valid, don't overwrite
+                Serial.println("  RTC time preserved (wake from deep sleep)");
             }
 
             // Show current time
