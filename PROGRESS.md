@@ -132,26 +132,44 @@ Dual deep sleep modes (normal motion-wake + extended timer-wake) prevent battery
 ## Next Up
 
 ### iOS App - Phase 4: BLE & Storage (Current Priority)
-**Status:** 🔄 Ready to Start (2026-01-16)
+**Status:** 📋 Planning Complete (2026-01-16)
 
-Implement iOS BLE client to communicate with ESP32 firmware and sync drink history. Will enable end-to-end testing of Phase 3 BLE implementation.
+Implement iOS BLE client to communicate with ESP32 firmware and sync drink history. Will enable end-to-end testing of Phase 3 BLE implementation. See [Plans/014-ios-ble-coredata-integration.md](Plans/014-ios-ble-coredata-integration.md) for detailed implementation plan.
 
-**Tasks:**
-- [ ] Implement CoreBluetooth BLE manager with background mode support
-- [ ] Enable bluetooth-central background capability in Info.plist
-- [ ] Add device scanning and connection with peripheral identifier persistence
-- [ ] Parse binary BLE structs using withUnsafeBytes (DrinkRecord, CurrentState, etc.)
-- [ ] Implement pull-based drink sync protocol on iOS side
-- [ ] Create CoreData models (Bottle, DrinkRecord, DailySummary)
-- [ ] Replace mock data with CoreData persistence
-- [ ] Handle background reconnection and notification processing
-- [ ] Set device time on first connection (critical for drink timestamps)
-- [ ] Test background sync: app backgrounded → pick up bottle → verify data synced when foregrounded
+**Approach Decision:** BLE-First incremental replacement
+- Keep existing placeholder UI components and views
+- Add BLE layer alongside mock data (Phases 4.1-4.3)
+- Surgically replace mock data with CoreData (Phase 4.4)
+- Polish and add new features (Phases 4.5-4.6)
+
+**Key Technical Decisions (2026-01-16):**
+- ✅ BLE-First approach (see live data before adding persistence)
+- ✅ Single device per app (MVP scope, matches PRD)
+- ✅ Timestamp-based deduplication (CoreData unique constraint)
+- ✅ Auto-reconnect on foreground
+- ✅ Time sync on every connection
+- ✅ HealthKit deferred to Phase 5
+- ✅ Incremental scaffolding (keep existing views, modify not replace)
+
+**Implementation Phases:**
+- Phase 4.1: BLE Foundation (scanning, connection, discovery)
+- Phase 4.2: Current State & Battery Notifications (real-time parsing)
+- Phase 4.3: CoreData Schema & Persistence
+- Phase 4.4: Drink Sync Protocol (chunked transfer, deduplication)
+- Phase 4.5: Commands & Time Sync (TARE, RESET_DAILY, etc.)
+- Phase 4.6: Background Mode & Polish (state restoration, error handling)
 
 **Prerequisites:**
 - ✅ Firmware Phase 3A-3D complete (BLE server functional)
 - ✅ iOS placeholder UI complete (screens ready for real data)
 - ✅ Binary struct definitions documented in Phase 3 plan
+- ✅ iOS UX PRD complete ([docs/iOS-UX-PRD.md](docs/iOS-UX-PRD.md))
+
+**Implementation Sequence:**
+1. ✅ Technical plan created ([Plans/014-ios-ble-coredata-integration.md](Plans/014-ios-ble-coredata-integration.md))
+2. ✅ UX PRD created ([docs/iOS-UX-PRD.md](docs/iOS-UX-PRD.md))
+3. ⏳ **CURRENT:** User reviews and approves UX PRD
+4. 🔜 Begin Phase 4.1-4.6 implementation with both technical + UX plans
 
 **Handoff Point:**
 - After Phase 4 complete, return to Phase 3E for power optimization and end-to-end validation
@@ -188,7 +206,10 @@ Implement iOS BLE client to communicate with ESP32 firmware and sync drink histo
 - [Deep Sleep Reinstatement](Plans/010-deep-sleep-reinstatement.md) - Power management with 30s sleep (COMPLETED)
 - [Extended Deep Sleep Backpack Mode](Plans/011-extended-deep-sleep-backpack-mode.md) - Dual sleep modes for continuous motion (COMPLETED)
 - [iOS Placeholder UI](Plans/012-ios-placeholder-ui.md) - Multi-screen mockup UI (COMPLETED)
-- [BLE Integration](Plans/013-ble-integration.md) - Phase 3 firmware BLE implementation plan (IN PROGRESS)
+- [BLE Integration](Plans/013-ble-integration.md) - Phase 3 firmware BLE implementation plan (COMPLETED - Phase 3A-3D)
+- [iOS BLE & CoreData Integration](Plans/014-ios-ble-coredata-integration.md) - Phase 4 technical implementation plan (READY)
+- [iOS UX PRD Creation](Plans/015-ios-ux-prd-creation.md) - UX specification planning (COMPLETED)
+- [iOS UX PRD](docs/iOS-UX-PRD.md) - Complete UX specifications for iOS app (READY FOR REVIEW)
 - [Hardware Research](Plans/001-hardware-research.md) - Component selection analysis
 - [Adafruit BOM](Plans/002-bom-adafruit-feather.md) - UK parts list for Feather config
 - [SparkFun BOM](Plans/003-bom-sparkfun-qwiic.md) - UK parts list for Qwiic config
