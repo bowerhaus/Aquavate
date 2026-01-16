@@ -1,6 +1,6 @@
 # Aquavate - Active Development Progress
 
-**Last Updated:** 2026-01-16 (Phase 4.1 BLE Foundation Complete)
+**Last Updated:** 2026-01-16 (Phase 4.2 Current State Parsing Complete)
 
 ---
 
@@ -132,7 +132,7 @@ Dual deep sleep modes (normal motion-wake + extended timer-wake) prevent battery
 ## Next Up
 
 ### iOS App - Phase 4: BLE & Storage (Current Priority)
-**Status:** 🚧 Phase 4.1 Complete, Phase 4.2 Next (2026-01-16)
+**Status:** 🚧 Phase 4.2 Complete, Phase 4.3 Next (2026-01-16)
 
 Implement iOS BLE client to communicate with ESP32 firmware and sync drink history. Will enable end-to-end testing of Phase 3 BLE implementation. See [Plans/014-ios-ble-coredata-integration.md](Plans/014-ios-ble-coredata-integration.md) for detailed implementation plan.
 
@@ -169,8 +169,33 @@ Implement iOS BLE client to communicate with ESP32 firmware and sync drink histo
     - Peripheral identifier persistence for auto-reconnect
     - Scan/connection timeouts
   - Build verified successful
-- [ ] Phase 4.2: Current State & Battery Notifications (real-time parsing) **← NEXT**
-- [ ] Phase 4.3: CoreData Schema & Persistence
+
+- [x] **Phase 4.2: Current State & Battery Notifications** ✅ Complete (2026-01-16)
+  - Created [Services/BLEStructs.swift](ios/Aquavate/Aquavate/Services/BLEStructs.swift) - Binary struct definitions matching firmware exactly
+    - `BLECurrentState` (14 bytes) - Parse timestamp, weight, level, daily total, battery, flags, unsynced count
+    - `BLEBottleConfig` (12 bytes) - Parse/serialize scale factor, tare weight, capacity, goal
+    - `BLESyncControl` (8 bytes) - Parse/serialize sync protocol commands
+    - `BLEDrinkRecord` (10 bytes) - Individual drink record parsing
+    - `BLEDrinkDataChunk` (variable) - Chunked transfer header + records
+    - `BLECommand` (4 bytes) - Command serialization with factory methods
+  - Updated [Services/BLEManager.swift](ios/Aquavate/Aquavate/Services/BLEManager.swift):
+    - Added @Published properties: currentWeightG, bottleLevelMl, dailyTotalMl, batteryPercent
+    - Added @Published flags: isTimeValid, isCalibrated, isStable, unsyncedCount
+    - Added @Published config: bottleCapacityMl, dailyGoalMl, lastStateUpdateTime
+    - Implemented `handleCurrentStateUpdate()` - Parse 14-byte Current State
+    - Implemented `handleBatteryLevelUpdate()` - Parse Battery Service notification
+    - Implemented `handleBottleConfigUpdate()` - Parse 12-byte Bottle Config
+  - Updated [Views/HomeView.swift](ios/Aquavate/Aquavate/Views/HomeView.swift):
+    - Uses BLEManager environment object for real-time data when connected
+    - Falls back to mock data when disconnected (graceful degradation)
+    - Added connection status indicator with color coding
+    - Added battery level display with icon and percentage
+    - Added status badges: Calibrated, Stable, Unsynced count
+    - Added StatusBadge reusable component
+  - Build verified successful
+  - Ready for hardware testing
+
+- [ ] Phase 4.3: CoreData Schema & Persistence **← NEXT**
 - [ ] Phase 4.4: Drink Sync Protocol (chunked transfer, deduplication)
 - [ ] Phase 4.5: Commands & Time Sync (TARE, RESET_DAILY, etc.)
 - [ ] Phase 4.6: Background Mode & Polish (state restoration, error handling)
@@ -182,13 +207,13 @@ Implement iOS BLE client to communicate with ESP32 firmware and sync drink histo
 - ✅ iOS UX PRD complete ([docs/iOS-UX-PRD.md](docs/iOS-UX-PRD.md))
 
 **Next Step:**
-- Implement Phase 4.2: Current State & Battery Notifications
-- Reference: [Plans/014-ios-ble-coredata-integration.md](Plans/014-ios-ble-coredata-integration.md) Phase 4.2
+- Implement Phase 4.3: CoreData Schema & Persistence
+- Reference: [Plans/014-ios-ble-coredata-integration.md](Plans/014-ios-ble-coredata-integration.md) Phase 4.3
 - Tasks:
-  - Add BLEStructs.swift with binary struct definitions
-  - Parse 14-byte Current State characteristic
-  - Add @Published properties for weight, level, daily total, battery, flags
-  - Update HomeView to display real-time BLE data
+  - Create Aquavate.xcdatamodeld with CDDrinkRecord, CDBottle entities
+  - Set up PersistenceController with preview data
+  - Add timestamp+bottleId unique constraint for deduplication
+  - Inject CoreData context into SwiftUI environment
 
 **Handoff Point:**
 - After Phase 4 complete, return to Phase 3E for power optimization and end-to-end validation

@@ -31,7 +31,7 @@ enum BLEConnectionState: String {
 @MainActor
 class BLEManager: NSObject, ObservableObject {
 
-    // MARK: - Published Properties
+    // MARK: - Published Properties (Connection)
 
     /// Current connection state
     @Published private(set) var connectionState: BLEConnectionState = .disconnected
@@ -47,6 +47,43 @@ class BLEManager: NSObject, ObservableObject {
 
     /// Whether Bluetooth is available and powered on
     @Published private(set) var isBluetoothReady = false
+
+    // MARK: - Published Properties (Current State - Phase 4.2)
+
+    /// Current bottle weight in grams (from load cell)
+    @Published private(set) var currentWeightG: Int = 0
+
+    /// Current water level in bottle (ml)
+    @Published private(set) var bottleLevelMl: Int = 0
+
+    /// Today's cumulative water intake (ml)
+    @Published private(set) var dailyTotalMl: Int = 0
+
+    /// Battery percentage (0-100)
+    @Published private(set) var batteryPercent: Int = 0
+
+    /// Whether device time has been set
+    @Published private(set) var isTimeValid: Bool = false
+
+    /// Whether device is calibrated
+    @Published private(set) var isCalibrated: Bool = false
+
+    /// Whether weight reading is stable
+    @Published private(set) var isStable: Bool = false
+
+    /// Number of drink records pending sync
+    @Published private(set) var unsyncedCount: Int = 0
+
+    /// Timestamp of last Current State update
+    @Published private(set) var lastStateUpdateTime: Date?
+
+    // MARK: - Published Properties (Bottle Config)
+
+    /// Bottle capacity in ml (from config)
+    @Published private(set) var bottleCapacityMl: Int = 830
+
+    /// Daily goal in ml (from config)
+    @Published private(set) var dailyGoalMl: Int = 2000
 
     // MARK: - Private Properties
 
@@ -441,25 +478,24 @@ extension BLEManager: CBPeripheralDelegate {
 
             logger.debug("Received \(data.count) bytes from \(characteristic.uuid)")
 
-            // Phase 4.2 will add parsing for each characteristic type
-            // For now, just log that we received data
+            // Parse characteristic data based on UUID
             switch characteristic.uuid {
             case BLEConstants.currentStateUUID:
-                logger.info("Received Current State update (\(data.count) bytes)")
+                handleCurrentStateUpdate(data)
 
             case BLEConstants.batteryLevelUUID:
-                if let level = data.first {
-                    logger.info("Battery level: \(level)%")
-                }
+                handleBatteryLevelUpdate(data)
 
             case BLEConstants.drinkDataUUID:
                 logger.info("Received Drink Data chunk (\(data.count) bytes)")
+                // Phase 4.4 will implement drink sync protocol
 
             case BLEConstants.bottleConfigUUID:
-                logger.info("Received Bottle Config (\(data.count) bytes)")
+                handleBottleConfigUpdate(data)
 
             case BLEConstants.syncControlUUID:
                 logger.info("Received Sync Control (\(data.count) bytes)")
+                // Phase 4.4 will implement sync state machine
 
             default:
                 logger.debug("Received data from unknown characteristic: \(characteristic.uuid)")
@@ -510,5 +546,53 @@ extension BLEManager: CBPeripheralDelegate {
             connectionTimer = nil
             errorMessage = nil
         }
+    }
+
+    // MARK: - Characteristic Parsing (Phase 4.2)
+
+    /// Parse and update Current State from BLE notification
+    private func handleCurrentStateUpdate(_ data: Data) {
+        guard let state = BLECurrentState.parse(from: data) else {
+            logger.error("Failed to parse Current State (expected 14 bytes, got \(data.count))")
+            return
+        }
+
+        // Update published properties
+        currentWeightG = Int(state.currentWeightG)
+        bottleLevelMl = Int(state.bottleLevelMl)
+        dailyTotalMl = Int(state.dailyTotalMl)
+        batteryPercent = Int(state.batteryPercent)
+        isTimeValid = state.isTimeValid
+        isCalibrated = state.isCalibrated
+        isStable = state.isStable
+        unsyncedCount = Int(state.unsyncedCount)
+        lastStateUpdateTime = Date()
+
+        logger.info("Current State: weight=\(state.currentWeightG)g, level=\(state.bottleLevelMl)ml, daily=\(state.dailyTotalMl)ml, battery=\(state.batteryPercent)%, unsynced=\(state.unsyncedCount)")
+        logger.debug("  Flags: timeValid=\(state.isTimeValid), calibrated=\(state.isCalibrated), stable=\(state.isStable)")
+    }
+
+    /// Parse and update Battery Level from BLE notification
+    private func handleBatteryLevelUpdate(_ data: Data) {
+        guard let level = data.first else {
+            logger.error("Failed to parse Battery Level (no data)")
+            return
+        }
+
+        batteryPercent = Int(level)
+        logger.info("Battery level updated: \(level)%")
+    }
+
+    /// Parse and update Bottle Config from BLE read
+    private func handleBottleConfigUpdate(_ data: Data) {
+        guard let config = BLEBottleConfig.parse(from: data) else {
+            logger.error("Failed to parse Bottle Config (expected 12 bytes, got \(data.count))")
+            return
+        }
+
+        bottleCapacityMl = Int(config.bottleCapacityMl)
+        dailyGoalMl = Int(config.dailyGoalMl)
+
+        logger.info("Bottle Config: capacity=\(config.bottleCapacityMl)ml, goal=\(config.dailyGoalMl)ml, tare=\(config.tareWeightGrams)g, scale=\(config.scaleFactor)")
     }
 }
