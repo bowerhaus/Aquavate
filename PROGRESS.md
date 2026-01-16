@@ -1,14 +1,37 @@
 # Aquavate - Active Development Progress
 
-**Last Updated:** 2026-01-15
+**Last Updated:** 2026-01-16
 
 ---
 
-## Current Branch: `extended-deep-sleep-backpack-mode`
+## Current Work
 
-**Status:** ✅ Complete - Ready to Merge
+No active tasks. Ready to begin Phase 3 (Firmware BLE) or Phase 4 (iOS BLE & Storage).
 
-This branch implements dual deep sleep modes (normal motion-wake + extended timer-wake) to prevent battery drain during continuous motion scenarios like backpacks. See [Plans/011-extended-deep-sleep-backpack-mode.md](Plans/011-extended-deep-sleep-backpack-mode.md) for details.
+---
+
+## Recently Completed
+
+### iOS Placeholder UI (Phase 3.5)
+**Status:** ✅ Complete (2026-01-16)
+
+Multi-screen placeholder UI for iOS app with mock data. See [Plans/012-ios-placeholder-ui.md](Plans/012-ios-placeholder-ui.md) for details.
+
+**Delivered:**
+- Splash screen with water drop icon and fade-in animations
+- Mock data models (DrinkRecord with 12 samples, Bottle config)
+- Three main views (Home, History, Settings) with TabView navigation
+- Reusable components (CircularProgressView, DrinkListItem)
+- Ready for testing in Xcode on iPhone
+
+**Files Created:** 8 new files (2 models, 4 views, 2 components) + 2 modified files
+
+### Extended Deep Sleep Backpack Mode (Phase 2.6)
+**Status:** ✅ Complete - Ready to Merge to master
+
+Branch: `extended-deep-sleep-backpack-mode`
+
+Dual deep sleep modes (normal motion-wake + extended timer-wake) prevent battery drain during continuous motion scenarios. See [Plans/011-extended-deep-sleep-backpack-mode.md](Plans/011-extended-deep-sleep-backpack-mode.md).
 
 **Power Impact:** ~60× reduction in backpack scenario (30mA continuous → 0.5mAh/hour)
 
@@ -24,11 +47,11 @@ This branch implements dual deep sleep modes (normal motion-wake + extended time
 - [ ] Test BLE advertising and connection from iOS
 - [ ] Consider FSM architecture for BLE pairing state management
 
-### iOS App - Phase 4: BLE & Storage
+### iOS App - Phase 4: BLE & Storage (After Placeholder UI)
 - [ ] Implement CoreBluetooth BLE manager
 - [ ] Add device scanning and pairing
 - [ ] Create CoreData models (Bottle, DrinkRecord, DailySummary)
-- [ ] Build basic home screen with current level display
+- [ ] Replace mock data with CoreData persistence
 - [ ] Implement drink history sync from puck
 
 ---
@@ -64,6 +87,7 @@ This branch implements dual deep sleep modes (normal motion-wake + extended time
 - [Smart Display State Tracking](Plans/009-smart-display-state-tracking.md) - Display module with time/battery updates (COMPLETED)
 - [Deep Sleep Reinstatement](Plans/010-deep-sleep-reinstatement.md) - Power management with 30s sleep (COMPLETED)
 - [Extended Deep Sleep Backpack Mode](Plans/011-extended-deep-sleep-backpack-mode.md) - Dual sleep modes for continuous motion (COMPLETED)
+- [iOS Placeholder UI](Plans/012-ios-placeholder-ui.md) - Multi-screen mockup UI (COMPLETED)
 - [Hardware Research](Plans/001-hardware-research.md) - Component selection analysis
 - [Adafruit BOM](Plans/002-bom-adafruit-feather.md) - UK parts list for Feather config
 - [SparkFun BOM](Plans/003-bom-sparkfun-qwiic.md) - UK parts list for Qwiic config
