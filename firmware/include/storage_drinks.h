@@ -66,4 +66,41 @@ bool storageLoadBufferMetadata(CircularBufferMetadata& meta);
  */
 bool storageSaveBufferMetadata(const CircularBufferMetadata& meta);
 
+/**
+ * Get drink record at specific circular buffer index
+ * Index 0 is the oldest record, record_count-1 is the newest
+ *
+ * @param index Logical index (0 = oldest, count-1 = newest)
+ * @param record Output parameter for loaded record
+ * @return true if record loaded successfully
+ */
+bool storageGetDrinkRecord(uint16_t index, DrinkRecord& record);
+
+/**
+ * Mark records as synced (set flags |= 0x01) for range
+ *
+ * @param start_index Logical start index (0 = oldest)
+ * @param count Number of records to mark
+ * @return true if marked successfully
+ */
+bool storageMarkSynced(uint16_t start_index, uint16_t count);
+
+/**
+ * Count unsynced records (where flags & 0x01 == 0)
+ *
+ * @return Number of unsynced records
+ */
+uint16_t storageGetUnsyncedCount();
+
+/**
+ * Get all unsynced records for sync protocol
+ * Returns records in chronological order (oldest first)
+ *
+ * @param buffer Output buffer for records
+ * @param max_count Maximum records to retrieve
+ * @param out_count Output parameter for actual count retrieved
+ * @return true if successful
+ */
+bool storageGetUnsyncedRecords(DrinkRecord* buffer, uint16_t max_count, uint16_t& out_count);
+
 #endif // STORAGE_DRINKS_H

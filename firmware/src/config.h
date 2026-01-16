@@ -23,7 +23,7 @@
 #define DEBUG_DISPLAY_UPDATES           1   // 0 = disable display update messages
 #define DEBUG_DRINK_TRACKING            1   // 0 = disable drink detection debug
 #define DEBUG_CALIBRATION               1   // 0 = disable calibration debug
-#define DEBUG_BLE                       0   // 0 = disable BLE debug (not yet implemented)
+#define DEBUG_BLE                       1   // 0 = disable BLE debug, 1 = enable BLE debug
 
 // Runtime debug control - these extern declarations allow runtime debug control
 // Use these macros in your code instead of #if DEBUG_* for runtime control

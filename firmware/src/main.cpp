@@ -27,6 +27,9 @@
 // Display state tracking
 #include "display.h"
 
+// BLE service
+#include "ble_service.h"
+
 
 // FIX Bug #4: Sensor snapshot to prevent multiple reads per loop
 struct SensorSnapshot {
@@ -865,6 +868,25 @@ void setup() {
     // Note: Display will update on first stable check to ensure correct values shown
 #endif
 
+    // Initialize BLE service
+    Serial.println("Initializing BLE service...");
+    if (bleInit()) {
+        Serial.println("BLE service initialized!");
+
+        // Start advertising on motion wake (not timer wake)
+        if (wakeup_reason == ESP_SLEEP_WAKEUP_EXT0) {
+            Serial.println("Motion wake detected - starting BLE advertising");
+            bleStartAdvertising();
+        } else if (wakeup_reason == ESP_SLEEP_WAKEUP_UNDEFINED) {
+            Serial.println("Power on/reset - starting BLE advertising");
+            bleStartAdvertising();
+        } else {
+            Serial.println("Timer wake - BLE advertising NOT started (power conservation)");
+        }
+    } else {
+        Serial.println("BLE initialization failed!");
+    }
+
     Serial.println("Setup complete!");
     Serial.print("Will sleep in ");
     Serial.print(AWAKE_DURATION_MS / 1000);
@@ -874,6 +896,41 @@ void setup() {
 void loop() {
     // Check for serial commands
     serialCommandsUpdate();
+
+    // Update BLE service
+    bleUpdate();
+
+    // Handle BLE commands (Phase 3C)
+    if (bleCheckResetDailyRequested()) {
+        Serial.println("BLE Command: RESET_DAILY");
+        drinksResetDaily();
+        wakeTime = millis(); // Reset sleep timer
+    }
+
+    if (bleCheckClearHistoryRequested()) {
+        Serial.println("BLE Command: CLEAR_HISTORY");
+        drinksClearAll();
+        wakeTime = millis(); // Reset sleep timer
+    }
+
+    if (bleCheckStartCalibrationRequested()) {
+        Serial.println("BLE Command: START_CALIBRATION");
+        if (calibrationGetState() == CAL_IDLE) {
+            calibrationStart();
+            wakeTime = millis(); // Reset sleep timer
+        } else {
+            Serial.println("BLE Command: Cannot start calibration - already in progress");
+        }
+    }
+
+    if (bleCheckCancelCalibrationRequested()) {
+        Serial.println("BLE Command: CANCEL_CALIBRATION");
+        calibrationCancel();
+        g_last_cal_state = CAL_IDLE;
+        wakeTime = millis(); // Reset sleep timer
+    }
+
+    // Note: TARE_NOW command will be handled below in the weight reading section
 
     // FIX Bug #4: READ SENSORS ONCE - create snapshot for this loop iteration
     SensorSnapshot sensors;
@@ -888,6 +945,22 @@ void loop() {
         if (g_calibrated) {
             sensors.water_ml = calibrationGetWaterWeight(sensors.adc_reading, g_calibration);
         }
+    }
+
+    // Handle BLE TARE command (must be after ADC read)
+    if (bleCheckTareRequested() && g_calibrated && nauReady) {
+        Serial.println("BLE Command: TARE_NOW");
+        // Update empty bottle ADC to current reading (tare weight)
+        g_calibration.empty_bottle_adc = sensors.adc_reading;
+        // Recalculate full bottle ADC (empty + 830ml * scale_factor)
+        g_calibration.full_bottle_adc = g_calibration.empty_bottle_adc + (int32_t)(830.0f * g_calibration.scale_factor);
+        // Save updated calibration to NVS
+        if (storageSaveCalibration(g_calibration)) {
+            Serial.println("BLE Command: Tare complete, calibration updated");
+        } else {
+            Serial.println("BLE Command: Tare failed - could not save calibration");
+        }
+        wakeTime = millis(); // Reset sleep timer
     }
 
     // Read accelerometer and get gesture (ONCE)
@@ -1145,6 +1218,14 @@ void loop() {
                     if (time_interval_elapsed) last_time_check = millis();
                     if (battery_interval_elapsed) last_battery_check = millis();
                 }
+
+                // Update BLE Current State (send notifications if connected)
+                bleUpdateCurrentState(daily_state, current_adc, g_calibration,
+                                    battery_pct, g_calibrated, g_time_valid,
+                                    gesture == GESTURE_UPRIGHT_STABLE);
+
+                // Update BLE battery level (separate characteristic)
+                bleUpdateBatteryLevel(battery_pct);
             }
 #endif
         }
@@ -1234,6 +1315,11 @@ void loop() {
         if (calibrationIsActive()) {
             Serial.println("Sleep blocked - calibration in progress");
             wakeTime = millis(); // Reset timer to prevent immediate sleep after calibration
+        }
+        // Prevent sleep when BLE is connected
+        else if (bleIsConnected()) {
+            Serial.println("Sleep blocked - BLE connected");
+            wakeTime = millis(); // Reset timer while connected
         } else {
 #if DISPLAY_SLEEP_INDICATOR
             // Show Zzzz indicator before sleeping
