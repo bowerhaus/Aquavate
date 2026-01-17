@@ -268,7 +268,7 @@ Sarah's Bluetooth is accidentally turned off. When she opens the app, she sees a
 
 ### 2.4 Home Screen (Main Tab)
 
-**Purpose:** At-a-glance view of current bottle level and daily progress
+**Purpose:** At-a-glance view of daily progress toward hydration goal (PRIMARY) and current bottle level (SECONDARY)
 
 **Layout:**
 ```
@@ -280,27 +280,27 @@ Sarah's Bluetooth is accidentally turned off. When she opens the app, she sees a
 │       ┌───────────────┐         │
 │      ╱                 ╲        │
 │     │                   │       │
-│     │      420 ml       │       │  ← Large text (28pt Bold)
-│     │    remaining      │       │  ← Subtext (15pt Regular)
+│     │     1,200 ml      │       │  ← Large text (28pt Bold) - DAILY TOTAL
+│     │  of 2,000ml goal  │       │  ← Subtext (15pt Regular)
 │     │                   │       │
 │      ╲                 ╱        │
-│       └───────────────┘         │  ← Circular progress ring (200pt)
+│       └───────────────┘         │  ← Circular progress ring (200pt) - PRIMARY
 │                                 │
 │   ┌─────────────────────────┐   │
-│   │ Today's Goal        60% │   │
-│   │ ████████░░░░░░░░░░░░░░  │   │  ← Progress bar
-│   │ 1,200ml / 2,000ml       │   │
+│   │ Bottle Level        56% │   │
+│   │ ████████░░░░░░░░░░░░░░  │   │  ← Progress bar - SECONDARY
+│   │ 420ml / 750ml           │   │
 │   └─────────────────────────┘   │
 │                                 │
 │   ─────────────────────────────│
 │                                 │
 │   Recent Drinks                 │  ← Section header
 │                                 │
-│   💧 2:30 PM    200ml   420ml  │  ← DrinkListItem
+│   💧 200ml      2:30 PM  420ml │  ← DrinkListItem (amount emphasized)
 │   ─────────────────────────────│
-│   💧 11:45 AM   150ml   620ml  │
+│   💧 150ml     11:45 AM  620ml │
 │   ─────────────────────────────│
-│   💧 9:15 AM    250ml   770ml  │
+│   💧 250ml      9:15 AM  770ml │
 │                                 │
 └─────────────────────────────────┘
 │  🏠 Home  │  📊 History  │  ⚙️  │  ← Tab bar
@@ -310,9 +310,9 @@ Sarah's Bluetooth is accidentally turned off. When she opens the app, she sees a
 **Data Displayed:**
 | Element | Source | Format |
 |---------|--------|--------|
-| Bottle level | BLE Current State (real-time) | "{X} ml remaining" |
-| Daily total | BLE Current State or CoreData sum | "{X}ml / {goal}ml" |
-| Recent drinks | CoreData (last 5 today) | Time, amount, level after |
+| Daily total (PRIMARY) | BLE Current State or CoreData sum | "{X} ml of {goal}ml goal" |
+| Bottle level (SECONDARY) | BLE Current State (real-time) | "{X}ml / {capacity}ml" |
+| Recent drinks | CoreData (last 5 today) | Amount (bold), time, level after |
 | Sync status | Last BLE sync timestamp | "Last synced {X} ago" |
 | Connection dot | BLE connection state | Green/Orange/Gray |
 
@@ -997,7 +997,7 @@ Command sent to puck (TARE_NOW 0x01)
 
 ### CircularProgressView (Existing)
 
-**Purpose:** Display bottle level or daily progress
+**Purpose:** Display daily goal progress (PRIMARY) or bottle level
 
 **Props:**
 ```swift
@@ -1005,6 +1005,7 @@ struct CircularProgressView {
     let current: Int      // Current value (ml)
     let total: Int        // Maximum value (ml)
     let color: Color      // Ring color
+    let label: String     // Customizable label (default: "remaining")
 }
 ```
 
@@ -1013,29 +1014,33 @@ struct CircularProgressView {
 - Curve: ease-out
 - Animates both ring trim and center text
 
-**Center Text:**
+**Center Text (Daily Goal - PRIMARY usage):**
 ```
-     420 ml        ← 28pt Bold, primary color
-    remaining      ← 15pt Regular, secondary color
+    1,200 ml       ← 28pt Bold, primary color
+ of 2,000ml goal   ← 15pt Regular, secondary color
 ```
 
 **Accessibility:**
-- VoiceOver: "Bottle level: 420 milliliters of 750 milliliters remaining"
+- VoiceOver: "Daily progress: 1200 milliliters of 2000 milliliters goal"
 
 ---
 
 ### DrinkListItem (Existing)
 
-**Purpose:** Single drink record in list
+**Purpose:** Single drink record in list - emphasizes amount consumed over remaining
 
 **Layout:**
 ```
 ┌───────────────────────────────┐
-│  💧  2:30 PM    200ml   420ml │
-│   │     │         │       │   │
-│   │     │         │       └── Level after (secondary)
-│   │     │         └────────── Amount (primary)
-│   │     └──────────────────── Timestamp (secondary)
+│  💧  200ml        420ml       │
+│   │    │            │         │
+│   │    │            └──────── Level after (secondary, de-emphasized)
+│   │    └───────────────────── Amount consumed (headline, bold)
+│   │                           │
+│   │  2:30 PM      remaining   │
+│   │    │            │         │
+│   │    │            └──────── Label (caption, tertiary)
+│   │    └───────────────────── Timestamp (subheadline, secondary)
 │   └────────────────────────── Icon (blue)
 └───────────────────────────────┘
 ```

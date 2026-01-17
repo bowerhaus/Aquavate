@@ -11,10 +11,18 @@ struct CircularProgressView: View {
     let current: Int
     let total: Int
     let color: Color
+    let label: String
+
+    init(current: Int, total: Int, color: Color, label: String = "remaining") {
+        self.current = current
+        self.total = total
+        self.color = color
+        self.label = label
+    }
 
     private var progress: Double {
         guard total > 0 else { return 0 }
-        return Double(current) / Double(total)
+        return min(1.0, Double(current) / Double(total))
     }
 
     var body: some View {
@@ -39,7 +47,7 @@ struct CircularProgressView: View {
                     .font(.system(size: 36, weight: .bold, design: .rounded))
                     .foregroundColor(.primary)
 
-                Text("remaining")
+                Text(label)
                     .font(.system(size: 16, weight: .regular))
                     .foregroundColor(.secondary)
             }

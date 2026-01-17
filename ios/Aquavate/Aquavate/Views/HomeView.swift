@@ -66,6 +66,11 @@ struct HomeView: View {
         return min(1.0, Double(displayDailyTotal) / Double(displayGoal))
     }
 
+    private var bottleProgress: Double {
+        guard displayCapacity > 0 else { return 0 }
+        return min(1.0, Double(displayBottleLevel) / Double(displayCapacity))
+    }
+
     private var recentDrinks: [DrinkRecord] {
         Array(todaysDrinks.prefix(5))
     }
@@ -158,33 +163,34 @@ struct HomeView: View {
                         .padding(.horizontal)
                     }
 
-                    // Circular progress ring - bottle level
+                    // Circular progress ring - daily goal (PRIMARY FOCUS)
                     CircularProgressView(
-                        current: displayBottleLevel,
-                        total: displayCapacity,
-                        color: .blue
+                        current: displayDailyTotal,
+                        total: displayGoal,
+                        color: .blue,
+                        label: "of \(displayGoal)ml goal"
                     )
                     .padding(.vertical, 16)
 
-                    // Daily goal progress bar
+                    // Bottle level progress bar (SECONDARY)
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
-                            Text("Today's Goal")
+                            Text("Bottle Level")
                                 .font(.headline)
                             Spacer()
-                            Text("\(Int(dailyProgress * 100))%")
+                            Text("\(Int(bottleProgress * 100))%")
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                         }
 
-                        ProgressView(value: dailyProgress)
+                        ProgressView(value: bottleProgress)
                             .tint(.blue)
 
                         HStack {
-                            Text("\(displayDailyTotal)ml")
+                            Text("\(displayBottleLevel)ml")
                                 .font(.subheadline)
                                 .fontWeight(.medium)
-                            Text("/ \(displayGoal)ml")
+                            Text("/ \(displayCapacity)ml")
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                         }

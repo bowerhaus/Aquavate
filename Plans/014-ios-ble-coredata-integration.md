@@ -557,17 +557,22 @@ struct HomeView: View {
                 Text(connectionStatusText)
             }
 
-            // Real-time bottle level from BLE
+            // PRIMARY: Daily goal progress (large circular graphic)
             CircularProgressView(
-                current: bleManager.bottleLevel,
-                total: 750,
-                color: .blue
+                current: bleManager.dailyTotal,
+                total: bleManager.dailyGoal,
+                color: .blue,
+                label: "of \(bleManager.dailyGoal)ml goal"
             )
 
-            // Daily total from BLE Current State
-            Text("Today: \(bleManager.dailyTotal)ml / 2000ml")
+            // SECONDARY: Bottle level (small progress bar)
+            VStack(alignment: .leading) {
+                Text("Bottle Level")
+                ProgressView(value: Double(bleManager.bottleLevel) / Double(bleManager.bottleCapacity))
+                Text("\(bleManager.bottleLevel)ml / \(bleManager.bottleCapacity)ml")
+            }
 
-            // Recent drinks from CoreData
+            // Recent drinks from CoreData (amount consumed emphasized)
             ForEach(todaysDrinks.prefix(5)) { drink in
                 DrinkListItem(drink: drink.toDrinkRecord())
             }
