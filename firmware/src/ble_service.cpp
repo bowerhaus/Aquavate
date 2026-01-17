@@ -136,11 +136,14 @@ class CommandCallbacks : public NimBLECharacteristicCallbacks {
                 // Re-initialize drink tracking now that time is valid
                 drinksInit();
 
-                // Log the time we set
+                // Log the time we set (using gmtime_r to avoid IRAM overhead)
                 time_t now = time(NULL);
-                struct tm* tm_info = localtime(&now);
+                struct tm timeinfo;
+                gmtime_r(&now, &timeinfo);
                 char timeStr[32];
-                strftime(timeStr, sizeof(timeStr), "%Y-%m-%d %H:%M:%S", tm_info);
+                snprintf(timeStr, sizeof(timeStr), "%04d-%02d-%02d %02d:%02d:%02d",
+                         timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday,
+                         timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
                 BLE_DEBUG_F("Device time set to: %s", timeStr);
             } else {
                 BLE_DEBUG("ERROR: Failed to set time");
