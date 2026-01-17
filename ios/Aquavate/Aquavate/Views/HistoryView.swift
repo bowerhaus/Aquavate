@@ -6,10 +6,27 @@
 //
 
 import SwiftUI
+import CoreData
 
 struct HistoryView: View {
-    let drinks = DrinkRecord.sampleData
+    @Environment(\.managedObjectContext) private var viewContext
     @State private var selectedDate: Date = Date()
+
+    // Fetch all drink records from CoreData (last 7 days)
+    @FetchRequest(
+        sortDescriptors: [NSSortDescriptor(keyPath: \CDDrinkRecord.timestamp, ascending: false)],
+        predicate: NSPredicate(
+            format: "timestamp >= %@",
+            Calendar.current.date(byAdding: .day, value: -7, to: Calendar.current.startOfDay(for: Date()))! as CVarArg
+        ),
+        animation: .default
+    )
+    private var recentDrinksCD: FetchedResults<CDDrinkRecord>
+
+    // Convert to display model
+    private var drinks: [DrinkRecord] {
+        recentDrinksCD.map { $0.toDrinkRecord() }
+    }
 
     private var last7Days: [Date] {
         let calendar = Calendar.current

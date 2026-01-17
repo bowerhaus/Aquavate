@@ -100,6 +100,10 @@ class BottleConfigCallbacks : public NimBLECharacteristicCallbacks {
     }
 };
 
+// Forward declarations for time handling
+extern bool g_time_valid;
+void drinksInit();  // Re-initialize drink tracking when time becomes valid
+
 // Command characteristic callbacks
 class CommandCallbacks : public NimBLECharacteristicCallbacks {
     void onWrite(NimBLECharacteristic* pCharacteristic) {
@@ -107,6 +111,42 @@ class CommandCallbacks : public NimBLECharacteristicCallbacks {
 
         // Get written data
         std::string value = pCharacteristic->getValue();
+
+        // Check for SET_TIME command (5 bytes)
+        if (value.length() == sizeof(BLE_SetTimeCommand) && value[0] == BLE_CMD_SET_TIME) {
+            BLE_SetTimeCommand timeCmd;
+            memcpy(&timeCmd, value.data(), sizeof(BLE_SetTimeCommand));
+
+            BLE_DEBUG_F("Command: SET_TIME, timestamp=%u", timeCmd.timestamp);
+
+            // Set the ESP32 RTC
+            struct timeval tv;
+            tv.tv_sec = timeCmd.timestamp;
+            tv.tv_usec = 0;
+
+            if (settimeofday(&tv, NULL) == 0) {
+                BLE_DEBUG("Time set successfully");
+
+                // Mark time as valid
+                g_time_valid = true;
+                storageSaveTimeValid(true);
+
+                // Re-initialize drink tracking now that time is valid
+                drinksInit();
+
+                // Log the time we set
+                time_t now = time(NULL);
+                struct tm* tm_info = localtime(&now);
+                char timeStr[32];
+                strftime(timeStr, sizeof(timeStr), "%Y-%m-%d %H:%M:%S", tm_info);
+                BLE_DEBUG_F("Device time set to: %s", timeStr);
+            } else {
+                BLE_DEBUG("ERROR: Failed to set time");
+            }
+            return;
+        }
+
+        // Standard 4-byte command
         if (value.length() == sizeof(BLE_Command)) {
             BLE_Command cmd;
             memcpy(&cmd, value.data(), sizeof(BLE_Command));
@@ -146,8 +186,8 @@ class CommandCallbacks : public NimBLECharacteristicCallbacks {
                     break;
             }
         } else {
-            BLE_DEBUG_F("Invalid command size: %d bytes (expected %d)",
-                       value.length(), sizeof(BLE_Command));
+            BLE_DEBUG_F("Invalid command size: %d bytes (expected 4 or 5)",
+                       value.length());
         }
     }
 };

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="23231" systemVersion="24C5089c" minimumToolsVersion="Automatic" sourceLanguage="Swift" usedWithSwiftData="NO" userDefinedModelVersionIdentifier="">
+    <entity name="CDBottle" representedClassName="CDBottle" syncable="YES" codeGenerationType="class">
+        <attribute name="batteryPercent" optional="YES" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="capacityMl" optional="YES" attributeType="Integer 16" defaultValueString="750" usesScalarValueType="YES"/>
+        <attribute name="dailyGoalMl" optional="YES" attributeType="Integer 16" defaultValueString="2000" usesScalarValueType="YES"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="isCalibrated" optional="YES" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="lastSyncDate" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="name" optional="YES" attributeType="String" defaultValueString="My Bottle"/>
+        <attribute name="peripheralIdentifier" optional="YES" attributeType="String"/>
+        <attribute name="scaleFactor" optional="YES" attributeType="Float" defaultValueString="1.0" usesScalarValueType="YES"/>
+        <attribute name="tareWeightGrams" optional="YES" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <relationship name="drinkRecords" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="CDDrinkRecord" inverseName="bottle" inverseEntity="CDDrinkRecord"/>
+    </entity>
+    <entity name="CDDrinkRecord" representedClassName="CDDrinkRecord" syncable="YES" codeGenerationType="class">
+        <attribute name="amountMl" optional="YES" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="bottleId" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="bottleLevelMl" optional="YES" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="drinkType" optional="YES" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="syncedToHealth" optional="YES" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="timestamp" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <relationship name="bottle" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="CDBottle" inverseName="drinkRecords" inverseEntity="CDBottle"/>
+        <uniquenessConstraints>
+            <uniquenessConstraint>
+                <constraint value="timestamp"/>
+                <constraint value="bottleId"/>
+            </uniquenessConstraint>
+        </uniquenessConstraints>
+    </entity>
+</model>

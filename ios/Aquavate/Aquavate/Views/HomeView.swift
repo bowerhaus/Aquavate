@@ -6,20 +6,26 @@
 //
 
 import SwiftUI
+import CoreData
 
 struct HomeView: View {
     @EnvironmentObject var bleManager: BLEManager
+    @Environment(\.managedObjectContext) private var viewContext
 
-    // Mock data for drink history (will be replaced with CoreData in Phase 4.3-4.4)
-    let drinks = DrinkRecord.sampleData
+    // Fetch today's drinks from CoreData, sorted by most recent first
+    @FetchRequest(
+        sortDescriptors: [NSSortDescriptor(keyPath: \CDDrinkRecord.timestamp, ascending: false)],
+        predicate: NSPredicate(format: "timestamp >= %@", Calendar.current.startOfDay(for: Date()) as CVarArg),
+        animation: .default
+    )
+    private var todaysDrinksCD: FetchedResults<CDDrinkRecord>
 
+    // Convert CoreData records to display model
     private var todaysDrinks: [DrinkRecord] {
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: Date())
-        return drinks.filter { calendar.startOfDay(for: $0.timestamp) == today }
+        todaysDrinksCD.map { $0.toDrinkRecord() }
     }
 
-    // Use BLE data when connected, otherwise calculate from mock drinks
+    // Use BLE data when connected, otherwise calculate from CoreData drinks
     private var displayDailyTotal: Int {
         if bleManager.connectionState.isConnected {
             return bleManager.dailyTotalMl

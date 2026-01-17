@@ -33,14 +33,15 @@ struct BLECurrentState {
         return data.withUnsafeBytes { (ptr: UnsafeRawBufferPointer) -> BLECurrentState? in
             guard let baseAddress = ptr.baseAddress else { return nil }
 
+            // Use loadUnaligned for packed struct data to avoid alignment crashes
             return BLECurrentState(
-                timestamp: baseAddress.load(as: UInt32.self),
-                currentWeightG: baseAddress.load(fromByteOffset: 4, as: Int16.self),
-                bottleLevelMl: baseAddress.load(fromByteOffset: 6, as: UInt16.self),
-                dailyTotalMl: baseAddress.load(fromByteOffset: 8, as: UInt16.self),
+                timestamp: baseAddress.loadUnaligned(as: UInt32.self),
+                currentWeightG: baseAddress.loadUnaligned(fromByteOffset: 4, as: Int16.self),
+                bottleLevelMl: baseAddress.loadUnaligned(fromByteOffset: 6, as: UInt16.self),
+                dailyTotalMl: baseAddress.loadUnaligned(fromByteOffset: 8, as: UInt16.self),
                 batteryPercent: baseAddress.load(fromByteOffset: 10, as: UInt8.self),
                 flags: baseAddress.load(fromByteOffset: 11, as: UInt8.self),
-                unsyncedCount: baseAddress.load(fromByteOffset: 12, as: UInt16.self)
+                unsyncedCount: baseAddress.loadUnaligned(fromByteOffset: 12, as: UInt16.self)
             )
         }
     }
@@ -87,11 +88,12 @@ struct BLEBottleConfig {
         return data.withUnsafeBytes { (ptr: UnsafeRawBufferPointer) -> BLEBottleConfig? in
             guard let baseAddress = ptr.baseAddress else { return nil }
 
+            // Use loadUnaligned for packed struct data to avoid alignment crashes
             return BLEBottleConfig(
-                scaleFactor: baseAddress.load(as: Float.self),
-                tareWeightGrams: baseAddress.load(fromByteOffset: 4, as: Int32.self),
-                bottleCapacityMl: baseAddress.load(fromByteOffset: 8, as: UInt16.self),
-                dailyGoalMl: baseAddress.load(fromByteOffset: 10, as: UInt16.self)
+                scaleFactor: baseAddress.loadUnaligned(as: Float.self),
+                tareWeightGrams: baseAddress.loadUnaligned(fromByteOffset: 4, as: Int32.self),
+                bottleCapacityMl: baseAddress.loadUnaligned(fromByteOffset: 8, as: UInt16.self),
+                dailyGoalMl: baseAddress.loadUnaligned(fromByteOffset: 10, as: UInt16.self)
             )
         }
     }
@@ -147,12 +149,13 @@ struct BLESyncControl {
         return data.withUnsafeBytes { (ptr: UnsafeRawBufferPointer) -> BLESyncControl? in
             guard let baseAddress = ptr.baseAddress else { return nil }
 
+            // Use loadUnaligned for packed struct data to avoid alignment crashes
             return BLESyncControl(
-                startIndex: baseAddress.load(as: UInt16.self),
-                count: baseAddress.load(fromByteOffset: 2, as: UInt16.self),
+                startIndex: baseAddress.loadUnaligned(as: UInt16.self),
+                count: baseAddress.loadUnaligned(fromByteOffset: 2, as: UInt16.self),
                 command: baseAddress.load(fromByteOffset: 4, as: UInt8.self),
                 status: baseAddress.load(fromByteOffset: 5, as: UInt8.self),
-                chunkSize: baseAddress.load(fromByteOffset: 6, as: UInt16.self)
+                chunkSize: baseAddress.loadUnaligned(fromByteOffset: 6, as: UInt16.self)
             )
         }
     }
@@ -262,20 +265,27 @@ struct BLEDrinkDataChunk {
         return data.withUnsafeBytes { (ptr: UnsafeRawBufferPointer) -> BLEDrinkDataChunk? in
             guard let baseAddress = ptr.baseAddress else { return nil }
 
-            let chunkIndex = baseAddress.load(as: UInt16.self)
-            let totalChunks = baseAddress.load(fromByteOffset: 2, as: UInt16.self)
+            // Use loadUnaligned for packed struct data to avoid alignment crashes
+            let chunkIndex = baseAddress.loadUnaligned(as: UInt16.self)
+            let totalChunks = baseAddress.loadUnaligned(fromByteOffset: 2, as: UInt16.self)
             let recordCount = baseAddress.load(fromByteOffset: 4, as: UInt8.self)
 
-            // Parse individual records
+            // Validate expected size: header (6 bytes) + records (10 bytes each)
+            let expectedSize = headerSize + (Int(recordCount) * BLEDrinkRecord.size)
+            guard data.count >= expectedSize else {
+                // Data too short for declared record count
+                return nil
+            }
+
+            // Parse individual records (use loadUnaligned for multi-byte types)
             var records: [BLEDrinkRecord] = []
             for i in 0..<Int(recordCount) {
                 let offset = headerSize + (i * BLEDrinkRecord.size)
-                guard data.count >= offset + BLEDrinkRecord.size else { break }
 
                 let record = BLEDrinkRecord(
-                    timestamp: baseAddress.load(fromByteOffset: offset, as: UInt32.self),
-                    amountMl: baseAddress.load(fromByteOffset: offset + 4, as: Int16.self),
-                    bottleLevelMl: baseAddress.load(fromByteOffset: offset + 6, as: UInt16.self),
+                    timestamp: baseAddress.loadUnaligned(fromByteOffset: offset, as: UInt32.self),
+                    amountMl: baseAddress.loadUnaligned(fromByteOffset: offset + 4, as: Int16.self),
+                    bottleLevelMl: baseAddress.loadUnaligned(fromByteOffset: offset + 6, as: UInt16.self),
                     type: baseAddress.load(fromByteOffset: offset + 8, as: UInt8.self),
                     flags: baseAddress.load(fromByteOffset: offset + 9, as: UInt8.self)
                 )

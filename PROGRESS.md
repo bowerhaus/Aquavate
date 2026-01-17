@@ -1,6 +1,6 @@
 # Aquavate - Active Development Progress
 
-**Last Updated:** 2026-01-16 (Phase 4.2 Current State Parsing Complete)
+**Last Updated:** 2026-01-17 (Fixed drink sync alignment crash)
 
 ---
 
@@ -132,7 +132,7 @@ Dual deep sleep modes (normal motion-wake + extended timer-wake) prevent battery
 ## Next Up
 
 ### iOS App - Phase 4: BLE & Storage (Current Priority)
-**Status:** 🚧 Phase 4.2 Complete, Phase 4.3 Next (2026-01-16)
+**Status:** ✅ Phase 4 Complete (2026-01-16) - Ready for Phase 3E
 
 Implement iOS BLE client to communicate with ESP32 firmware and sync drink history. Will enable end-to-end testing of Phase 3 BLE implementation. See [Plans/014-ios-ble-coredata-integration.md](Plans/014-ios-ble-coredata-integration.md) for detailed implementation plan.
 
@@ -192,35 +192,119 @@ Implement iOS BLE client to communicate with ESP32 firmware and sync drink histo
     - Added battery level display with icon and percentage
     - Added status badges: Calibrated, Stable, Unsynced count
     - Added StatusBadge reusable component
+  - Updated [Views/SettingsView.swift](ios/Aquavate/Aquavate/Views/SettingsView.swift):
+    - Fixed battery indicator to use real BLE data (was using mock data)
+    - Added Device Info section with: Battery, Current Weight, Calibrated, Time Set, Unsynced Records
+    - Dynamic battery icon and color based on percentage
+  - Updated [AquavateApp.swift](ios/Aquavate/Aquavate/AquavateApp.swift):
+    - Added scenePhase observation for app lifecycle
+    - Disconnect BLE when app goes to background (allows bottle to sleep)
+    - Auto-reconnect when app returns to foreground
   - Build verified successful
-  - Ready for hardware testing
+  - Hardware tested: real-time updates working on Home and Settings screens
 
-- [ ] Phase 4.3: CoreData Schema & Persistence **← NEXT**
-- [ ] Phase 4.4: Drink Sync Protocol (chunked transfer, deduplication)
-- [ ] Phase 4.5: Commands & Time Sync (TARE, RESET_DAILY, etc.)
-- [ ] Phase 4.6: Background Mode & Polish (state restoration, error handling)
+- [x] **Phase 4.3: CoreData Schema & Persistence** ✅ Complete (2026-01-16)
+  - Created [CoreData/Aquavate.xcdatamodeld](ios/Aquavate/Aquavate/CoreData/Aquavate.xcdatamodeld) - Schema definition
+    - `CDBottle` entity: id, name, capacityMl, dailyGoalMl, batteryPercent, scaleFactor, tareWeightGrams, isCalibrated, lastSyncDate, peripheralIdentifier
+    - `CDDrinkRecord` entity: id, timestamp, amountMl, bottleLevelMl, drinkType, syncedToHealth, bottleId
+    - Relationship: CDBottle → CDDrinkRecord (one-to-many, cascade delete)
+    - Unique constraint on CDDrinkRecord: [timestamp, bottleId] for deduplication
+  - Created [CoreData/PersistenceController.swift](ios/Aquavate/Aquavate/CoreData/PersistenceController.swift)
+    - Shared singleton with in-memory preview support
+    - NSMergeByPropertyObjectTrumpMergePolicy for automatic deduplication
+    - Preview data with sample bottle and drink records
+    - Helper methods: getOrCreateDefaultBottle(), saveDrinkRecords(), getTodaysDrinkRecords()
+    - Extension methods: toDrinkRecord() for CDDrinkRecord, toBottle() for CDBottle
+  - Updated [AquavateApp.swift](ios/Aquavate/Aquavate/AquavateApp.swift)
+    - Injected CoreData context via .environment(\.managedObjectContext, ...)
+  - Build verified successful
 
-**Prerequisites:**
-- ✅ Firmware Phase 3A-3D complete (BLE server functional)
-- ✅ iOS placeholder UI complete (screens ready for real data)
-- ✅ Binary struct definitions documented in Phase 3 plan
-- ✅ iOS UX PRD complete ([docs/iOS-UX-PRD.md](docs/iOS-UX-PRD.md))
+- [x] **Phase 4.4: Drink Sync Protocol** ✅ Complete (2026-01-16)
+  - Added sync state machine to [Services/BLEManager.swift](ios/Aquavate/Aquavate/Services/BLEManager.swift):
+    - `BLESyncState` enum: idle, requesting, receiving, complete, failed
+    - @Published properties: syncState, syncProgress, syncedRecordCount, totalRecordsToSync
+    - Sync buffer to accumulate records during chunked transfer
+  - Implemented Drink Data characteristic handling:
+    - `handleDrinkDataUpdate()` - Parse variable-size chunks (up to 206 bytes)
+    - Validates chunk sequence, appends records to buffer
+    - Progress tracking with chunk-based percentage
+    - ACK-based flow control with automatic retry
+  - Auto-sync on connection:
+    - Triggers when `unsyncedCount > 0` on first Current State update
+    - Sends START command to firmware with record count
+    - Completes sync when last chunk received
+  - CoreData integration:
+    - `completeSyncTransfer()` saves all records via PersistenceController
+    - Timestamp deduplication via unique constraint
+    - Gets/creates default bottle ID for relationship
+  - Build verified successful
+
+- [x] **Phase 4.5: Commands & Time Sync** ✅ Complete (2026-01-16)
+  - Added command methods to [Services/BLEManager.swift](ios/Aquavate/Aquavate/Services/BLEManager.swift):
+    - `sendTareCommand()` - TARE_NOW (0x01) - Reset empty bottle baseline
+    - `sendResetDailyCommand()` - RESET_DAILY (0x05) - Reset daily intake counter
+    - `sendClearHistoryCommand()` - CLEAR_HISTORY (0x06) - Clear all drink records
+    - `sendStartCalibrationCommand()` - START_CALIBRATION (0x02) - Begin calibration
+    - `sendCancelCalibrationCommand()` - CANCEL_CALIBRATION (0x04) - Cancel calibration
+    - `writeCommand()` - Generic command write to Command characteristic
+  - Implemented time sync:
+    - `syncDeviceTime()` - Sends SET_TIME (0x10) with current Unix timestamp
+    - Auto-syncs time on every connection (in `checkDiscoveryComplete()`)
+  - Added Bottle Config methods:
+    - `writeBottleConfig(capacity:goal:)` - Update bottle capacity and daily goal
+    - `readBottleConfig()` - Request bottle config read from device
+  - Updated [Views/SettingsView.swift](ios/Aquavate/Aquavate/Views/SettingsView.swift):
+    - Added "Device Commands" section with command buttons
+    - Tare, Reset Daily, Sync Time, Clear History buttons
+    - Manual Sync button when unsynced records > 0
+    - Sync progress indicator during active sync
+    - Updated version to 1.0.0 (BLE Phase 4.5)
+  - Build verified successful
+
+- [x] **Phase 4.6: Background Mode & Polish** ✅ Complete (2026-01-16)
+  - Verified state restoration infrastructure:
+    - CBCentralManagerOptionRestoreIdentifierKey already configured
+    - Peripheral ID persistence via UserDefaults (lastConnectedPeripheralIdentifier)
+    - willRestoreState callback for reconnecting to restored peripherals
+    - UIBackgroundModes "bluetooth-central" in Info.plist
+  - Added last sync timestamp:
+    - `lastSyncTime` @Published property with UserDefaults persistence
+    - Updated on successful sync completion (in completeSyncTransfer)
+    - "Last Synced" row in Settings with relative time display
+  - Improved error handling UI:
+    - Dismissible error messages with X button
+    - Bluetooth unavailable warning when Bluetooth is off
+  - Build verified successful
+
+**Phase 4 Summary:**
+All 6 phases complete. iOS app can now:
+- Scan and connect to Aquavate devices
+- Receive real-time Current State updates (weight, level, daily total, battery)
+- Auto-sync time on connection
+- Auto-sync drink history when unsynced records detected
+- Save drink records to CoreData with deduplication
+- Send commands (Tare, Reset Daily, Clear History)
+- Persist and restore connection state
 
 **Next Step:**
-- Implement Phase 4.3: CoreData Schema & Persistence
-- Reference: [Plans/014-ios-ble-coredata-integration.md](Plans/014-ios-ble-coredata-integration.md) Phase 4.3
+- Return to Phase 3E for firmware power optimization
+- Reference: [Plans/013-ble-integration.md](Plans/013-ble-integration.md) Phase 3E
 - Tasks:
-  - Create Aquavate.xcdatamodeld with CDDrinkRecord, CDBottle entities
-  - Set up PersistenceController with preview data
-  - Add timestamp+bottleId unique constraint for deduplication
-  - Inject CoreData context into SwiftUI environment
-
-**Handoff Point:**
-- After Phase 4 complete, return to Phase 3E for power optimization and end-to-end validation
+  - Connection parameter tuning (15-30ms intervals)
+  - Graceful disconnection UI ("Synced ✓" message)
+  - Verify wake integration (motion vs timer)
+  - Power measurement validation
+  - End-to-end testing with iOS app
 
 ---
 
 ## Known Issues
+
+**Fixed: Fatal error on drink data sync (2026-01-17):**
+- Issue: "Fatal error: load from misaligned raw pointer" crash during drink sync
+- Root cause: BLEStructs.swift used `load()` for multi-byte types on unaligned data
+- Fix: Changed all struct parsing to use `loadUnaligned()` for packed binary data
+- Also added improved debug logging with hex dumps for troubleshooting
 
 **Wake-on-tilt directional sensitivity:**
 - Wake interrupt reliably triggers on left/right tilts

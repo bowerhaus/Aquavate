@@ -4,9 +4,12 @@
 //
 //  CoreBluetooth central manager for communicating with Aquavate firmware.
 //  Phase 4.1: Scanning, connection, and service/characteristic discovery.
+//  Phase 4.2: Current State and battery notifications.
+//  Phase 4.4: Drink sync protocol (chunked transfer).
 //
 
 import CoreBluetooth
+import CoreData
 import Combine
 import os.log
 
@@ -24,6 +27,19 @@ enum BLEConnectionState: String {
 
     var isActive: Bool {
         self != .disconnected
+    }
+}
+
+/// Sync state for drink history transfer
+enum BLESyncState: String {
+    case idle = "Idle"
+    case requesting = "Requesting..."
+    case receiving = "Receiving..."
+    case complete = "Sync Complete"
+    case failed = "Sync Failed"
+
+    var isActive: Bool {
+        self == .requesting || self == .receiving
     }
 }
 
@@ -85,7 +101,43 @@ class BLEManager: NSObject, ObservableObject {
     /// Daily goal in ml (from config)
     @Published private(set) var dailyGoalMl: Int = 2000
 
+    // MARK: - Published Properties (Sync - Phase 4.4)
+
+    /// Current sync state
+    @Published private(set) var syncState: BLESyncState = .idle
+
+    /// Sync progress (0.0 to 1.0)
+    @Published private(set) var syncProgress: Double = 0.0
+
+    /// Number of records synced in current transfer
+    @Published private(set) var syncedRecordCount: Int = 0
+
+    /// Total records to sync in current transfer
+    @Published private(set) var totalRecordsToSync: Int = 0
+
+    /// Timestamp of last successful sync
+    @Published private(set) var lastSyncTime: Date? {
+        didSet {
+            // Persist to UserDefaults
+            if let time = lastSyncTime {
+                UserDefaults.standard.set(time, forKey: "lastSyncTime")
+            }
+        }
+    }
+
     // MARK: - Private Properties
+
+    /// Buffer for drink records during sync
+    private var syncBuffer: [BLEDrinkRecord] = []
+
+    /// Expected total chunks in current sync
+    private var expectedTotalChunks: UInt16 = 0
+
+    /// Last received chunk index
+    private var lastChunkIndex: UInt16 = 0
+
+    /// Bottle ID for current sync (from CoreData)
+    private var currentBottleId: UUID?
 
     private var centralManager: CBCentralManager!
     private var connectedPeripheral: CBPeripheral?
@@ -102,6 +154,9 @@ class BLEManager: NSObject, ObservableObject {
 
     override init() {
         super.init()
+
+        // Load persisted last sync time
+        lastSyncTime = UserDefaults.standard.object(forKey: "lastSyncTime") as? Date
 
         let options: [String: Any] = [
             CBCentralManagerOptionRestoreIdentifierKey: BLEConstants.centralManagerRestoreIdentifier,
@@ -487,15 +542,13 @@ extension BLEManager: CBPeripheralDelegate {
                 handleBatteryLevelUpdate(data)
 
             case BLEConstants.drinkDataUUID:
-                logger.info("Received Drink Data chunk (\(data.count) bytes)")
-                // Phase 4.4 will implement drink sync protocol
+                handleDrinkDataUpdate(data)
 
             case BLEConstants.bottleConfigUUID:
                 handleBottleConfigUpdate(data)
 
             case BLEConstants.syncControlUUID:
-                logger.info("Received Sync Control (\(data.count) bytes)")
-                // Phase 4.4 will implement sync state machine
+                handleSyncControlUpdate(data)
 
             default:
                 logger.debug("Received data from unknown characteristic: \(characteristic.uuid)")
@@ -545,6 +598,14 @@ extension BLEManager: CBPeripheralDelegate {
             connectionTimer?.invalidate()
             connectionTimer = nil
             errorMessage = nil
+
+            // Get bottle ID for sync
+            currentBottleId = PersistenceController.shared.getOrCreateDefaultBottle().id
+
+            // Sync device time on every connection
+            syncDeviceTime()
+
+            // Auto-sync will be triggered by handleCurrentStateUpdate when we receive unsyncedCount
         }
     }
 
@@ -556,6 +617,8 @@ extension BLEManager: CBPeripheralDelegate {
             logger.error("Failed to parse Current State (expected 14 bytes, got \(data.count))")
             return
         }
+
+        let previousUnsyncedCount = unsyncedCount
 
         // Update published properties
         currentWeightG = Int(state.currentWeightG)
@@ -570,6 +633,13 @@ extension BLEManager: CBPeripheralDelegate {
 
         logger.info("Current State: weight=\(state.currentWeightG)g, level=\(state.bottleLevelMl)ml, daily=\(state.dailyTotalMl)ml, battery=\(state.batteryPercent)%, unsynced=\(state.unsyncedCount)")
         logger.debug("  Flags: timeValid=\(state.isTimeValid), calibrated=\(state.isCalibrated), stable=\(state.isStable)")
+
+        // Auto-sync if we have unsynced records and sync is not already in progress
+        // Only trigger on first state update with unsynced records (previousUnsyncedCount == 0)
+        if unsyncedCount > 0 && previousUnsyncedCount == 0 && !syncState.isActive && connectionState.isConnected {
+            logger.info("Detected \(self.unsyncedCount) unsynced records, starting auto-sync")
+            startDrinkSync()
+        }
     }
 
     /// Parse and update Battery Level from BLE notification
@@ -594,5 +664,314 @@ extension BLEManager: CBPeripheralDelegate {
         dailyGoalMl = Int(config.dailyGoalMl)
 
         logger.info("Bottle Config: capacity=\(config.bottleCapacityMl)ml, goal=\(config.dailyGoalMl)ml, tare=\(config.tareWeightGrams)g, scale=\(config.scaleFactor)")
+    }
+
+    // MARK: - Sync Protocol (Phase 4.4)
+
+    /// Handle Sync Control characteristic update
+    private func handleSyncControlUpdate(_ data: Data) {
+        guard let syncControl = BLESyncControl.parse(from: data) else {
+            logger.error("Failed to parse Sync Control (expected 8 bytes, got \(data.count))")
+            return
+        }
+
+        logger.info("Sync Control: status=\(syncControl.status), command=\(syncControl.command), count=\(syncControl.count)")
+
+        // Update sync state based on firmware response
+        switch BLESyncControl.Status(rawValue: syncControl.status) {
+        case .idle:
+            if syncState == .complete {
+                // Sync finished successfully
+            } else if syncState.isActive {
+                // Sync was cancelled or reset
+                syncState = .idle
+            }
+        case .inProgress:
+            // Firmware is sending data
+            syncState = .receiving
+        case .complete:
+            // Firmware reports sync complete
+            completeSyncTransfer()
+        case .none:
+            logger.warning("Unknown sync status: \(syncControl.status)")
+        }
+    }
+
+    /// Handle Drink Data chunk notification
+    private func handleDrinkDataUpdate(_ data: Data) {
+        // Debug: log raw data for troubleshooting
+        let hexString = data.map { String(format: "%02X", $0) }.joined(separator: " ")
+        logger.info("Drink Data raw (\(data.count) bytes): \(hexString)")
+
+        // Minimum size check with better error message
+        guard data.count >= BLEDrinkDataChunk.headerSize else {
+            logger.warning("Drink Data too short (\(data.count) bytes, need \(BLEDrinkDataChunk.headerSize) for header) - ignoring")
+            return  // Don't fail sync, firmware may send empty/status notifications
+        }
+
+        guard let chunk = BLEDrinkDataChunk.parse(from: data) else {
+            logger.error("Failed to parse Drink Data chunk (got \(data.count) bytes)")
+            // Log more detail about what we received
+            if data.count >= 6 {
+                let chunkIdx = data.prefix(2).withUnsafeBytes { $0.load(as: UInt16.self) }
+                let totalChunks = data.dropFirst(2).prefix(2).withUnsafeBytes { $0.load(as: UInt16.self) }
+                let recordCount = data[4]
+                logger.error("Partial parse: chunkIdx=\(chunkIdx), totalChunks=\(totalChunks), recordCount=\(recordCount)")
+                logger.error("Expected data size: \(6 + Int(recordCount) * 10) bytes, got \(data.count)")
+            }
+            handleSyncFailure("Invalid drink data chunk")
+            return
+        }
+
+        logger.info("Received chunk \(chunk.chunkIndex + 1)/\(chunk.totalChunks) with \(chunk.recordCount) records")
+
+        // Validate chunk sequence
+        if chunk.chunkIndex == 0 {
+            // First chunk - initialize sync
+            syncBuffer.removeAll()
+            expectedTotalChunks = chunk.totalChunks
+            totalRecordsToSync = Int(chunk.totalChunks) * Int(BLEDrinkDataChunk.maxRecordsPerChunk)
+        } else if chunk.chunkIndex != lastChunkIndex + 1 {
+            // Out of order chunk
+            logger.warning("Out of order chunk: expected \(self.lastChunkIndex + 1), got \(chunk.chunkIndex)")
+        }
+
+        lastChunkIndex = chunk.chunkIndex
+
+        // Append records to buffer
+        syncBuffer.append(contentsOf: chunk.records)
+        syncedRecordCount = syncBuffer.count
+
+        // Update progress
+        if chunk.totalChunks > 0 {
+            syncProgress = Double(chunk.chunkIndex + 1) / Double(chunk.totalChunks)
+        }
+
+        logger.debug("Sync progress: \(self.syncBuffer.count) records, \(Int(self.syncProgress * 100))%")
+
+        // Send ACK for this chunk
+        sendSyncAck()
+
+        // Check if this was the last chunk
+        if chunk.isLastChunk {
+            logger.info("Last chunk received, completing sync")
+            completeSyncTransfer()
+        }
+    }
+
+    /// Start drink history sync
+    func startDrinkSync() {
+        guard connectionState.isConnected else {
+            logger.warning("Cannot start sync: not connected")
+            return
+        }
+
+        guard !syncState.isActive else {
+            logger.warning("Sync already in progress")
+            return
+        }
+
+        guard unsyncedCount > 0 else {
+            logger.info("No records to sync")
+            syncState = .complete
+            return
+        }
+
+        logger.info("Starting drink sync for \(self.unsyncedCount) records")
+
+        // Reset sync state
+        syncState = .requesting
+        syncProgress = 0.0
+        syncedRecordCount = 0
+        totalRecordsToSync = unsyncedCount
+        syncBuffer.removeAll()
+        lastChunkIndex = 0
+        expectedTotalChunks = 0
+
+        // Get or create bottle ID for CoreData
+        currentBottleId = PersistenceController.shared.getOrCreateDefaultBottle().id
+
+        // Send START command to firmware
+        let startControl = BLESyncControl.startCommand(count: UInt16(unsyncedCount))
+        writeSyncControl(startControl)
+    }
+
+    /// Send ACK for received chunk
+    private func sendSyncAck() {
+        let ackControl = BLESyncControl.ackCommand()
+        writeSyncControl(ackControl)
+    }
+
+    /// Write to Sync Control characteristic
+    private func writeSyncControl(_ control: BLESyncControl) {
+        guard let peripheral = connectedPeripheral,
+              let characteristic = characteristics[BLEConstants.syncControlUUID] else {
+            logger.error("Cannot write sync control: peripheral or characteristic not available")
+            return
+        }
+
+        let data = control.toData()
+        peripheral.writeValue(data, for: characteristic, type: .withResponse)
+        logger.debug("Wrote sync control: command=\(control.command)")
+    }
+
+    /// Complete the sync transfer and save to CoreData
+    private func completeSyncTransfer() {
+        guard !syncBuffer.isEmpty else {
+            logger.info("Sync complete with no records")
+            syncState = .complete
+            lastSyncTime = Date()
+            return
+        }
+
+        logger.info("Completing sync with \(self.syncBuffer.count) records")
+
+        // Save to CoreData
+        if let bottleId = currentBottleId {
+            PersistenceController.shared.saveDrinkRecords(syncBuffer, for: bottleId)
+            logger.info("Saved \(self.syncBuffer.count) records to CoreData")
+        } else {
+            logger.error("No bottle ID for saving records")
+        }
+
+        // Update state
+        syncState = .complete
+        syncProgress = 1.0
+        lastSyncTime = Date()
+
+        // Clear buffer
+        let recordCount = syncBuffer.count
+        syncBuffer.removeAll()
+
+        logger.info("Drink sync complete: \(recordCount) records synced")
+    }
+
+    /// Handle sync failure
+    private func handleSyncFailure(_ reason: String) {
+        logger.error("Sync failed: \(reason)")
+        syncState = .failed
+        syncBuffer.removeAll()
+        errorMessage = "Sync failed: \(reason)"
+    }
+
+    /// Check if sync should start automatically (called after connection complete)
+    func checkAutoSync() {
+        // Auto-sync when there are unsynced records
+        if unsyncedCount > 0 && !syncState.isActive {
+            logger.info("Auto-starting sync for \(self.unsyncedCount) unsynced records")
+            startDrinkSync()
+        }
+    }
+
+    // MARK: - Commands (Phase 4.5)
+
+    /// Send TARE command to reset empty bottle baseline
+    func sendTareCommand() {
+        writeCommand(BLECommand.tareNow())
+        logger.info("Sent TARE_NOW command")
+    }
+
+    /// Send RESET_DAILY command to reset daily intake counter
+    func sendResetDailyCommand() {
+        writeCommand(BLECommand.resetDaily())
+        logger.info("Sent RESET_DAILY command")
+    }
+
+    /// Send CLEAR_HISTORY command to clear all drink records
+    func sendClearHistoryCommand() {
+        writeCommand(BLECommand.clearHistory())
+        logger.info("Sent CLEAR_HISTORY command")
+    }
+
+    /// Send START_CALIBRATION command to begin calibration flow
+    func sendStartCalibrationCommand() {
+        writeCommand(BLECommand.startCalibration())
+        logger.info("Sent START_CALIBRATION command")
+    }
+
+    /// Send CANCEL_CALIBRATION command to abort calibration
+    func sendCancelCalibrationCommand() {
+        writeCommand(BLECommand.cancelCalibration())
+        logger.info("Sent CANCEL_CALIBRATION command")
+    }
+
+    /// Write command to Command characteristic
+    private func writeCommand(_ command: BLECommand) {
+        guard let peripheral = connectedPeripheral,
+              let characteristic = characteristics[BLEConstants.commandUUID] else {
+            logger.error("Cannot write command: peripheral or characteristic not available")
+            errorMessage = "Not connected to device"
+            return
+        }
+
+        let data = command.toData()
+        peripheral.writeValue(data, for: characteristic, type: .withResponse)
+        logger.debug("Wrote command: \(command.command)")
+    }
+
+    // MARK: - Time Sync (Phase 4.5)
+
+    /// Sync device time to current iOS time
+    func syncDeviceTime() {
+        guard let peripheral = connectedPeripheral,
+              let characteristic = characteristics[BLEConstants.commandUUID] else {
+            logger.error("Cannot sync time: peripheral or characteristic not available")
+            return
+        }
+
+        let currentTimestamp = UInt32(Date().timeIntervalSince1970)
+        let data = BLECommand.setTime(timestamp: currentTimestamp)
+        peripheral.writeValue(data, for: characteristic, type: .withResponse)
+        logger.info("Sent SET_TIME command with timestamp: \(currentTimestamp)")
+    }
+
+    /// Auto-sync time on connection if device time is invalid
+    private func checkTimeSync() {
+        // Always sync time on connection to handle drift and ensure accuracy
+        if connectionState.isConnected {
+            logger.info("Syncing device time on connection")
+            syncDeviceTime()
+        }
+    }
+
+    // MARK: - Bottle Config (Phase 4.5)
+
+    /// Write new bottle configuration to device
+    func writeBottleConfig(capacity: UInt16, goal: UInt16) {
+        guard let peripheral = connectedPeripheral,
+              let characteristic = characteristics[BLEConstants.bottleConfigUUID] else {
+            logger.error("Cannot write bottle config: peripheral or characteristic not available")
+            errorMessage = "Not connected to device"
+            return
+        }
+
+        // Create config with current values (we only update capacity and goal)
+        // Note: scaleFactor and tareWeight should be preserved from calibration
+        let config = BLEBottleConfig(
+            scaleFactor: 1.0,  // Will be preserved by firmware if not recalibrating
+            tareWeightGrams: 0, // Will be preserved by firmware
+            bottleCapacityMl: capacity,
+            dailyGoalMl: goal
+        )
+
+        let data = config.toData()
+        peripheral.writeValue(data, for: characteristic, type: .withResponse)
+        logger.info("Wrote bottle config: capacity=\(capacity)ml, goal=\(goal)ml")
+
+        // Update local state
+        bottleCapacityMl = Int(capacity)
+        dailyGoalMl = Int(goal)
+    }
+
+    /// Read bottle configuration from device
+    func readBottleConfig() {
+        guard let peripheral = connectedPeripheral,
+              let characteristic = characteristics[BLEConstants.bottleConfigUUID] else {
+            logger.error("Cannot read bottle config: peripheral or characteristic not available")
+            return
+        }
+
+        peripheral.readValue(for: characteristic)
+        logger.info("Requested bottle config read")
     }
 }

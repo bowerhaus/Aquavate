@@ -8,6 +8,10 @@
 import SwiftUI
 
 struct ContentView: View {
+    #if DEBUG
+    @State private var showDebug = false
+    #endif
+
     var body: some View {
         TabView {
             HomeView()
@@ -24,6 +28,13 @@ struct ContentView: View {
                 .tabItem {
                     Label("Settings", systemImage: "gear")
                 }
+
+            #if DEBUG
+            DebugView()
+                .tabItem {
+                    Label("Debug", systemImage: "ladybug.fill")
+                }
+            #endif
         }
     }
 }

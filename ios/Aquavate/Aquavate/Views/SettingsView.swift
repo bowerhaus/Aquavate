@@ -138,6 +138,25 @@ struct SettingsView: View {
                             Text(error)
                                 .foregroundStyle(.secondary)
                                 .font(.caption)
+                            Spacer()
+                            Button {
+                                bleManager.errorMessage = nil
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+
+                    // Bluetooth not ready warning
+                    if !bleManager.isBluetoothReady && bleManager.connectionState == .disconnected {
+                        HStack {
+                            Image(systemName: "bluetooth.slash")
+                                .foregroundStyle(.red)
+                            Text("Bluetooth is off or unavailable")
+                                .foregroundStyle(.secondary)
+                                .font(.caption)
                         }
                     }
                 }
@@ -215,6 +234,89 @@ struct SettingsView: View {
                                     .foregroundStyle(.secondary)
                             }
                         }
+
+                        // Sync status
+                        if bleManager.syncState.isActive {
+                            HStack {
+                                ProgressView()
+                                    .scaleEffect(0.7)
+                                Text("Syncing...")
+                                Spacer()
+                                Text("\(Int(bleManager.syncProgress * 100))%")
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+
+                        // Last synced timestamp
+                        if let lastSync = bleManager.lastSyncTime {
+                            HStack {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundStyle(.green)
+                                Text("Last Synced")
+                                Spacer()
+                                Text(lastSync, style: .relative)
+                                    .foregroundStyle(.secondary)
+                                    .font(.caption)
+                            }
+                        }
+                    }
+
+                    // Device Commands
+                    Section("Device Commands") {
+                        Button {
+                            bleManager.sendTareCommand()
+                        } label: {
+                            HStack {
+                                Image(systemName: "arrow.counterclockwise")
+                                    .foregroundStyle(.blue)
+                                Text("Tare (Zero Scale)")
+                            }
+                        }
+
+                        Button {
+                            bleManager.sendResetDailyCommand()
+                        } label: {
+                            HStack {
+                                Image(systemName: "arrow.uturn.backward")
+                                    .foregroundStyle(.orange)
+                                Text("Reset Daily Total")
+                            }
+                        }
+
+                        Button {
+                            bleManager.syncDeviceTime()
+                        } label: {
+                            HStack {
+                                Image(systemName: "clock.arrow.circlepath")
+                                    .foregroundStyle(.green)
+                                Text("Sync Time")
+                            }
+                        }
+
+                        if bleManager.unsyncedCount > 0 && !bleManager.syncState.isActive {
+                            Button {
+                                bleManager.startDrinkSync()
+                            } label: {
+                                HStack {
+                                    Image(systemName: "arrow.triangle.2.circlepath")
+                                        .foregroundStyle(.purple)
+                                    Text("Sync Drink History")
+                                    Spacer()
+                                    Text("\(bleManager.unsyncedCount) records")
+                                        .foregroundStyle(.secondary)
+                                        .font(.caption)
+                                }
+                            }
+                        }
+
+                        Button(role: .destructive) {
+                            bleManager.sendClearHistoryCommand()
+                        } label: {
+                            HStack {
+                                Image(systemName: "trash")
+                                Text("Clear Device History")
+                            }
+                        }
                     }
                 }
 
@@ -242,7 +344,7 @@ struct SettingsView: View {
                     HStack {
                         Text("Version")
                         Spacer()
-                        Text("1.0.0 (BLE Phase 4.1)")
+                        Text("1.0.0 (BLE Phase 4.5)")
                             .foregroundStyle(.secondary)
                             .font(.caption)
                     }

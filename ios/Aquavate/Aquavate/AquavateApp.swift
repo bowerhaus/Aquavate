@@ -6,12 +6,15 @@
 //
 
 import SwiftUI
+import CoreData
 
 @main
 struct AquavateApp: App {
     @State private var showSplash = true
     @StateObject private var bleManager = BLEManager()
     @Environment(\.scenePhase) private var scenePhase
+
+    let persistenceController = PersistenceController.shared
 
     var body: some Scene {
         WindowGroup {
@@ -26,6 +29,7 @@ struct AquavateApp: App {
                     }
             } else {
                 ContentView()
+                    .environment(\.managedObjectContext, persistenceController.viewContext)
                     .environmentObject(bleManager)
             }
         }
