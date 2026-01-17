@@ -94,6 +94,13 @@ struct __attribute__((packed)) BLE_Command {
 // 0x02-0x04 reserved for future calibration commands (iOS app will handle calibration)
 #define BLE_CMD_RESET_DAILY         0x05
 #define BLE_CMD_CLEAR_HISTORY       0x06
+#define BLE_CMD_SET_TIME            0x10  // Set device time (5 bytes: cmd + 4-byte Unix timestamp)
+
+// Set Time Command (5 bytes) - different from standard 4-byte command
+struct __attribute__((packed)) BLE_SetTimeCommand {
+    uint8_t  command;       // Always 0x10
+    uint32_t timestamp;     // Unix timestamp (seconds since 1970)
+};
 
 // Public API
 
