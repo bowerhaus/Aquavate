@@ -2,6 +2,10 @@
 // Serial command parser for USB time setting and configuration
 // Uses ESP32 internal RTC (gettimeofday/settimeofday)
 
+#include "config.h"
+
+#if ENABLE_SERIAL_COMMANDS
+
 #include "serial_commands.h"
 #include "storage.h"
 #include "drinks.h"
@@ -1277,3 +1281,5 @@ void serialCommandsUpdate() {
         }
     }
 }
+
+#endif // ENABLE_SERIAL_COMMANDS

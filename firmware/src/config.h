@@ -6,6 +6,38 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
+#include <stdint.h>  // For uint8_t, uint32_t types
+
+// ==================== Feature Flags ====================
+
+// Master Mode Selection
+// Set IOS_MODE to control build configuration:
+//   IOS_MODE=1: iOS App Mode (Production - default)
+//     - BLE enabled for iOS app communication
+//     - Serial commands disabled (saves ~3.7KB IRAM)
+//     - IRAM usage: ~127KB / 131KB (97.2%)
+//
+//   IOS_MODE=0: Standalone USB Mode (Development/Configuration)
+//     - BLE disabled (saves ~45.5KB IRAM)
+//     - Serial commands enabled for USB configuration
+//     - IRAM usage: ~82KB / 131KB (62.4%)
+
+#define IOS_MODE    1
+
+// Auto-configure feature flags based on IOS_MODE
+#if IOS_MODE
+    #define ENABLE_BLE              1
+    #define ENABLE_SERIAL_COMMANDS  0
+#else
+    #define ENABLE_BLE              0
+    #define ENABLE_SERIAL_COMMANDS  1
+#endif
+
+// Sanity check: Verify mutual exclusivity
+#if ENABLE_BLE && ENABLE_SERIAL_COMMANDS
+#error "Cannot enable both ENABLE_BLE and ENABLE_SERIAL_COMMANDS - IRAM overflow! Check IOS_MODE configuration."
+#endif
+
 // ==================== Debug Configuration ====================
 
 // Debug levels (runtime control via serial commands '0'-'4', '9')

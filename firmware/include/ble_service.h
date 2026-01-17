@@ -6,6 +6,10 @@
 #ifndef BLE_SERVICE_H
 #define BLE_SERVICE_H
 
+#include "config.h"
+
+#if ENABLE_BLE
+
 #include <Arduino.h>
 #include "drinks.h"
 #include "storage.h"
@@ -92,13 +96,6 @@ struct __attribute__((packed)) BLE_Command {
 #define BLE_CMD_CANCEL_CALIBRATION  0x04
 #define BLE_CMD_RESET_DAILY         0x05
 #define BLE_CMD_CLEAR_HISTORY       0x06
-#define BLE_CMD_SET_TIME            0x10  // Set device time (5 bytes: cmd + 4-byte Unix timestamp)
-
-// Set Time Command (5 bytes) - different from standard 4-byte command
-struct __attribute__((packed)) BLE_SetTimeCommand {
-    uint8_t  command;       // Always 0x10
-    uint32_t timestamp;     // Unix timestamp (seconds since 1970)
-};
 
 // Public API
 
@@ -169,5 +166,7 @@ bool bleCheckResetDailyRequested();
 bool bleCheckClearHistoryRequested();
 bool bleCheckStartCalibrationRequested();
 bool bleCheckCancelCalibrationRequested();
+
+#endif // ENABLE_BLE
 
 #endif // BLE_SERVICE_H

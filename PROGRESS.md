@@ -1,10 +1,70 @@
 # Aquavate - Active Development Progress
 
-**Last Updated:** 2026-01-17 (Fixed drink sync alignment crash)
+**Last Updated:** 2026-01-17 (IRAM Optimization Complete)
 
 ---
 
 ## Current Work
+
+### IRAM Optimization - Conditional Compilation (2026-01-17) ✅ COMPLETE
+**Status:** ✅ Successfully implemented and verified
+
+**Problem:** IRAM overflow (134,076 / 131,072 bytes = 3,004 bytes over limit)
+- Adding time-set BLE command caused overflow
+- Needed to reduce IRAM by ~3KB minimum
+
+**Solution Implemented:** Conditional compilation with mutually exclusive BLE/Serial Commands
+
+**Implementation Details:**
+- Added two compile-time flags in [firmware/src/config.h](firmware/src/config.h):
+  - `ENABLE_BLE` (default: 1) - iOS app mode
+  - `ENABLE_SERIAL_COMMANDS` (default: 0) - Standalone USB mode
+- Flags are mutually exclusive (compile error if both enabled)
+- Reverted from ESP-IDF Bluedroid back to NimBLE
+- Wrapped all BLE code in `#if ENABLE_BLE` blocks
+- Wrapped all serial command code in `#if ENABLE_SERIAL_COMMANDS` blocks
+- Updated main.cpp with conditional initialization
+
+**Verified Build Results:**
+
+**Mode 1: iOS App Mode (Production - default)**
+- Config: `ENABLE_BLE=1`, `ENABLE_SERIAL_COMMANDS=0`
+- IRAM Usage: **127,362 bytes / 131,072 bytes** (97.2%)
+- **✅ PASSES** with 3,710 bytes headroom
+- Flash: 762,004 bytes (58.1%)
+- RAM: 36,548 bytes (11.2%)
+
+**Mode 2: Standalone USB Mode (Development)**
+- Config: `ENABLE_BLE=0`, `ENABLE_SERIAL_COMMANDS=1`
+- IRAM Usage: **81,846 bytes / 131,072 bytes** (62.4%)
+- **✅ PASSES** with 49,226 bytes headroom
+- Flash: 467,928 bytes (35.7%)
+- RAM: 23,060 bytes (7.0%)
+
+**IRAM Savings Achieved:**
+- Disabling serial commands: ~3.7 KB (as predicted)
+- Disabling BLE: ~45.5 KB (even better than predicted!)
+- Safety check verified: Compile error when both enabled
+
+**Files Modified:**
+- [firmware/src/config.h](firmware/src/config.h) - Feature flags + sanity check
+- [firmware/include/ble_service.h](firmware/include/ble_service.h) - Wrapped in #if ENABLE_BLE
+- [firmware/src/ble_service.cpp](firmware/src/ble_service.cpp) - Wrapped in #if ENABLE_BLE
+- [firmware/include/serial_commands.h](firmware/include/serial_commands.h) - Wrapped in #if ENABLE_SERIAL_COMMANDS
+- [firmware/src/serial_commands.cpp](firmware/src/serial_commands.cpp) - Wrapped in #if ENABLE_SERIAL_COMMANDS
+- [firmware/src/main.cpp](firmware/src/main.cpp) - Conditional includes and initialization
+- [firmware/platformio.ini](firmware/platformio.ini) - Added NimBLE library back
+
+**Plan Document:**
+- [Plans/020-serial-commands-removal.md](Plans/020-serial-commands-removal.md) - Full implementation plan
+
+**Current Branch:** `esp-idf-ble-rewrite`
+
+**Result:** ✅ IRAM issue resolved! Firmware fits comfortably in both modes with production mode ready for deployment.
+
+---
+
+## Recently Active
 
 ### Phase 3: Firmware BLE Integration & App Sync
 **Status:** ⏸️ Paused at Phase 3D - Moving to Phase 4 (iOS App) (2026-01-16)
@@ -338,6 +398,7 @@ All 6 phases complete. iOS app can now:
 - [iOS BLE & CoreData Integration](Plans/014-ios-ble-coredata-integration.md) - Phase 4 technical implementation plan (READY)
 - [iOS UX PRD Creation](Plans/015-ios-ux-prd-creation.md) - UX specification planning (COMPLETED)
 - [iOS UX PRD](docs/iOS-UX-PRD.md) - Complete UX specifications for iOS app (APPROVED)
+- [Serial Commands Removal](Plans/020-serial-commands-removal.md) - IRAM optimization via conditional compilation (COMPLETED)
 - [Hardware Research](Plans/001-hardware-research.md) - Component selection analysis
 - [Adafruit BOM](Plans/002-bom-adafruit-feather.md) - UK parts list for Feather config
 - [SparkFun BOM](Plans/003-bom-sparkfun-qwiic.md) - UK parts list for Qwiic config

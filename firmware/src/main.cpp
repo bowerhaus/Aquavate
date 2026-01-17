@@ -16,10 +16,13 @@
 #include "calibration.h"
 #include "ui_calibration.h"
 
-// Serial commands for time setting
+// Serial commands for time setting (conditional)
+#if ENABLE_SERIAL_COMMANDS
 #include "serial_commands.h"
+#endif
 #include <sys/time.h>
 #include <time.h>
+#include <nvs_flash.h>
 
 // Daily intake tracking
 #include "drinks.h"
@@ -27,8 +30,10 @@
 // Display state tracking
 #include "display.h"
 
-// BLE service
+// BLE service (conditional)
+#if ENABLE_BLE
 #include "ble_service.h"
+#endif
 
 
 // FIX Bug #4: Sensor snapshot to prevent multiple reads per loop
@@ -808,10 +813,12 @@ void setup() {
         Serial.println("Storage initialization failed");
     }
 
-    // Initialize serial command handler
+    // Initialize serial command handler (conditional)
+#if ENABLE_SERIAL_COMMANDS
     serialCommandsInit();
     serialCommandsSetTimeCallback(onTimeSet);
     Serial.println("Serial command handler initialized");
+#endif
 
     // Initialize gesture detection
     if (lisReady) {
@@ -907,7 +914,19 @@ void setup() {
     // Note: Display will update on first stable check to ensure correct values shown
 #endif
 
-    // Initialize BLE service
+    // Initialize NVS (required by ESP-IDF BLE)
+    Serial.println("Initializing NVS flash...");
+    esp_err_t ret = nvs_flash_init();
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        Serial.println("NVS: Erasing and reinitializing...");
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        ret = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(ret);
+    Serial.println("NVS initialized!");
+
+    // Initialize BLE service (conditional)
+#if ENABLE_BLE
     Serial.println("Initializing BLE service...");
     if (bleInit()) {
         Serial.println("BLE service initialized!");
@@ -925,6 +944,7 @@ void setup() {
     } else {
         Serial.println("BLE initialization failed!");
     }
+#endif
 
     Serial.println("Setup complete!");
     Serial.print("Will sleep in ");
@@ -933,13 +953,18 @@ void setup() {
 }
 
 void loop() {
-    // Check for serial commands
+    // Check for serial commands (conditional)
+#if ENABLE_SERIAL_COMMANDS
     serialCommandsUpdate();
+#endif
 
-    // Update BLE service
+    // Update BLE service (conditional)
+#if ENABLE_BLE
     bleUpdate();
+#endif
 
-    // Handle BLE commands (Phase 3C)
+    // Handle BLE commands (Phase 3C - conditional)
+#if ENABLE_BLE
     if (bleCheckResetDailyRequested()) {
         Serial.println("BLE Command: RESET_DAILY");
         drinksResetDaily();
@@ -970,6 +995,7 @@ void loop() {
     }
 
     // Note: TARE_NOW command will be handled below in the weight reading section
+#endif
 
     // FIX Bug #4: READ SENSORS ONCE - create snapshot for this loop iteration
     SensorSnapshot sensors;
@@ -986,7 +1012,8 @@ void loop() {
         }
     }
 
-    // Handle BLE TARE command (must be after ADC read)
+    // Handle BLE TARE command (must be after ADC read - conditional)
+#if ENABLE_BLE
     if (bleCheckTareRequested() && g_calibrated && nauReady) {
         Serial.println("BLE Command: TARE_NOW");
         // Update empty bottle ADC to current reading (tare weight)
@@ -1001,6 +1028,7 @@ void loop() {
         }
         wakeTime = millis(); // Reset sleep timer
     }
+#endif
 
     // Read accelerometer and get gesture (ONCE)
     if (lisReady) {
@@ -1268,13 +1296,15 @@ void loop() {
                     if (battery_interval_elapsed) last_battery_check = millis();
                 }
 
-                // Update BLE Current State (send notifications if connected)
+                // Update BLE Current State (send notifications if connected - conditional)
+#if ENABLE_BLE
                 bleUpdateCurrentState(daily_state, current_adc, g_calibration,
                                     battery_pct, g_calibrated, g_time_valid,
                                     gesture == GESTURE_UPRIGHT_STABLE);
 
                 // Update BLE battery level (separate characteristic)
                 bleUpdateBatteryLevel(battery_pct);
+#endif
             }
 #endif
         }
@@ -1346,11 +1376,14 @@ void loop() {
     if (!g_in_extended_sleep_mode && !calibrationIsActive()) {
         unsigned long total_awake_time = millis() - g_continuous_awake_start;
         if (total_awake_time >= (g_extended_sleep_threshold_sec * 1000)) {
-            // Block extended sleep when BLE is connected (same as normal sleep)
+            // Block extended sleep when BLE is connected (same as normal sleep - conditional)
+#if ENABLE_BLE
             if (bleIsConnected()) {
                 Serial.println("Extended sleep blocked - BLE connected");
                 g_continuous_awake_start = millis(); // Reset timer while connected
-            } else {
+            } else
+#endif
+            {
                 Serial.print("Extended sleep: Continuous awake threshold exceeded (");
                 Serial.print(total_awake_time / 1000);
                 Serial.print("s >= ");
@@ -1371,11 +1404,14 @@ void loop() {
             Serial.println("Sleep blocked - calibration in progress");
             wakeTime = millis(); // Reset timer to prevent immediate sleep after calibration
         }
-        // Prevent sleep when BLE is connected
+        // Prevent sleep when BLE is connected (conditional)
+#if ENABLE_BLE
         else if (bleIsConnected()) {
             Serial.println("Sleep blocked - BLE connected");
             wakeTime = millis(); // Reset timer while connected
-        } else {
+        }
+#endif
+        else {
 #if DISPLAY_SLEEP_INDICATOR
             // Show Zzzz indicator before sleeping
             Serial.println("Displaying Zzzz indicator...");
