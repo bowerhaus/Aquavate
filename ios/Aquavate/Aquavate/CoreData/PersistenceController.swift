@@ -160,18 +160,24 @@ struct PersistenceController {
         for bleRecord in bleRecords {
             let record = CDDrinkRecord(context: context)
             record.id = UUID()
-            record.timestamp = Date(timeIntervalSince1970: TimeInterval(bleRecord.timestamp))
+            let drinkDate = Date(timeIntervalSince1970: TimeInterval(bleRecord.timestamp))
+            record.timestamp = drinkDate
             record.amountMl = bleRecord.amountMl
             // Safe conversion: clamp UInt16 to Int16 range (values > 32767 are unrealistic for bottle level)
             record.bottleLevelMl = Int16(clamping: bleRecord.bottleLevelMl)
             record.drinkType = Int16(bleRecord.type)
             record.syncedToHealth = false
             record.bottleId = bottleId
+
+            print("[CoreData] Creating record: timestamp=\(bleRecord.timestamp) (\(drinkDate)), amount=\(bleRecord.amountMl)ml")
         }
 
         do {
             try context.save()
-            print("[CoreData] Saved \(bleRecords.count) drink records")
+            print("[CoreData] Saved \(bleRecords.count) drink records for bottle \(bottleId)")
+
+            // Force SwiftUI to refresh @FetchRequest results by processing pending changes
+            context.processPendingChanges()
         } catch {
             print("[CoreData] Save error: \(error)")
             context.rollback()

@@ -12,13 +12,19 @@ struct HomeView: View {
     @EnvironmentObject var bleManager: BLEManager
     @Environment(\.managedObjectContext) private var viewContext
 
-    // Fetch today's drinks from CoreData, sorted by most recent first
+    // Fetch all drinks from CoreData, sorted by most recent first
+    // Filter to today's drinks in computed property to ensure dynamic date comparison
     @FetchRequest(
         sortDescriptors: [NSSortDescriptor(keyPath: \CDDrinkRecord.timestamp, ascending: false)],
-        predicate: NSPredicate(format: "timestamp >= %@", Calendar.current.startOfDay(for: Date()) as CVarArg),
         animation: .default
     )
-    private var todaysDrinksCD: FetchedResults<CDDrinkRecord>
+    private var allDrinksCD: FetchedResults<CDDrinkRecord>
+
+    // Filter to today's drinks dynamically (not at compile time)
+    private var todaysDrinksCD: [CDDrinkRecord] {
+        let startOfDay = Calendar.current.startOfDay(for: Date())
+        return allDrinksCD.filter { ($0.timestamp ?? .distantPast) >= startOfDay }
+    }
 
     // Convert CoreData records to display model
     private var todaysDrinks: [DrinkRecord] {
@@ -128,21 +134,18 @@ struct HomeView: View {
                     .padding(.horizontal)
                     .padding(.top, 8)
 
-                    // Status flags (when connected)
+                    // Status warnings (when connected)
                     if bleManager.connectionState.isConnected {
                         HStack(spacing: 12) {
-                            StatusBadge(
-                                label: "Calibrated",
-                                isActive: bleManager.isCalibrated,
-                                activeColor: .green,
-                                inactiveColor: .orange
-                            )
-                            StatusBadge(
-                                label: "Stable",
-                                isActive: bleManager.isStable,
-                                activeColor: .blue,
-                                inactiveColor: .gray
-                            )
+                            // Only show calibration warning when NOT calibrated
+                            if !bleManager.isCalibrated {
+                                StatusBadge(
+                                    label: "Not Calibrated",
+                                    isActive: true,
+                                    activeColor: .orange,
+                                    inactiveColor: .gray
+                                )
+                            }
                             if bleManager.unsyncedCount > 0 {
                                 StatusBadge(
                                     label: "\(bleManager.unsyncedCount) unsynced",

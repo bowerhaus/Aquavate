@@ -12,16 +12,19 @@ struct HistoryView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @State private var selectedDate: Date = Date()
 
-    // Fetch all drink records from CoreData (last 7 days)
+    // Fetch all drink records from CoreData
+    // Filter to last 7 days in computed property to ensure dynamic date comparison
     @FetchRequest(
         sortDescriptors: [NSSortDescriptor(keyPath: \CDDrinkRecord.timestamp, ascending: false)],
-        predicate: NSPredicate(
-            format: "timestamp >= %@",
-            Calendar.current.date(byAdding: .day, value: -7, to: Calendar.current.startOfDay(for: Date()))! as CVarArg
-        ),
         animation: .default
     )
-    private var recentDrinksCD: FetchedResults<CDDrinkRecord>
+    private var allDrinksCD: FetchedResults<CDDrinkRecord>
+
+    // Filter to last 7 days dynamically
+    private var recentDrinksCD: [CDDrinkRecord] {
+        let sevenDaysAgo = Calendar.current.date(byAdding: .day, value: -7, to: Calendar.current.startOfDay(for: Date()))!
+        return allDrinksCD.filter { ($0.timestamp ?? .distantPast) >= sevenDaysAgo }
+    }
 
     // Convert to display model
     private var drinks: [DrinkRecord] {

@@ -58,6 +58,9 @@ static volatile bool g_ble_tare_requested = false;
 static volatile bool g_ble_reset_daily_requested = false;
 static volatile bool g_ble_clear_history_requested = false;
 
+// Forward declaration for sync complete notification
+static void bleNotifyCurrentStateUpdate();
+
 // Debug helpers
 extern bool g_debug_enabled;
 extern bool g_debug_ble;
@@ -303,6 +306,9 @@ class SyncControlCallbacks : public NimBLECharacteristicCallbacks {
                     // Reset to IDLE after brief delay
                     syncControl.status = 0; // IDLE
                     syncControl.count = 0;
+
+                    // Notify app of updated unsynced count (should now be 0)
+                    bleNotifyCurrentStateUpdate();
                 } else {
                     // Send next chunk
                     bleSyncSendNextChunk();
@@ -707,6 +713,19 @@ void bleUpdateCurrentState(const DailyState& state, int32_t current_adc,
                        currentState.battery_percent);
         }
     }
+}
+
+// Notify current state with updated unsynced count (called after sync completes)
+static void bleNotifyCurrentStateUpdate() {
+    if (!isConnected || pCurrentStateChar == nullptr) {
+        return;
+    }
+
+    // Update unsynced count and notify
+    currentState.unsynced_count = storageGetUnsyncedCount();
+    pCurrentStateChar->setValue((uint8_t*)&currentState, sizeof(currentState));
+    pCurrentStateChar->notify();
+    BLE_DEBUG_F("Current State notified after sync: unsynced=%d", currentState.unsynced_count);
 }
 
 // Command check functions (Phase 3C)

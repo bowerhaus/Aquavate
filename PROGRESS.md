@@ -1,10 +1,49 @@
 # Aquavate - Active Development Progress
 
-**Last Updated:** 2026-01-17 (IRAM Optimization Complete)
+**Last Updated:** 2026-01-17 (Phase 4 Bug Fixes Complete)
 
 ---
 
 ## Current Work
+
+### Phase 4 Bug Fixes & Polish (2026-01-17) ✅ COMPLETE
+**Status:** ✅ All critical sync bugs fixed, UI polish complete
+
+**Issues Fixed Today:**
+
+1. **Drinks not appearing in UI after sync** ✅ Fixed
+   - Root cause: `@FetchRequest` predicates used static `Date()` captured at view init
+   - Fix: Changed to fetch all records and filter dynamically in computed properties
+   - Files: [HomeView.swift](ios/Aquavate/Aquavate/Views/HomeView.swift), [HistoryView.swift](ios/Aquavate/Aquavate/Views/HistoryView.swift)
+
+2. **Sync not triggering for new drinks** ✅ Fixed
+   - Root cause: `syncState` stayed at `.complete` after sync, blocking new syncs
+   - Fix: Reset `syncState` to `.idle` after completion
+   - File: [BLEManager.swift](ios/Aquavate/Aquavate/Services/BLEManager.swift)
+
+3. **"X unsynced" badge not updating after sync** ✅ Fixed
+   - Root cause: Firmware didn't send Current State notification after marking records synced
+   - Fix: Added `bleNotifyCurrentStateUpdate()` call after sync complete
+   - File: [ble_service.cpp](firmware/src/ble_service.cpp)
+
+4. **Infinite sync loop - records never marked synced** ✅ Fixed
+   - Root cause: `storageMarkSynced()` marked by logical index, but unsynced records could be at any index
+   - Fix: Changed to iterate and mark first N unsynced records (matching `storageGetUnsyncedRecords` logic)
+   - File: [storage_drinks.cpp](firmware/src/storage_drinks.cpp)
+
+5. **UI polish - removed unnecessary status badges** ✅ Fixed
+   - Removed "Stable" badge (technical debug info, not user-facing)
+   - Changed "Calibrated" to only show "Not Calibrated" warning when needed
+   - File: [HomeView.swift](ios/Aquavate/Aquavate/Views/HomeView.swift)
+
+**Current Status:**
+- ✅ App connects and syncs drinks successfully
+- ✅ Drinks appear in Recent Drinks and History views
+- ✅ Unsynced count updates correctly after sync
+- ✅ New drinks sync automatically when poured while connected
+- ✅ UI shows only relevant warnings (Not Calibrated, X unsynced)
+
+---
 
 ### IRAM Optimization - Conditional Compilation (2026-01-17) ✅ COMPLETE
 **Status:** ✅ Phase 1 and Phase 2 complete
@@ -398,19 +437,44 @@ All 6 phases complete. iOS app can now:
 - Send commands (Tare, Reset Daily, Clear History)
 - Persist and restore connection state
 
-**Next Step:**
-- Return to Phase 3E for firmware power optimization
-- Reference: [Plans/013-ble-integration.md](Plans/013-ble-integration.md) Phase 3E
-- Tasks:
-  - Connection parameter tuning (15-30ms intervals)
-  - Graceful disconnection UI ("Synced ✓" message)
-  - Verify wake integration (motion vs timer)
-  - Power measurement validation
-  - End-to-end testing with iOS app
+**Phase 4 Verification Checklist (from Plan 014):**
+- [x] App discovers and connects to firmware automatically
+- [x] Real-time bottle level updates in HomeView (<1s latency)
+- [x] Drink history syncs automatically on connection
+- [x] CoreData prevents duplicate records (timestamp constraint works)
+- [x] Commands work (TARE, RESET_DAILY tested)
+- [x] Time syncs on every connection (time_valid flag set)
+- [ ] Background sync works (needs testing: app backgrounded → pick up bottle → data synced)
+- [x] Connection state visible in UI (connected/scanning/disconnected)
+- [x] Daily total matches firmware display
+- [x] Battery level displays correctly
+
+**Next Steps:**
+1. **Phase 4.7: iOS Calibration Wizard** (Optional - can be deferred)
+   - Currently bottle must be calibrated via USB serial commands
+   - iOS wizard would provide in-app calibration flow
+   - Reference: [Plans/014-ios-ble-coredata-integration.md](Plans/014-ios-ble-coredata-integration.md) Phase 4.7
+
+2. **Phase 3E: Firmware Power Optimization**
+   - Reference: [Plans/013-ble-integration.md](Plans/013-ble-integration.md) Phase 3E
+   - Tasks:
+     - Connection parameter tuning (15-30ms intervals)
+     - Graceful disconnection UI ("Synced ✓" message)
+     - Verify wake integration (motion vs timer)
+     - Power measurement validation
+     - End-to-end testing with iOS app
+
+3. **Merge branches to master**
+   - `serial-commands-removal` branch ready to merge
+   - Clean up any remaining debug logging
 
 ---
 
 ## Known Issues
+
+**Fixed: Multiple drink sync bugs (2026-01-17):**
+- See "Phase 4 Bug Fixes & Polish" section above for details
+- All critical sync issues resolved: drinks now appear in UI, sync completes properly, no infinite loops
 
 **Fixed: Fatal error on drink data sync (2026-01-17):**
 - Issue: "Fatal error: load from misaligned raw pointer" crash during drink sync

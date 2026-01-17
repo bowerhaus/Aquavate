@@ -110,6 +110,8 @@ cd firmware
 ~/.platformio/penv/bin/platformio device monitor         # Serial monitor
 ```
 
+**Note:** The user will handle firmware uploads and device restarts manually. Do not attempt to upload firmware or wait for upload confirmation - just build and inform the user when ready.
+
 ## Reference Documentation
 
 Read these documents for progressive disclosure - CLAUDE.md keeps context light, these provide depth:

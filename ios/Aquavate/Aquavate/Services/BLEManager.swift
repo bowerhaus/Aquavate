@@ -635,8 +635,9 @@ extension BLEManager: CBPeripheralDelegate {
         logger.debug("  Flags: timeValid=\(state.isTimeValid), calibrated=\(state.isCalibrated), stable=\(state.isStable)")
 
         // Auto-sync if we have unsynced records and sync is not already in progress
-        // Only trigger on first state update with unsynced records (previousUnsyncedCount == 0)
-        if unsyncedCount > 0 && previousUnsyncedCount == 0 && !syncState.isActive && connectionState.isConnected {
+        // Trigger when: we have unsynced records, sync is idle, and we're connected
+        // This handles both initial connection and new drinks poured while connected
+        if unsyncedCount > 0 && syncState == .idle && connectionState.isConnected {
             logger.info("Detected \(self.unsyncedCount) unsynced records, starting auto-sync")
             startDrinkSync()
         }
@@ -819,7 +820,7 @@ extension BLEManager: CBPeripheralDelegate {
     private func completeSyncTransfer() {
         guard !syncBuffer.isEmpty else {
             logger.info("Sync complete with no records")
-            syncState = .complete
+            syncState = .idle
             lastSyncTime = Date()
             return
         }
@@ -834,14 +835,14 @@ extension BLEManager: CBPeripheralDelegate {
             logger.error("No bottle ID for saving records")
         }
 
-        // Update state
-        syncState = .complete
-        syncProgress = 1.0
-        lastSyncTime = Date()
-
         // Clear buffer
         let recordCount = syncBuffer.count
         syncBuffer.removeAll()
+
+        // Update state - go back to idle so we can sync again if more drinks arrive
+        syncState = .idle
+        syncProgress = 1.0
+        lastSyncTime = Date()
 
         logger.info("Drink sync complete: \(recordCount) records synced")
     }

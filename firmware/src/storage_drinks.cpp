@@ -220,24 +220,13 @@ bool storageGetDrinkRecord(uint16_t index, DrinkRecord& record) {
 }
 
 bool storageMarkSynced(uint16_t start_index, uint16_t count) {
-    // Load metadata to validate range
+    (void)start_index; // Not used - we mark the first N unsynced records
+
+    // Load metadata
     CircularBufferMetadata meta;
     if (!storageLoadBufferMetadata(meta) || meta.record_count == 0) {
         Serial.println("No drink records to mark synced");
         return false;
-    }
-
-    // Validate range
-    if (start_index >= meta.record_count) {
-        Serial.println("ERROR: Invalid start index for mark synced");
-        return false;
-    }
-
-    // Clamp count to available records
-    if (start_index + count > meta.record_count) {
-        count = meta.record_count - start_index;
-        Serial.print("WARNING: Clamping mark synced count to ");
-        Serial.println(count);
     }
 
     Preferences prefs;
@@ -246,16 +235,16 @@ bool storageMarkSynced(uint16_t start_index, uint16_t count) {
         return false;
     }
 
-    // Mark each record in range
-    for (uint16_t i = 0; i < count; i++) {
-        uint16_t logical_index = start_index + i;
-
-        // Calculate physical index
+    // Iterate through all records and mark the first 'count' unsynced ones as synced
+    // This matches the logic in storageGetUnsyncedRecords
+    uint16_t marked = 0;
+    for (uint16_t i = 0; i < meta.record_count && marked < count; i++) {
+        // Calculate physical index (same logic as storageGetUnsyncedRecords)
         uint16_t physical_index;
         if (meta.record_count < DRINK_MAX_RECORDS) {
-            physical_index = logical_index;
+            physical_index = i;
         } else {
-            physical_index = (meta.write_index + logical_index) % DRINK_MAX_RECORDS;
+            physical_index = (meta.write_index + i) % DRINK_MAX_RECORDS;
         }
 
         // Load record
@@ -265,26 +254,31 @@ bool storageMarkSynced(uint16_t start_index, uint16_t count) {
         DrinkRecord record;
         size_t read_size = prefs.getBytes(key, &record, sizeof(DrinkRecord));
         if (read_size != sizeof(DrinkRecord)) {
-            Serial.print("WARNING: Failed to read record at index ");
-            Serial.println(logical_index);
+            Serial.print("WARNING: Failed to read record at physical index ");
+            Serial.println(physical_index);
             continue;
         }
 
-        // Set synced flag
-        record.flags |= 0x01;
+        // Only mark if currently unsynced (bit 0 not set)
+        if ((record.flags & 0x01) == 0) {
+            // Set synced flag
+            record.flags |= 0x01;
 
-        // Write back
-        size_t written = prefs.putBytes(key, &record, sizeof(DrinkRecord));
-        if (written != sizeof(DrinkRecord)) {
-            Serial.print("WARNING: Failed to write synced flag at index ");
-            Serial.println(logical_index);
+            // Write back
+            size_t written = prefs.putBytes(key, &record, sizeof(DrinkRecord));
+            if (written != sizeof(DrinkRecord)) {
+                Serial.print("WARNING: Failed to write synced flag at physical index ");
+                Serial.println(physical_index);
+            } else {
+                marked++;
+            }
         }
     }
 
     prefs.end();
 
     Serial.print("Marked ");
-    Serial.print(count);
+    Serial.print(marked);
     Serial.println(" records as synced");
 
     return true;
