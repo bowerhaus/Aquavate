@@ -1,8 +1,12 @@
 # Aquavate iOS App - UX Product Requirements Document
 
-**Version:** 1.0
-**Date:** 2026-01-16
-**Status:** Draft for Review
+**Version:** 1.1
+**Date:** 2026-01-17
+**Status:** Approved (Updated for iOS Calibration)
+
+**Changelog:**
+- **v1.1 (2026-01-17):** Updated Calibration Wizard (Section 2.3) - iOS now performs two-point calibration instead of firmware. Added live ADC readings, stability indicators, and BLE integration details.
+- **v1.0 (2026-01-16):** Initial approved version
 
 ---
 
@@ -150,78 +154,115 @@ Sarah's Bluetooth is accidentally turned off. When she opens the app, she sees a
 
 ---
 
-### 2.3 Calibration Wizard (Modal)
+### 2.3 Calibration Wizard (Modal) - UPDATED 2026-01-17
 
-**Purpose:** Set up tare weight and capacity for user's specific bottle
+**Purpose:** Guide user through two-point calibration to establish bottle's scale factor
+
+**Context:** iOS app now performs calibration (firmware standalone calibration removed for IRAM savings). App measures empty and full bottle weights, calculates scale factor, and writes results to firmware via BLE Bottle Config characteristic.
 
 **Presentation:** Full-screen modal sheet (not dismissible by swipe during calibration)
 
-**Step 1: Tare (Empty Bottle)**
+**Step 1: Empty Bottle Measurement**
 ```
 ┌─────────────────────────────────┐
-│           Step 1 of 2           │  ← Progress indicator
+│  [X]          Step 1 of 2       │  ← Close button + Progress
+│                                 │
+│        🍶                       │  ← Bottle icon (empty)
+│                                 │
+│   Place Empty Bottle            │  ← Headline (22pt Bold)
+│                                 │
+│   Remove the bottle from the    │
+│   base and empty it completely. │  ← Body text (17pt Regular)
+│   Place back when ready.        │
+│                                 │
+│   Current: 1245 ADC             │  ← Live weight reading (14pt mono)
+│   ●●●○○ Stability               │  ← 5-dot indicator
 │                                 │
 │   ┌─────────────────────────┐   │
-│   │                         │   │
-│   │   [Empty Bottle Icon]   │   │  ← SF Symbol: waterbottle
-│   │                         │   │
+│   │  Tap When Stable        │   │  ← Primary CTA (disabled until 5/5 dots)
 │   └─────────────────────────┘   │
 │                                 │
-│   Place Your Empty Bottle       │  ← Headline
+│   [< Back]                      │  ← Secondary action
 │                                 │
-│   Remove any water and place    │
-│   your empty bottle on the      │
-│   puck. Keep it still.          │  ← Instructions
+└─────────────────────────────────┘
+```
+
+**Step 2: Full Bottle Measurement**
+```
+┌─────────────────────────────────┐
+│  [X]          Step 2 of 2       │
 │                                 │
-│   ⏳ Measuring...               │  ← Status (or ✓ Stable when ready)
+│        🍶💧                     │  ← Bottle icon (filled)
+│                                 │
+│   Fill Bottle to 830ml          │  ← Headline
+│                                 │
+│   Fill the bottle to the 830ml  │
+│   line. Place upright on the    │
+│   base when ready.              │
+│                                 │
+│   Current: 7892 ADC             │  ← Live weight reading
+│   ●●●●● Stability               │  ← All dots filled (stable)
 │                                 │
 │   ┌─────────────────────────┐   │
-│   │   Set Empty Weight      │   │  ← Primary button (enabled when stable)
+│   │  Tap When Stable        │   │  ← Enabled (pulsing blue)
+│   └─────────────────────────┘   │
+│                                 │
+│   [< Back]                      │  ← Return to step 1
+│                                 │
+└─────────────────────────────────┘
+```
+
+**Success Screen:**
+```
+┌─────────────────────────────────┐
+│  [Done]                         │
+│                                 │
+│           ✓                     │  ← Large checkmark (green, 72pt)
+│                                 │
+│   Calibration Complete!         │  ← Headline
+│                                 │
+│   Scale: 8.2 ADC/g              │  ← Calculated scale factor
+│   Tare: 1245 ADC                │  ← Empty baseline
+│                                 │
+│   Your bottle is ready to       │
+│   track water intake!           │
+│                                 │
+│   ┌─────────────────────────┐   │
+│   │     Continue            │   │  ← Primary CTA
 │   └─────────────────────────┘   │
 │                                 │
 └─────────────────────────────────┘
 ```
 
-**Step 2: Capacity (Full Bottle)**
-```
-┌─────────────────────────────────┐
-│           Step 2 of 2           │
-│                                 │
-│   ┌─────────────────────────┐   │
-│   │                         │   │
-│   │  [Full Bottle Icon]     │   │
-│   │                         │   │
-│   └─────────────────────────┘   │
-│                                 │
-│   Fill Your Bottle              │
-│                                 │
-│   Fill to your normal level     │
-│   and enter the capacity.       │
-│                                 │
-│   ┌─────────────────────────┐   │
-│   │  [Capacity Picker]      │   │  ← Stepper: 500-1500ml in 50ml steps
-│   │       750 ml            │   │
-│   └─────────────────────────┘   │
-│                                 │
-│   ┌─────────────────────────┐   │
-│   │   Complete Setup        │   │
-│   └─────────────────────────┘   │
-│                                 │
-└─────────────────────────────────┘
-```
+**Data Flow:**
+1. **Step 1:** Read live ADC from BLE Current State → `emptyADC = currentWeightG`
+2. **Step 2:** Read live ADC from BLE Current State → `fullADC = currentWeightG`
+3. **Calculate:** `scaleFactor = (fullADC - emptyADC) / 830.0`
+4. **Validate:** Scale factor must be 5-15 ADC/g (typical range)
+5. **Write:** Send to firmware via BLE Bottle Config characteristic
+
+**Stability Indicator:**
+- 5 dots that fill sequentially as weight stabilizes
+- Reading must be stable for 2s to fill all dots
+- Haptic feedback when all 5 dots filled
+- CTA button enabled only when stable (all 5 dots)
 
 **Completion:**
 - Haptic: Success (light impact)
-- Brief "Setup Complete ✓" message (1s)
+- Show success screen for 2s
+- Write calibration to firmware
 - Dismiss modal → Navigate to Home Screen
+- Firmware sets `calibrated` flag to true
 
 **Edge Cases:**
 | Scenario | Behavior |
 |----------|----------|
-| Weight not stable | "Hold still..." message, button disabled |
-| Capacity < 100ml | Error: "Capacity must be at least 100ml" |
-| User cancels mid-flow | Alert: "Cancel setup? You'll need to complete this later." |
-| Connection lost | Alert: "Connection lost. Tap Retry to reconnect." |
+| Weight not stable | "Hold still..." tooltip, CTA disabled, < 5 dots |
+| Invalid scale factor (< 5 or > 15) | Alert: "Calibration failed. Try again." |
+| BLE disconnect during calibration | Alert: "Connection lost" → return to Settings |
+| User exits mid-calibration | Alert: "Cancel calibration?" with confirm |
+| Firmware write fails | Alert: "Failed to save. Please retry." |
+| Scale factor = 0 or negative | Alert: "Invalid measurement. Ensure bottle is filled." |
 
 ---
 
@@ -408,7 +449,9 @@ Sarah's Bluetooth is accidentally turned off. When she opens the app, she sees a
 │                                 │
 │  DEVICE COMMANDS                │
 │  ┌─────────────────────────────┐│
-│  │ ⚖️ Tare Bottle              ││  ← Tappable action
+│  │ 🔧 Calibrate Bottle         ││  ← Opens calibration wizard (NEW)
+│  ├─────────────────────────────┤│
+│  │ ⚖️ Tare Bottle              ││  ← Quick tare only (keeps scale factor)
 │  ├─────────────────────────────┤│
 │  │ 🔄 Reset Daily Total        ││
 │  ├─────────────────────────────┤│
@@ -432,11 +475,12 @@ Sarah's Bluetooth is accidentally turned off. When she opens the app, she sees a
 └─────────────────────────────────┘
 ```
 
-**Command Actions:**
+**Command Actions (Updated 2026-01-17):**
 
 | Command | Tap Behavior | Confirmation |
 |---------|--------------|--------------|
-| Tare Bottle | Sends TARE_NOW (0x01) | None (instant) |
+| Calibrate Bottle | Opens Calibration Wizard modal (NEW) | None (wizard has own confirm flow) |
+| Tare Bottle | Sends TARE_NOW (0x01) - Quick tare keeping scale factor | None (instant) |
 | Reset Daily Total | Sends RESET_DAILY (0x05) | Alert: "Reset today's total?" |
 | Clear History | Sends CLEAR_HISTORY (0x06) | Alert: "This cannot be undone." |
 
@@ -649,8 +693,85 @@ Home Screen shows:
 
 ---
 
-### Flow 5: Calibration Recalibration
+### Flow 5: Calibration Wizard (First-Time or Recalibration)
 
+```
+Settings Screen
+    │
+    ▼
+Tap "Calibrate Bottle"
+    │
+    ▼
+Calibration Wizard Modal
+    │
+    ▼
+Step 1: Empty Measurement
+    │
+    ├─► Subscribe to BLE Current State
+    │
+    ├─► Display live ADC reading
+    │
+    ├─► Monitor stability (isStable flag)
+    │       │
+    │       ▼
+    │   [Stable for 2s?]
+    │       ├── No → Show "Hold still..." (1-4 dots)
+    │       │         CTA disabled
+    │       │
+    │       └── Yes → Fill all 5 dots
+    │                 Enable CTA (pulsing blue)
+    │                 Haptic feedback
+    │
+    ▼
+Tap "Tap When Stable"
+    │
+    ├─► Save emptyADC = currentWeightG
+    │
+    ▼
+Step 2: Full Measurement
+    │
+    ├─► Continue reading BLE Current State
+    │
+    ├─► Display live ADC reading
+    │
+    ├─► Wait for stability (same as Step 1)
+    │
+    ▼
+Tap "Tap When Stable"
+    │
+    ├─► Save fullADC = currentWeightG
+    │
+    ▼
+Calculate Scale Factor
+    │
+    ├─► scaleFactor = (fullADC - emptyADC) / 830.0
+    │
+    ▼
+[Valid Scale Factor?] (5-15 ADC/g)
+    │
+    ├── No → Alert: "Calibration failed. Try again."
+    │         Return to Step 1
+    │
+    └── Yes → Show Success Screen
+              │
+              ▼
+          Write to Firmware
+              │
+              ├─► BLE Bottle Config characteristic
+              ├─► scaleFactor, emptyADC, capacity=830, goal=2400
+              │
+              ▼
+          [Write Success?]
+              │
+              ├── No → Alert: "Failed to save. Please retry."
+              │
+              └── Yes → Banner: "Calibration complete ✓"
+                        Dismiss modal
+                        Return to Settings
+                        (calibrated flag now true)
+```
+
+**Alternative Flow: Tare Only (Quick Recalibration)**
 ```
 Settings Screen
     │
@@ -658,16 +779,17 @@ Settings Screen
 Tap "Tare Bottle"
     │
     ▼
-Command sent to puck
+Command sent to puck (TARE_NOW 0x01)
+    │
+    ├─► Updates empty baseline to current weight
+    ├─► Keeps existing scale factor
     │
     ▼
 [Weight Stable?]
     │
-    ├── Yes → Tare saved
-    │         Banner: "Bottle tared ✓"
+    ├── Yes → Banner: "Bottle tared ✓"
     │
-    └── No → Error
-              Banner: "Hold bottle still and try again"
+    └── No → Banner: "Hold bottle still and try again"
 ```
 
 ---
@@ -1094,15 +1216,20 @@ struct CircularProgressView {
 | Timezone change | App returns to foreground | Resync time on next connection |
 | Clock drift | Consecutive connections | Resync every connection |
 
-### Calibration Edge Cases
+### Calibration Edge Cases (Updated 2026-01-17)
 
 | Scenario | Detection | Behavior |
 |----------|-----------|----------|
-| Weight unstable | stable flag = false | "Hold still..." message, button disabled |
-| Capacity < 100ml | User input validation | Error message, prevent continue |
-| Calibration timeout (60s) | No stable reading | Cancel wizard, show error |
-| User exits mid-calibration | Cancel button or swipe | Confirm alert, return to pairing |
-| Connection lost during | Disconnect event | Alert, offer retry from current step |
+| Weight unstable | stable flag = false | "Hold still..." tooltip, CTA disabled, < 5 stability dots |
+| Invalid scale factor | scaleFactor < 5 or > 15 | Alert: "Calibration failed. Scale factor out of range (8.2 expected, got X.X). Try again." → Restart Step 1 |
+| Scale factor = 0 or negative | (fullADC - emptyADC) ≤ 0 | Alert: "Invalid measurement. Ensure bottle is properly filled to 830ml." → Restart |
+| BLE disconnect (Step 1) | Connection lost | Alert: "Connection lost. Calibration incomplete." → Return to Settings |
+| BLE disconnect (Step 2) | Connection lost | Alert: "Connection lost. Calibration incomplete." → Return to Settings |
+| Firmware write fails | BLE write error | Alert: "Failed to save calibration to device. Please retry." → Offer retry |
+| Calibration timeout (60s) | No stable reading for 60s | Alert: "Calibration timed out. Please try again." → Return to Settings |
+| User exits mid-calibration | Tap [X] or swipe down | Alert: "Cancel calibration? Your bottle will not be calibrated." → Confirm/Cancel |
+| User taps Back from Step 2 | Tap [< Back] | Return to Step 1 (emptyADC value preserved) |
+| Same ADC both steps | fullADC == emptyADC | Alert: "No weight change detected. Did you fill the bottle?" → Retry Step 2 |
 
 ### Data Edge Cases
 
@@ -1274,14 +1401,14 @@ struct CircularProgressView {
 
 ## Appendix: Screen Inventory
 
-| Screen | Status | Phase |
-|--------|--------|-------|
-| Splash Screen | ✅ Exists | - |
-| Pairing Screen | 🆕 New | 4.1 |
-| Calibration Wizard | 🆕 New | 4.5 |
-| Home Screen | 🔄 Modify | 4.2-4.6 |
-| History Screen | 🔄 Modify | 4.3-4.4 |
-| Settings Screen | 🔄 Modify | 4.2-4.5 |
+| Screen | Status | Phase | Notes |
+|--------|--------|-------|-------|
+| Splash Screen | ✅ Exists | - | No changes |
+| Pairing Screen | 🆕 New | 4.1 | Device scanning |
+| Calibration Wizard | 🔄 Updated | 4.7 | Two-point calibration (updated 2026-01-17) |
+| Home Screen | 🔄 Modify | 4.2-4.6 | Wire BLE data |
+| History Screen | 🔄 Modify | 4.3-4.4 | Wire CoreData |
+| Settings Screen | 🔄 Modify | 4.2-4.5 | Add "Calibrate Bottle" button |
 
 | Component | Status | Phase |
 |-----------|--------|-------|
@@ -1298,10 +1425,15 @@ struct CircularProgressView {
 
 This UX PRD defines the complete user experience for the Aquavate iOS app. Upon approval, Phase 4 implementation will begin following both this document and the technical plan in [Plans/014-ios-ble-coredata-integration.md](../Plans/014-ios-ble-coredata-integration.md).
 
-**Document Status:** Ready for Review
+**Document Status:** Approved (v1.1)
+
+**Update Note (2026-01-17):**
+- Calibration Wizard updated for iOS-based two-point calibration
+- Firmware standalone calibration removed (IRAM optimization)
+- All calibration UX now handled by iOS app with live ADC readings
+- Phase 4.7 added to implementation plan
 
 **Next Steps:**
-1. User reviews this document
-2. Feedback incorporated (if any)
-3. Final approval
-4. Begin Phase 4.1 implementation
+1. ✅ Phase 4.1-4.6 implementation (Complete)
+2. Phase 4.7 implementation (Calibration Wizard) - Optional/Future
+3. Begin Phase 5 (Advanced features)

@@ -6,6 +6,8 @@
 #include "ui_calibration.h"
 #include "config.h"
 
+#if ENABLE_STANDALONE_CALIBRATION
+
 #if defined(BOARD_ADAFRUIT_FEATHER)
 
 // Static variables
@@ -222,3 +224,5 @@ void uiCalibrationUpdateForState(CalibrationState state, int32_t adc_value, floa
 }
 
 #endif // BOARD_ADAFRUIT_FEATHER
+
+#endif // ENABLE_STANDALONE_CALIBRATION

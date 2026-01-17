@@ -126,11 +126,10 @@ struct BLE_Command {
 
 // Commands:
 // 0x01: TARE_NOW
-// 0x02: START_CALIBRATION
-// 0x03: CALIBRATE_POINT (param2=grams)
-// 0x04: CANCEL_CALIBRATION
+// 0x02-0x04: RESERVED (calibration handled by iOS app)
 // 0x05: RESET_DAILY
 // 0x06: CLEAR_HISTORY (WARNING)
+// 0x10: SET_TIME (param2=unix_timestamp_high_16, followed by low_16 in separate command)
 ```
 
 ### Drink History Sync Protocol (Pull-Based)
@@ -391,10 +390,14 @@ iOS App                    ESP32 Puck
 ### Phase 3C: Custom Service - Config & Commands (Priority: MEDIUM)
 **Goal:** Allow iOS app to read/write device configuration and send commands
 
+**⚠️ Update (2026-01-17): Calibration commands removed**
+- BLE calibration commands (START_CALIBRATION, CANCEL_CALIBRATION) removed to save IRAM
+- iOS app will implement its own calibration wizard UI
+- Firmware exposes core calibration functions for iOS app to use via Bottle Config characteristic
+
 **Files to Modify:**
 - `firmware/src/ble_service.cpp` - Add Bottle Config and Command characteristics
 - `firmware/include/ble_service.h` - Add BLE_BottleConfig, BLE_Command structs
-- `firmware/src/calibration.cpp` - Expose calibration trigger functions
 
 **Tasks:**
 1. Define `BLE_BottleConfig` struct (12 bytes, packed)
@@ -402,10 +405,11 @@ iOS App                    ESP32 Puck
    - Properties: READ, WRITE
    - Read: Return calibration data from [storage.h:CalibrationData](firmware/include/storage.h)
    - Write: Update calibration data, save to NVS
+   - iOS app uses this to write calibration results from its own wizard
 3. Define `BLE_Command` struct (4 bytes, packed)
 4. Implement Command characteristic (`...0005`)
    - Properties: WRITE
-   - Handle commands: TARE, CALIBRATE, RESET_DAILY, CLEAR_HISTORY
+   - Handle commands: TARE, RESET_DAILY, CLEAR_HISTORY, SET_TIME
 5. Wire command handlers to existing functions:
    - TARE_NOW: Trigger weight tare
    - RESET_DAILY: Call [drinks.h:drinksResetDaily()](firmware/include/drinks.h)

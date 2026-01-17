@@ -11,6 +11,9 @@
 
 #include <Arduino.h>
 #include "calibration.h"
+#include "config.h"
+
+#if ENABLE_STANDALONE_CALIBRATION
 
 #if defined(BOARD_ADAFRUIT_FEATHER)
     #include "Adafruit_ThinkInk.h"
@@ -57,5 +60,7 @@ void uiCalibrationShowError(const char* message);
 // Update display for current calibration state
 // Automatically selects appropriate screen based on state
 void uiCalibrationUpdateForState(CalibrationState state, int32_t adc_value, float scale_factor);
+
+#endif // ENABLE_STANDALONE_CALIBRATION
 
 #endif // UI_CALIBRATION_H

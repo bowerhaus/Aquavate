@@ -102,6 +102,214 @@ For **each screen** (Home, History, Settings, Pairing):
 - Data updates: How new drinks appear (fade in, slide from top)
 - Progress: How bottle level animates (smooth fill transition)
 
+---
+
+#### Calibration Wizard (NEW - 2026-01-17)
+
+**Purpose:** Guide user through two-point calibration to establish bottle's scale factor
+
+**Context:** Firmware standalone calibration removed (IRAM savings). iOS app now performs calibration and writes results to firmware via BLE Bottle Config characteristic.
+
+**Entry Points:**
+- First-time setup flow (after pairing)
+- Settings → "Calibrate Bottle" button
+- Alert when "calibrated" flag is false in Current State
+
+**Layout Specification - Step 1 (Empty Measurement):**
+```
+┌─────────────────────────────┐
+│  [X Close] Calibration 1/2  │  ← Navigation bar with step indicator
+│                             │
+│    🍶                       │  ← Bottle icon (empty)
+│                             │
+│  Place Empty Bottle         │  ← Title (24pt, bold)
+│                             │
+│  Remove the bottle from     │  ← Instructions (16pt, gray)
+│  the base and empty it      │
+│  completely. Place back     │
+│  when ready.                │
+│                             │
+│  [Current: 1245 ADC]        │  ← Live weight reading (monospace, 14pt)
+│  [Stability: ●●●○○]         │  ← Stability indicator (5 dots)
+│                             │
+│  [ Tap When Stable ]        │  ← Primary CTA (disabled until stable)
+│                             │
+│  [< Back]                   │  ← Secondary action
+└─────────────────────────────┘
+```
+
+**Layout Specification - Step 2 (Full Measurement):**
+```
+┌─────────────────────────────┐
+│  [X Close] Calibration 2/2  │  ← Step indicator updated
+│                             │
+│    🍶💧                     │  ← Bottle icon (filled)
+│                             │
+│  Fill Bottle to 830ml       │  ← Title (24pt, bold)
+│                             │
+│  Fill the bottle to the     │  ← Instructions (16pt, gray)
+│  830ml line. Place upright  │
+│  on the base when ready.    │
+│                             │
+│  [Current: 7892 ADC]        │  ← Live weight reading
+│  [Stability: ●●●●●]         │  ← Stability indicator (all filled)
+│                             │
+│  [ Tap When Stable ]        │  ← Primary CTA (enabled when stable)
+│                             │
+│  [< Back]                   │  ← Return to step 1
+└─────────────────────────────┘
+```
+
+**Layout Specification - Success Screen:**
+```
+┌─────────────────────────────┐
+│  [Done]                      │  ← Dismiss button
+│                             │
+│         ✓                   │  ← Success checkmark (green, 72pt)
+│                             │
+│  Calibration Complete!      │  ← Title (24pt, bold)
+│                             │
+│  Scale: 8.2 ADC/g           │  ← Calculated scale factor
+│  Tare: 1245 ADC             │  ← Empty baseline
+│                             │
+│  Your bottle is ready       │  ← Confirmation message
+│  to track water intake!     │
+│                             │
+│  [    Continue    ]         │  ← Primary CTA (dismisses modal)
+└─────────────────────────────┘
+```
+
+**User Actions:**
+
+**Step 1 (Empty):**
+- Primary: Tap "Tap When Stable" → advance to Step 2
+- Secondary: Tap "Back" → cancel calibration (show alert)
+- Secondary: Tap "X" → cancel calibration (show alert)
+- Automatic: Live ADC reading updates every 500ms
+- Automatic: Stability dots fill when weight stable for 2s
+
+**Step 2 (Full):**
+- Primary: Tap "Tap When Stable" → calculate scale factor → show success
+- Secondary: Tap "Back" → return to Step 1
+- Secondary: Tap "X" → cancel calibration (show alert)
+- Automatic: Live ADC reading updates every 500ms
+- Automatic: Stability dots fill when weight stable for 2s
+
+**Success Screen:**
+- Primary: Tap "Continue" → write calibration to firmware → dismiss modal
+- Secondary: Tap "Done" (nav bar) → same as Continue
+
+**Data Displayed:**
+
+**Real-time (BLE Current State):**
+- `currentWeightG` → ADC reading (raw sensor value)
+- `isStable` flag → drives stability indicator
+
+**Calculated:**
+- Scale factor = (fullADC - emptyADC) / 830g
+- Validation: scale factor must be 5-15 ADC/g (typical range)
+
+**Written to firmware (BLE Bottle Config):**
+```swift
+bleManager.writeBottleConfig(
+    scaleFactor: calculatedScaleFactor,
+    tareWeight: emptyADC,
+    capacity: 830,
+    goal: 2400  // Default daily goal
+)
+```
+
+**State Variations:**
+
+**Normal State (Each Step):**
+- Live ADC reading updating
+- Stability indicator showing 1-5 dots
+- CTA button disabled until stable (5/5 dots)
+
+**Stable State:**
+- All 5 stability dots filled (green)
+- CTA button enabled (blue, pulsing glow)
+- Haptic feedback when stability achieved
+
+**Loading State (Success → Dismiss):**
+- Show spinner: "Writing calibration..."
+- Disable Continue button during write
+- Auto-dismiss on success
+
+**Error States:**
+
+**Disconnection During Calibration:**
+- Show alert: "Connection lost. Calibration incomplete."
+- CTA: "Reconnect" → return to Settings
+
+**Invalid Scale Factor:**
+- If calculated scale factor < 5 or > 15 ADC/g
+- Show alert: "Calibration failed. Scale factor out of range (8.2 expected, got X.X). Please try again."
+- CTA: "Retry" → restart from Step 1
+
+**Unstable Reading:**
+- If user tries to tap CTA while unstable
+- Shake animation on CTA button
+- Show tooltip: "Hold still until all dots are filled"
+
+**User Cancels Mid-Flow:**
+- Show alert: "Cancel calibration? Your bottle will not be calibrated."
+- CTAs: "Keep Calibrating" (primary), "Cancel Calibration" (destructive)
+
+**Animations:**
+
+**Entry:**
+- Modal slides up from bottom (0.3s ease-out)
+- Content fades in (0.2s delay)
+
+**Step Transitions:**
+- Slide left/right (0.3s) when advancing/going back
+- Title cross-fade (0.2s)
+
+**Stability Indicator:**
+- Dots fill sequentially (0.1s each) as stability increases
+- Pulse animation when all 5 filled
+
+**Success Screen:**
+- Checkmark scales in with spring animation (0.5s)
+- Scale factor/tare fade in sequentially (0.1s stagger)
+
+**Exit:**
+- Modal slides down to bottom (0.3s ease-in)
+
+**BLE Integration:**
+
+**Subscribe to notifications:**
+- Current State characteristic (for live ADC + stability flag)
+
+**Read during calibration:**
+- `bleManager.currentWeightG` → display as ADC reading
+- `bleManager.isStable` → drive stability indicator
+
+**Write on success:**
+- `bleManager.writeBottleConfig(...)` → persist to firmware NVS
+
+**Accessibility:**
+
+- VoiceOver labels for each step: "Calibration step 1 of 2: Place empty bottle"
+- Announce ADC updates every 2s (not every 500ms to avoid spam)
+- Announce stability: "Weight stable, ready to continue" (when 5/5 dots)
+- Announce success: "Calibration complete. Scale factor: 8.2 ADC per gram"
+- Dynamic Type support for all text (min 16pt body, 24pt title)
+
+**Edge Cases:**
+
+| Scenario | Behavior |
+|----------|----------|
+| Weight not stable (< 2s) | CTA disabled, show "Hold still..." tooltip |
+| Invalid scale factor | Alert: "Calibration failed. Try again." → restart |
+| BLE disconnects during flow | Alert: "Connection lost" → return to Settings |
+| User exits mid-calibration | Alert: "Cancel calibration?" with confirm |
+| Firmware write fails | Alert: "Failed to save calibration. Please retry." |
+| Scale factor = 0 or negative | Alert: "Invalid measurement. Ensure bottle is filled." |
+
+---
+
 ### 3. User Flows (Critical Paths)
 
 **Flow Diagrams** for:

@@ -6,6 +6,12 @@
 #include "calibration.h"
 #include "config.h"
 
+#if ENABLE_STANDALONE_CALIBRATION
+
+// ==================== Standalone Calibration State Machine ====================
+// This section is only compiled when ENABLE_STANDALONE_CALIBRATION is enabled.
+// In iOS mode, calibration is performed via the iOS app instead.
+
 // Static variables
 static CalibrationState g_state = CAL_IDLE;
 static CalibrationResult g_result;
@@ -304,6 +310,27 @@ void calibrationCancel() {
     g_weight_is_stable = false;
 }
 
+const char* calibrationGetStateName(CalibrationState state) {
+    switch (state) {
+        case CAL_IDLE: return "IDLE";
+        case CAL_TRIGGERED: return "TRIGGERED";
+        case CAL_WAIT_EMPTY: return "WAIT_EMPTY";
+        case CAL_MEASURE_EMPTY: return "MEASURE_EMPTY";
+        case CAL_CONFIRM_EMPTY: return "CONFIRM_EMPTY";
+        case CAL_WAIT_FULL: return "WAIT_FULL";
+        case CAL_MEASURE_FULL: return "MEASURE_FULL";
+        case CAL_CONFIRM_FULL: return "CONFIRM_FULL";
+        case CAL_COMPLETE: return "COMPLETE";
+        case CAL_ERROR: return "ERROR";
+        default: return "UNKNOWN";
+    }
+}
+
+#endif // ENABLE_STANDALONE_CALIBRATION
+
+// ==================== Core Calibration Functions ====================
+// These functions are ALWAYS compiled - needed for weight calculations and BLE.
+
 float calibrationCalculateScaleFactor(int32_t empty_adc, int32_t full_adc, float water_volume_ml) {
     // Bottle weight cancels out in the difference:
     // - empty_adc = bottle_weight * scale + offset
@@ -337,20 +364,4 @@ float calibrationGetWaterWeight(int32_t current_adc, const CalibrationData& cal)
 
     // For water, grams = ml
     return water_grams;
-}
-
-const char* calibrationGetStateName(CalibrationState state) {
-    switch (state) {
-        case CAL_IDLE: return "IDLE";
-        case CAL_TRIGGERED: return "TRIGGERED";
-        case CAL_WAIT_EMPTY: return "WAIT_EMPTY";
-        case CAL_MEASURE_EMPTY: return "MEASURE_EMPTY";
-        case CAL_CONFIRM_EMPTY: return "CONFIRM_EMPTY";
-        case CAL_WAIT_FULL: return "WAIT_FULL";
-        case CAL_MEASURE_FULL: return "MEASURE_FULL";
-        case CAL_CONFIRM_FULL: return "CONFIRM_FULL";
-        case CAL_COMPLETE: return "COMPLETE";
-        case CAL_ERROR: return "ERROR";
-        default: return "UNKNOWN";
-    }
 }

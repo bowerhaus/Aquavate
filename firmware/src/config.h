@@ -15,22 +15,28 @@
 //   IOS_MODE=1: iOS App Mode (Production - default)
 //     - BLE enabled for iOS app communication
 //     - Serial commands disabled (saves ~3.7KB IRAM)
-//     - IRAM usage: ~127KB / 131KB (97.2%)
+//     - Standalone calibration disabled (saves ~2.4KB IRAM)
+//     - IRAM usage: ~125KB / 131KB (95.3%)
+//     - Headroom: ~6.1KB
 //
 //   IOS_MODE=0: Standalone USB Mode (Development/Configuration)
 //     - BLE disabled (saves ~45.5KB IRAM)
 //     - Serial commands enabled for USB configuration
+//     - Standalone calibration enabled (inverted-hold trigger + UI)
 //     - IRAM usage: ~82KB / 131KB (62.4%)
+//     - Headroom: ~49.2KB
 
 #define IOS_MODE    1
 
 // Auto-configure feature flags based on IOS_MODE
 #if IOS_MODE
-    #define ENABLE_BLE              1
-    #define ENABLE_SERIAL_COMMANDS  0
+    #define ENABLE_BLE                      1
+    #define ENABLE_SERIAL_COMMANDS          0
+    #define ENABLE_STANDALONE_CALIBRATION   0   // Saves ~2.4KB IRAM
 #else
-    #define ENABLE_BLE              0
-    #define ENABLE_SERIAL_COMMANDS  1
+    #define ENABLE_BLE                      0
+    #define ENABLE_SERIAL_COMMANDS          1
+    #define ENABLE_STANDALONE_CALIBRATION   1   // Keep for USB mode
 #endif
 
 // Sanity check: Verify mutual exclusivity

@@ -91,9 +91,7 @@ struct __attribute__((packed)) BLE_Command {
 
 // Command types
 #define BLE_CMD_TARE_NOW            0x01
-#define BLE_CMD_START_CALIBRATION   0x02
-#define BLE_CMD_CALIBRATE_POINT     0x03
-#define BLE_CMD_CANCEL_CALIBRATION  0x04
+// 0x02-0x04 reserved for future calibration commands (iOS app will handle calibration)
 #define BLE_CMD_RESET_DAILY         0x05
 #define BLE_CMD_CLEAR_HISTORY       0x06
 
@@ -164,8 +162,6 @@ String bleGetDeviceSuffix();
 bool bleCheckTareRequested();
 bool bleCheckResetDailyRequested();
 bool bleCheckClearHistoryRequested();
-bool bleCheckStartCalibrationRequested();
-bool bleCheckCancelCalibrationRequested();
 
 #endif // ENABLE_BLE
 

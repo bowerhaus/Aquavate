@@ -7,60 +7,112 @@
 ## Current Work
 
 ### IRAM Optimization - Conditional Compilation (2026-01-17) ✅ COMPLETE
-**Status:** ✅ Successfully implemented and verified
+**Status:** ✅ Phase 1 and Phase 2 complete
 
 **Problem:** IRAM overflow (134,076 / 131,072 bytes = 3,004 bytes over limit)
 - Adding time-set BLE command caused overflow
 - Needed to reduce IRAM by ~3KB minimum
+- Additional ~2.4KB savings possible by disabling standalone calibration
 
-**Solution Implemented:** Conditional compilation with mutually exclusive BLE/Serial Commands
+**Phase 1: BLE/Serial Commands Conditional Compilation** ✅ COMPLETE
 
 **Implementation Details:**
-- Added two compile-time flags in [firmware/src/config.h](firmware/src/config.h):
-  - `ENABLE_BLE` (default: 1) - iOS app mode
-  - `ENABLE_SERIAL_COMMANDS` (default: 0) - Standalone USB mode
+- Added `IOS_MODE` master flag in [firmware/src/config.h](firmware/src/config.h:29)
+- Auto-configures `ENABLE_BLE` and `ENABLE_SERIAL_COMMANDS` based on mode
 - Flags are mutually exclusive (compile error if both enabled)
 - Reverted from ESP-IDF Bluedroid back to NimBLE
 - Wrapped all BLE code in `#if ENABLE_BLE` blocks
 - Wrapped all serial command code in `#if ENABLE_SERIAL_COMMANDS` blocks
 - Updated main.cpp with conditional initialization
 
-**Verified Build Results:**
+**Verified Build Results (Phase 1):**
 
 **Mode 1: iOS App Mode (Production - default)**
-- Config: `ENABLE_BLE=1`, `ENABLE_SERIAL_COMMANDS=0`
+- Config: `IOS_MODE=1` → `ENABLE_BLE=1`, `ENABLE_SERIAL_COMMANDS=0`
 - IRAM Usage: **127,362 bytes / 131,072 bytes** (97.2%)
 - **✅ PASSES** with 3,710 bytes headroom
 - Flash: 762,004 bytes (58.1%)
 - RAM: 36,548 bytes (11.2%)
 
 **Mode 2: Standalone USB Mode (Development)**
-- Config: `ENABLE_BLE=0`, `ENABLE_SERIAL_COMMANDS=1`
+- Config: `IOS_MODE=0` → `ENABLE_BLE=0`, `ENABLE_SERIAL_COMMANDS=1`
 - IRAM Usage: **81,846 bytes / 131,072 bytes** (62.4%)
 - **✅ PASSES** with 49,226 bytes headroom
 - Flash: 467,928 bytes (35.7%)
 - RAM: 23,060 bytes (7.0%)
 
-**IRAM Savings Achieved:**
-- Disabling serial commands: ~3.7 KB (as predicted)
-- Disabling BLE: ~45.5 KB (even better than predicted!)
+**IRAM Savings Achieved (Phase 1):**
+- Disabling serial commands: ~3.7 KB
+- Disabling BLE: ~45.5 KB
 - Safety check verified: Compile error when both enabled
 
+**Phase 2: Standalone Calibration Conditional Compilation** ✅ COMPLETE
+
+**Objective:** Save additional IRAM in iOS mode by disabling standalone calibration
+- iOS app will perform calibration via its own wizard UI
+- Firmware provides core calibration functions (weight calc, scale factor)
+- Standalone calibration state machine disabled in iOS mode
+
+**Implementation Complete:**
+- ✅ Added `ENABLE_STANDALONE_CALIBRATION` flag to [config.h](firmware/src/config.h:35)
+- ✅ Auto-configured by `IOS_MODE` (disabled in iOS mode, enabled in USB mode)
+- ✅ Wrapped [calibration.h](firmware/include/calibration.h) state machine with `#if ENABLE_STANDALONE_CALIBRATION`
+- ✅ Wrapped [calibration.cpp](firmware/src/calibration.cpp) state machine with `#if ENABLE_STANDALONE_CALIBRATION`
+- ✅ Core functions (`calibrationCalculateScaleFactor`, `calibrationGetWaterWeight`) always compiled
+- ✅ Wrapped [ui_calibration.h](firmware/include/ui_calibration.h) and [ui_calibration.cpp](firmware/src/ui_calibration.cpp) entirely
+- ✅ Wrapped standalone calibration code in [main.cpp](firmware/src/main.cpp)
+- ✅ Removed BLE `START_CALIBRATION`/`CANCEL_CALIBRATION` commands entirely (not needed)
+- ✅ Built and verified IRAM savings in both modes
+
+**Verified Build Results (Phase 2):**
+
+**Mode 1: iOS App Mode (Production - default)**
+- Config: `IOS_MODE=1` → `ENABLE_BLE=1`, `ENABLE_SERIAL_COMMANDS=0`, `ENABLE_STANDALONE_CALIBRATION=0`
+- IRAM Usage: **126,335 bytes / 131,072 bytes** (96.4%)
+- **✅ PASSES** with 4,737 bytes headroom
+- Flash: 754,452 bytes (57.6%)
+- RAM: 36,468 bytes (11.1%)
+
+**Mode 2: Standalone USB Mode (Development)**
+- Config: `IOS_MODE=0` → `ENABLE_BLE=0`, `ENABLE_SERIAL_COMMANDS=1`, `ENABLE_STANDALONE_CALIBRATION=1`
+- IRAM Usage: **80,819 bytes / 131,072 bytes** (61.7%)
+- **✅ PASSES** with 50,253 bytes headroom
+- Flash: 467,928 bytes (35.7%)
+- RAM: 23,060 bytes (7.0%)
+
+**IRAM Savings Achieved:**
+- **Phase 1**: 3.7KB (serial commands) + 45.5KB (BLE vs USB mode)
+- **Phase 2**: 1.0KB additional (standalone calibration UI + state machine)
+- **Total iOS headroom**: 4.7KB (enough for future features)
+
 **Files Modified:**
-- [firmware/src/config.h](firmware/src/config.h) - Feature flags + sanity check
-- [firmware/include/ble_service.h](firmware/include/ble_service.h) - Wrapped in #if ENABLE_BLE
-- [firmware/src/ble_service.cpp](firmware/src/ble_service.cpp) - Wrapped in #if ENABLE_BLE
-- [firmware/include/serial_commands.h](firmware/include/serial_commands.h) - Wrapped in #if ENABLE_SERIAL_COMMANDS
-- [firmware/src/serial_commands.cpp](firmware/src/serial_commands.cpp) - Wrapped in #if ENABLE_SERIAL_COMMANDS
-- [firmware/src/main.cpp](firmware/src/main.cpp) - Conditional includes and initialization
-- [firmware/platformio.ini](firmware/platformio.ini) - Added NimBLE library back
+- [firmware/src/config.h](firmware/src/config.h) - Added ENABLE_STANDALONE_CALIBRATION flag
+- [firmware/include/calibration.h](firmware/include/calibration.h) - Moved CalibrationState enum outside conditional, wrapped state machine
+- [firmware/src/calibration.cpp](firmware/src/calibration.cpp) - Wrapped state machine implementation
+- [firmware/include/ui_calibration.h](firmware/include/ui_calibration.h) - Wrapped entirely
+- [firmware/src/ui_calibration.cpp](firmware/src/ui_calibration.cpp) - Wrapped entirely
+- [firmware/src/main.cpp](firmware/src/main.cpp) - Wrapped calibration initialization, trigger, state machine, sleep prevention
+- [firmware/include/ble_service.h](firmware/include/ble_service.h) - Removed START_CALIBRATION/CANCEL_CALIBRATION commands
+- [firmware/src/ble_service.cpp](firmware/src/ble_service.cpp) - Removed calibration command implementations
 
-**Plan Document:**
-- [Plans/020-serial-commands-removal.md](Plans/020-serial-commands-removal.md) - Full implementation plan
+**Key Design Decision:**
+- BLE calibration commands removed entirely (not just disabled)
+- iOS app will implement its own calibration wizard UI
+- Firmware exposes core calibration math functions for iOS app to use
+- This approach provides better UX and saves IRAM
 
-**Current Branch:** `esp-idf-ble-rewrite`
+**Plan Documents Updated:** ✅ All Complete
+- ✅ [Plans/013-ble-integration.md](Plans/013-ble-integration.md) - Documented removal of BLE calibration commands, added iOS calibration note
+- ✅ [Plans/014-ios-ble-coredata-integration.md](Plans/014-ios-ble-coredata-integration.md) - Added Phase 4.7: iOS Calibration Wizard with complete implementation details
+- ✅ [Plans/015-ios-ux-prd-creation.md](Plans/015-ios-ux-prd-creation.md) - Added comprehensive Calibration Wizard UX specification
+- ✅ [docs/iOS-UX-PRD.md](docs/iOS-UX-PRD.md) - Updated to v1.1 with two-point calibration wizard (live ADC, stability indicators)
 
-**Result:** ✅ IRAM issue resolved! Firmware fits comfortably in both modes with production mode ready for deployment.
+**Current Branch:** `serial-commands-removal` (ready to merge)
+
+**Next Steps:**
+1. ✅ Update plan documents with iOS calibration approach - COMPLETE
+2. Test both build modes on hardware
+3. Merge to master
 
 ---
 

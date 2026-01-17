@@ -471,6 +471,67 @@ let options: [String: Any] = [
 centralManager = CBCentralManager(delegate: self, queue: nil, options: options)
 ```
 
+---
+
+#### Phase 4.7: iOS Calibration Wizard (NEW - 2026-01-17)
+
+**Context:**
+- Firmware standalone calibration removed to save IRAM (1KB savings)
+- iOS app now responsible for calibration UI and workflow
+- Firmware provides core math functions via Bottle Config characteristic
+
+**Deliverables:**
+- CalibrationWizardView with multi-step UI flow
+- Weight measurement helpers using BLE Current State
+- Write calibration results to firmware via Bottle Config characteristic
+- Calibration validation and error handling
+
+**User Flow:**
+```
+1. User taps "Calibrate" in Settings
+2. Welcome screen: "You'll need an empty bottle and tap water"
+3. Step 1: Place empty bottle → "Tap when ready" → measure 10s → show ADC value
+4. Step 2: Fill to 830ml line → "Tap when ready" → measure 10s → show ADC value
+5. Calculate scale factor (firmware function)
+6. Write calibration to firmware (BLE Bottle Config)
+7. Success screen: "Calibration complete! ✓"
+```
+
+**BLE Integration:**
+```swift
+// Read current weight (ADC) during calibration
+let currentState = bleManager.currentWeightG  // From Current State notifications
+
+// After both measurements
+let scaleFactor = calculateScaleFactor(emptyADC: emptyReading,
+                                       fullADC: fullReading,
+                                       waterVolumeMl: 830.0)
+
+// Write to firmware
+bleManager.writeBottleConfig(
+    scaleFactor: scaleFactor,
+    tareWeight: emptyReading,
+    capacity: 830,
+    goal: 2400  // Default daily goal
+)
+```
+
+**Testing:**
+- Complete calibration flow with real hardware
+- Verify scale factor calculation matches firmware
+- Verify calibration persists after disconnect/reconnect
+- Test error cases: disconnection mid-calibration, unstable readings
+- Verify "calibrated" flag updates in Current State
+
+**Critical Files:**
+- [Views/CalibrationWizardView.swift](ios/Aquavate/Aquavate/Views/CalibrationWizardView.swift) - New file
+- [Services/BLEManager.swift](ios/Aquavate/Aquavate/Services/BLEManager.swift) - Add `writeBottleConfig()` method
+- [Views/SettingsView.swift](ios/Aquavate/Aquavate/Views/SettingsView.swift) - Add "Calibrate" button
+
+**Note:** This phase can be implemented after Phase 4.6 or deferred to Phase 5 depending on priorities. Bottle can still be used with manual calibration via USB serial commands in standalone mode.
+
+---
+
 ### View Integration Pattern
 
 **HomeView.swift Example:**
@@ -688,7 +749,13 @@ func saveDrinkRecords(_ bleRecords: [BLE_DrinkRecord], context: NSManagedObjectC
 - [ ] Connection state visible in UI (connected/scanning/disconnected)
 - [ ] Daily total matches firmware display ±10ml
 - [ ] Battery level displays correctly
-- [ ] All 6 phases tested and verified
+- [ ] All 6 core phases tested and verified (4.1-4.6)
+
+**Phase 4.7 (iOS Calibration) - Optional for Phase 4:**
+- [ ] Calibration wizard UI complete with multi-step flow
+- [ ] Calibration writes to firmware via Bottle Config
+- [ ] Calibrated flag updates in Current State after calibration
+- [ ] Error handling for disconnection during calibration
 
 ### Post-Phase 4 Handoff:
 

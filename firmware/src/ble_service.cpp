@@ -57,8 +57,6 @@ static uint16_t syncCurrentChunk = 0;      // Current chunk being sent
 static volatile bool g_ble_tare_requested = false;
 static volatile bool g_ble_reset_daily_requested = false;
 static volatile bool g_ble_clear_history_requested = false;
-static volatile bool g_ble_start_calibration_requested = false;
-static volatile bool g_ble_cancel_calibration_requested = false;
 
 // Debug helpers
 extern bool g_debug_enabled;
@@ -123,16 +121,6 @@ class CommandCallbacks : public NimBLECharacteristicCallbacks {
                 case BLE_CMD_TARE_NOW:
                     BLE_DEBUG("Command: TARE_NOW");
                     g_ble_tare_requested = true;
-                    break;
-
-                case BLE_CMD_START_CALIBRATION:
-                    BLE_DEBUG("Command: START_CALIBRATION");
-                    g_ble_start_calibration_requested = true;
-                    break;
-
-                case BLE_CMD_CANCEL_CALIBRATION:
-                    BLE_DEBUG("Command: CANCEL_CALIBRATION");
-                    g_ble_cancel_calibration_requested = true;
                     break;
 
                 case BLE_CMD_RESET_DAILY:
@@ -700,22 +688,6 @@ bool bleCheckResetDailyRequested() {
 bool bleCheckClearHistoryRequested() {
     if (g_ble_clear_history_requested) {
         g_ble_clear_history_requested = false;
-        return true;
-    }
-    return false;
-}
-
-bool bleCheckStartCalibrationRequested() {
-    if (g_ble_start_calibration_requested) {
-        g_ble_start_calibration_requested = false;
-        return true;
-    }
-    return false;
-}
-
-bool bleCheckCancelCalibrationRequested() {
-    if (g_ble_cancel_calibration_requested) {
-        g_ble_cancel_calibration_requested = false;
         return true;
     }
     return false;

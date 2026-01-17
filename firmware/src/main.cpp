@@ -14,7 +14,9 @@
 #include "weight.h"
 #include "storage.h"
 #include "calibration.h"
+#if ENABLE_STANDALONE_CALIBRATION
 #include "ui_calibration.h"
+#endif
 
 // Serial commands for time setting (conditional)
 #if ENABLE_SERIAL_COMMANDS
@@ -71,7 +73,9 @@ RTC_DATA_ATTR unsigned long rtc_continuous_awake_start = 0;
 // Calibration state
 CalibrationData g_calibration;
 bool g_calibrated = false;
+#if ENABLE_STANDALONE_CALIBRATION
 CalibrationState g_last_cal_state = CAL_IDLE;
+#endif
 
 // Time state
 int8_t g_timezone_offset = 0;  // UTC offset in hours
@@ -856,6 +860,7 @@ void setup() {
     }
 
     // Initialize calibration state machine
+#if ENABLE_STANDALONE_CALIBRATION
     calibrationInit();
     Serial.println("Calibration state machine initialized");
 
@@ -881,6 +886,7 @@ void setup() {
         display.display();
     }
 #endif
+#endif // ENABLE_STANDALONE_CALIBRATION
 
     // Initialize drink tracking system (only if time is valid)
     if (g_time_valid) {
@@ -977,23 +983,6 @@ void loop() {
         wakeTime = millis(); // Reset sleep timer
     }
 
-    if (bleCheckStartCalibrationRequested()) {
-        Serial.println("BLE Command: START_CALIBRATION");
-        if (calibrationGetState() == CAL_IDLE) {
-            calibrationStart();
-            wakeTime = millis(); // Reset sleep timer
-        } else {
-            Serial.println("BLE Command: Cannot start calibration - already in progress");
-        }
-    }
-
-    if (bleCheckCancelCalibrationRequested()) {
-        Serial.println("BLE Command: CANCEL_CALIBRATION");
-        calibrationCancel();
-        g_last_cal_state = CAL_IDLE;
-        wakeTime = millis(); // Reset sleep timer
-    }
-
     // Note: TARE_NOW command will be handled below in the weight reading section
 #endif
 
@@ -1040,9 +1029,14 @@ void loop() {
     float current_water_ml = sensors.water_ml;
     GestureType gesture = sensors.gesture;
 
-    // Check calibration state
+    // Check calibration state (used in display logic even if standalone calibration disabled)
+#if ENABLE_STANDALONE_CALIBRATION
     CalibrationState cal_state = calibrationGetState();
+#else
+    CalibrationState cal_state = CAL_IDLE;  // Always idle when standalone calibration disabled
+#endif
 
+#if ENABLE_STANDALONE_CALIBRATION
     // If not in calibration mode, check for calibration trigger
     if (cal_state == CAL_IDLE) {
         // Check for calibration trigger gesture (hold inverted for 5s)
@@ -1187,6 +1181,7 @@ void loop() {
 #endif
         }
     }
+#endif // ENABLE_STANDALONE_CALIBRATION
 
     // Periodically check display state and update if needed (smart tracking)
     static unsigned long last_level_check = 0;
@@ -1373,7 +1368,11 @@ void loop() {
     }
 
     // Check for extended sleep trigger (backpack mode - continuous motion prevents normal sleep)
-    if (!g_in_extended_sleep_mode && !calibrationIsActive()) {
+    if (!g_in_extended_sleep_mode
+#if ENABLE_STANDALONE_CALIBRATION
+        && !calibrationIsActive()
+#endif
+    ) {
         unsigned long total_awake_time = millis() - g_continuous_awake_start;
         if (total_awake_time >= (g_extended_sleep_threshold_sec * 1000)) {
             // Block extended sleep when BLE is connected (same as normal sleep - conditional)
@@ -1399,19 +1398,26 @@ void loop() {
 
     // Check if it's time to sleep (only if sleep enabled)
     if (g_sleep_timeout_ms > 0 && millis() - wakeTime >= g_sleep_timeout_ms) {
+        bool sleep_blocked = false;
+
         // Prevent sleep during active calibration
+#if ENABLE_STANDALONE_CALIBRATION
         if (calibrationIsActive()) {
             Serial.println("Sleep blocked - calibration in progress");
             wakeTime = millis(); // Reset timer to prevent immediate sleep after calibration
-        }
-        // Prevent sleep when BLE is connected (conditional)
-#if ENABLE_BLE
-        else if (bleIsConnected()) {
-            Serial.println("Sleep blocked - BLE connected");
-            wakeTime = millis(); // Reset timer while connected
+            sleep_blocked = true;
         }
 #endif
-        else {
+        // Prevent sleep when BLE is connected (conditional)
+#if ENABLE_BLE
+        if (!sleep_blocked && bleIsConnected()) {
+            Serial.println("Sleep blocked - BLE connected");
+            wakeTime = millis(); // Reset timer while connected
+            sleep_blocked = true;
+        }
+#endif
+
+        if (!sleep_blocked) {
 #if DISPLAY_SLEEP_INDICATOR
             // Show Zzzz indicator before sleeping
             Serial.println("Displaying Zzzz indicator...");
