@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="1024" height="1024" fill="#FFFFFF"/>
+
+  <!-- Water drop shape - centered, similar to SF Symbol drop.fill -->
+  <path d="M512 140
+           C512 140 280 420 280 620
+           C280 780 384 884 512 884
+           C640 884 744 780 744 620
+           C744 420 512 140 512 140Z"
+        fill="#007AFF"/>
+</svg>
