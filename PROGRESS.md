@@ -1,10 +1,43 @@
 # Aquavate - Active Development Progress
 
-**Last Updated:** 2026-01-17 (Phase 4 Bug Fixes Complete)
+**Last Updated:** 2026-01-18 (Human Figure Progress Graphic)
 
 ---
 
 ## Current Work
+
+### iOS Human Figure Progress Graphic (2026-01-18) 🔄 IN PROGRESS
+**Status:** Implementation nearly complete, testing SVG vector assets
+
+**Goal:** Replace circular progress ring with human figure that fills from bottom to show hydration progress
+
+**Approach:** Using SVG vector graphics directly in iOS (no bitmap conversion needed)
+
+**Files Created/Modified:**
+- [ios/Aquavate/Aquavate/Components/HumanFigureProgressView.swift](ios/Aquavate/Aquavate/Components/HumanFigureProgressView.swift) - New SwiftUI view component
+- [ios/Aquavate/Aquavate/Assets.xcassets/HumanFigureOutline.imageset/](ios/Aquavate/Aquavate/Assets.xcassets/HumanFigureOutline.imageset/) - SVG outline (stroke, no fill)
+- [ios/Aquavate/Aquavate/Assets.xcassets/HumanFigureFilled.imageset/](ios/Aquavate/Aquavate/Assets.xcassets/HumanFigureFilled.imageset/) - SVG filled silhouette (for masking)
+- [ios/Aquavate/Aquavate/Views/HomeView.swift](ios/Aquavate/Aquavate/Views/HomeView.swift) - Updated to use HumanFigureProgressView
+
+**Source Assets:**
+- [firmware/assets/human_figure_source.svg](firmware/assets/human_figure_source.svg) - Source SVG with stroke outline
+- [firmware/assets/generate_pngs.py](firmware/assets/generate_pngs.py) - Python script for PNG generation (kept as fallback)
+
+**Implementation Details:**
+- HumanFigureProgressView uses two SVG layers:
+  1. HumanFigureFilled - solid black silhouette used as mask for blue progress fill
+  2. HumanFigureOutline - stroke outline layered on top
+- Blue fill animates from bottom up based on progress (0-100%)
+- Text displays below figure: "X ml" and "of Yml goal"
+- Frame size: 132x220 (10% larger than original 120x200)
+- SVGs use `preserves-vector-data: true` for perfect scaling
+
+**Next Steps:**
+1. Test SVG rendering in Xcode SwiftUI previews
+2. Verify fill animation works correctly
+3. Test on device
+
+---
 
 ### Phase 4 Bug Fixes & Polish (2026-01-17) ✅ COMPLETE
 **Status:** ✅ All critical sync bugs fixed, UI polish complete

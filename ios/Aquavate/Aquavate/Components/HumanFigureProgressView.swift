@@ -44,8 +44,8 @@ struct HumanFigureProgressView: View {
                 )
                 .animation(.easeInOut(duration: 0.5), value: progress)
 
-                // Outline image on top
-                Image("HumanFigure")
+                // Outline SVG on top
+                Image("HumanFigureOutline")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
             }
