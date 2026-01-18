@@ -163,8 +163,8 @@ struct HomeView: View {
                         .padding(.horizontal)
                     }
 
-                    // Circular progress ring - daily goal (PRIMARY FOCUS)
-                    CircularProgressView(
+                    // Human figure progress - daily goal (PRIMARY FOCUS)
+                    HumanFigureProgressView(
                         current: displayDailyTotal,
                         total: displayGoal,
                         color: .blue,
