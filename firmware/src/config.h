@@ -108,7 +108,7 @@ extern uint8_t g_daily_intake_display_mode;
 // Extended deep sleep configuration (backpack mode)
 // When device is continuously awake for threshold duration (e.g., in backpack),
 // switch to timer-based wake instead of motion wake to conserve battery
-#define EXTENDED_SLEEP_THRESHOLD_SEC    120     // 2 minutes continuous awake triggers extended sleep
+#define EXTENDED_SLEEP_THRESHOLD_SEC    300     // 5 minutes continuous awake triggers extended sleep
 #define EXTENDED_SLEEP_TIMER_SEC        60      // 1 minute timer wake in extended mode
 
 // Display "Zzzz" indicator before entering deep sleep
