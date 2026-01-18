@@ -571,7 +571,9 @@ bool bleInit() {
         AQUAVATE_DRINK_DATA_UUID,
         NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
     );
-    // Initial value will be set when sync starts
+    // Set initial value with empty chunk header (prevents 0-byte notification on subscribe)
+    static const uint8_t emptyChunk[6] = {0, 0, 0, 0, 0, 0}; // chunk_index=0, total_chunks=0, record_count=0, reserved=0
+    pDrinkDataChar->setValue(emptyChunk, sizeof(emptyChunk));
 
     pAquavateService->start();
     BLE_DEBUG("Aquavate Service started (Current State + Config + Commands + Sync)");

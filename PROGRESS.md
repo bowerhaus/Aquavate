@@ -1,13 +1,89 @@
 # Aquavate - Active Development Progress
 
-**Last Updated:** 2026-01-18 (Human Figure Progress Graphic)
+**Last Updated:** 2026-01-18 (Pull-to-Refresh Sync)
 
 ---
 
 ## Current Work
 
-### iOS Human Figure Progress Graphic (2026-01-18) 🔄 IN PROGRESS
-**Status:** Implementation nearly complete, testing SVG vector assets
+### Pull-to-Refresh Sync for HomeView (2026-01-18) ✅ COMPLETE & TESTED
+**Status:** Implementation complete and verified on hardware
+
+**Goal:** Add pull-to-refresh gesture to HomeView that connects to the bottle (if needed) and syncs drink history. Shows "Bottle is asleep - tilt to wake" alert if the bottle cannot be found.
+
+**Plan:** [Plans/021-pull-to-refresh-sync.md](Plans/021-pull-to-refresh-sync.md)
+
+**Files Modified:**
+1. **[ios/Aquavate/Aquavate/Services/BLEManager.swift](ios/Aquavate/Aquavate/Services/BLEManager.swift)**
+   - Added `RefreshResult` enum for async operation outcomes
+   - Added `performRefresh() async -> RefreshResult` - main entry point
+   - Added `attemptConnection() async` - uses simple polling (same mechanism as Settings scan)
+   - Added `performSyncOnly() async` - syncs when already connected, waits for Current State update
+   - Added idle disconnect timer (60 seconds) - connection stays open for real-time updates
+   - Added `startIdleDisconnectTimer()` and `cancelIdleDisconnectTimer()` methods
+
+2. **[ios/Aquavate/Aquavate/Views/HomeView.swift](ios/Aquavate/Aquavate/Views/HomeView.swift)**
+   - Added `@State` properties for alert presentation
+   - Added `.refreshable { }` modifier to ScrollView
+   - Added alert modifiers for "bottle asleep" and error cases
+
+3. **[ios/Aquavate/Aquavate/Views/SettingsView.swift](ios/Aquavate/Aquavate/Views/SettingsView.swift)**
+   - Wrapped connection controls (Scan/Connect/Disconnect) in `#if DEBUG`
+   - Device Info and Device Commands sections remain visible in release
+   - Updated version to "1.0.0 (Pull-to-Refresh)"
+
+4. **[ios/Aquavate/Aquavate/AquavateApp.swift](ios/Aquavate/Aquavate/AquavateApp.swift)**
+   - Removed auto-reconnect on foreground (user uses pull-to-refresh instead)
+   - Background disconnect remains immediate (allows bottle to sleep)
+
+**Key Behaviors:**
+- Pull down → connect (if needed) → sync → stay connected 60 seconds
+- Connection auto-disconnects after 60 seconds idle (battery conservation)
+- Disconnect immediately when app goes to background
+- Scan timeout with no devices → "Bottle is asleep - tilt to wake" alert
+- Uses simple polling with Task.sleep (same mechanism as Settings scan)
+
+**Edge Cases:**
+| Scenario | Behavior |
+|----------|----------|
+| Bluetooth off | Show error: "Bluetooth is turned off" |
+| Already connected | Sync, reset idle timer |
+| Already syncing | Wait for current sync |
+| No unsynced records | Stay connected (60s idle timer) |
+| Scan timeout (no devices) | Show "bottle asleep" alert |
+| Connection drops mid-sync | Show sync error |
+
+**Implementation Progress:**
+- [x] RefreshResult enum added to BLEManager.swift
+- [x] Async performRefresh() method
+- [x] attemptConnection() and performSyncOnly() helpers
+- [x] HomeView .refreshable modifier and alerts
+- [x] SettingsView #if DEBUG wrapping
+- [x] Build verification
+- [x] Idle disconnect timer (60 seconds)
+- [x] Removed auto-reconnect on foreground
+
+**Verification Checklist (hardware tested 2026-01-18):**
+- [x] Pull down when disconnected, bottle awake → connects, syncs, stays connected 60s
+- [ ] Pull down when disconnected, bottle asleep → shows "tilt to wake" alert after ~10s
+- [x] Pull down when already connected → syncs, resets idle timer
+- [ ] Pull down with Bluetooth off → shows Bluetooth error
+- [x] Pull down with no unsynced records → stays connected (idle timer)
+- [ ] Verify bottle returns to sleep after app disconnects
+- [x] Verify connection controls hidden in release build, visible in debug build
+- [x] Real-time data verified: weight=175g, level=175ml, daily=380ml, battery=99%
+- [x] Flags verified: timeValid=true, calibrated=true, stable=true
+
+**Fixed Minor Issue (0-byte drink data notification):**
+- Root cause: Drink Data characteristic had no initial value, causing 0-byte notification on subscribe
+- Firmware fix: Set 6-byte empty chunk header on init (`00 00 00 00 00 00`)
+- iOS fix: Recognize and silently ignore empty initial chunk (totalChunks=0, recordCount=0)
+- Files modified: [ble_service.cpp](firmware/src/ble_service.cpp), [BLEManager.swift](ios/Aquavate/Aquavate/Services/BLEManager.swift)
+
+---
+
+### iOS Human Figure Progress Graphic (2026-01-18) ✅ COMPLETE
+**Status:** Implementation complete and tested
 
 **Goal:** Replace circular progress ring with human figure that fills from bottom to show hydration progress
 
@@ -19,10 +95,6 @@
 - [ios/Aquavate/Aquavate/Assets.xcassets/HumanFigureFilled.imageset/](ios/Aquavate/Aquavate/Assets.xcassets/HumanFigureFilled.imageset/) - SVG filled silhouette (for masking)
 - [ios/Aquavate/Aquavate/Views/HomeView.swift](ios/Aquavate/Aquavate/Views/HomeView.swift) - Updated to use HumanFigureProgressView
 
-**Source Assets:**
-- [firmware/assets/human_figure_source.svg](firmware/assets/human_figure_source.svg) - Source SVG with stroke outline
-- [firmware/assets/generate_pngs.py](firmware/assets/generate_pngs.py) - Python script for PNG generation (kept as fallback)
-
 **Implementation Details:**
 - HumanFigureProgressView uses two SVG layers:
   1. HumanFigureFilled - solid black silhouette used as mask for blue progress fill
@@ -31,11 +103,6 @@
 - Text displays below figure: "X ml" and "of Yml goal"
 - Frame size: 132x220 (10% larger than original 120x200)
 - SVGs use `preserves-vector-data: true` for perfect scaling
-
-**Next Steps:**
-1. Test SVG rendering in Xcode SwiftUI previews
-2. Verify fill animation works correctly
-3. Test on device
 
 ---
 

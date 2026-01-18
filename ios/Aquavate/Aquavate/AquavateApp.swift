@@ -41,15 +41,14 @@ struct AquavateApp: App {
     private func handleScenePhaseChange(from oldPhase: ScenePhase, to newPhase: ScenePhase) {
         switch newPhase {
         case .background:
-            // Disconnect when app goes to background to allow bottle to sleep
+            // Disconnect immediately when app goes to background to allow bottle to sleep
             if bleManager.connectionState.isConnected {
                 bleManager.disconnect()
             }
         case .active:
-            // Reconnect when app returns to foreground
-            if bleManager.connectionState == .disconnected && bleManager.isBluetoothReady {
-                bleManager.reconnectToLastDevice()
-            }
+            // User should use pull-to-refresh to connect
+            // Don't auto-reconnect on foreground
+            break
         case .inactive:
             // Transitional state, no action needed
             break

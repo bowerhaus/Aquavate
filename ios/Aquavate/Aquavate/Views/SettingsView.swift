@@ -82,6 +82,9 @@ struct SettingsView: View {
                         }
                     }
 
+                    #if DEBUG
+                    // Connection controls only visible in debug builds
+                    // Release builds use pull-to-refresh on HomeView for sync
                     if bleManager.connectionState.isConnected {
                         Button(role: .destructive) {
                             bleManager.disconnect()
@@ -130,6 +133,7 @@ struct SettingsView: View {
                             }
                         }
                     }
+                    #endif
 
                     if let error = bleManager.errorMessage {
                         HStack {
@@ -344,7 +348,7 @@ struct SettingsView: View {
                     HStack {
                         Text("Version")
                         Spacer()
-                        Text("1.0.0 (BLE Phase 4.5)")
+                        Text("1.0.0 (Pull-to-Refresh)")
                             .foregroundStyle(.secondary)
                             .font(.caption)
                     }

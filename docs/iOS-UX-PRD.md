@@ -1,10 +1,11 @@
 # Aquavate iOS App - UX Product Requirements Document
 
-**Version:** 1.1
-**Date:** 2026-01-17
-**Status:** Approved (Updated for iOS Calibration)
+**Version:** 1.2
+**Date:** 2026-01-18
+**Status:** Approved (Updated for Pull-to-Refresh)
 
 **Changelog:**
+- **v1.2 (2026-01-18):** Added Pull-to-Refresh sync for Home screen (Section 2.4). Connection stays open 60s for real-time updates. Settings connection controls wrapped in `#if DEBUG` (Section 2.6).
 - **v1.1 (2026-01-17):** Updated Calibration Wizard (Section 2.3) - iOS now performs two-point calibration instead of firmware. Added live ADC readings, stability indicators, and BLE integration details.
 - **v1.0 (2026-01-16):** Initial approved version
 
@@ -316,10 +317,19 @@ Sarah's Bluetooth is accidentally turned off. When she opens the app, she sees a
 | Sync status | Last BLE sync timestamp | "Last synced {X} ago" |
 | Connection dot | BLE connection state | Green/Orange/Gray |
 
-**Pull-to-Refresh:**
-- Triggers manual sync if connected
-- Shows refresh spinner until complete
-- If disconnected: Attempts reconnection
+**Pull-to-Refresh (Updated 2026-01-18):**
+- If disconnected: Scans and connects to bottle, syncs, stays connected 60s
+- If connected: Syncs, resets idle timer
+- Shows refresh spinner until sync complete
+- Connection stays open for 60 seconds for real-time updates
+- Auto-disconnects after 60s idle (battery conservation)
+- Immediate disconnect when app goes to background
+
+**Pull-to-Refresh Alerts:**
+- "Bottle is Asleep" alert if scan times out (~10s) with no devices found
+  - Message: "Tilt your bottle to wake it up, then pull down to try again."
+- "Sync Error" alert if connection fails or sync interrupted
+- "Bluetooth is turned off" error if Bluetooth unavailable
 
 **State Variations:**
 
@@ -489,6 +499,12 @@ Sarah's Bluetooth is accidentally turned off. When she opens the app, she sees a
 - Failure: Red banner "Command failed. Try again." (4s)
 - Disconnected: Alert "Connect to bottle first"
 
+**Connection Controls (Updated 2026-01-18):**
+- Connection controls (Scan/Connect/Disconnect buttons) wrapped in `#if DEBUG`
+- **Debug builds:** Full connection controls visible for testing
+- **Release builds:** Users connect via pull-to-refresh on Home screen
+- Device Info and Device Commands sections remain visible in all builds
+
 **Device Time Warning:**
 If `time_valid` flag is false:
 ```
@@ -549,7 +565,7 @@ Home Screen                      ▼
 
 ---
 
-### Flow 2: Daily Usage
+### Flow 2: Daily Usage (Updated 2026-01-18)
 
 ```
 Morning:
@@ -558,20 +574,20 @@ Morning:
 Pick Up Bottle ──► Puck wakes, starts advertising
     │
     ▼
-iPhone Auto-reconnects (background)
+User opens app (disconnected state)
     │
     ▼
-Sync any overnight drinks (automatic)
+Pull down to refresh
     │
     ▼
-User opens app
+App scans, connects, syncs
     │
     ▼
 Home Screen shows current state
     │
     ├── Bottle level: 750ml (full)
     ├── Daily total: 0ml
-    └── Connection: ● Connected
+    └── Connection: ● Connected (60s idle timer)
 
 Throughout Day:
     │
@@ -588,8 +604,8 @@ Updates daily total (on device)
 Sends BLE notification
     │
     ▼
-If app open: UI updates in real-time
-If app closed: Updates on next open/sync
+If app open + connected: UI updates in real-time
+If app closed/disconnected: Updates on next pull-to-refresh
 
 Evening:
     │
@@ -1430,7 +1446,13 @@ struct CircularProgressView {
 
 This UX PRD defines the complete user experience for the Aquavate iOS app. Upon approval, Phase 4 implementation will begin following both this document and the technical plan in [Plans/014-ios-ble-coredata-integration.md](../Plans/014-ios-ble-coredata-integration.md).
 
-**Document Status:** Approved (v1.1)
+**Document Status:** Approved (v1.2)
+
+**Update Note (2026-01-18):**
+- Pull-to-Refresh sync implemented for Home screen
+- Connection stays open 60 seconds for real-time updates
+- Settings connection controls wrapped in `#if DEBUG` (release builds use pull-to-refresh)
+- "Bottle is Asleep" alert when device not found
 
 **Update Note (2026-01-17):**
 - Calibration Wizard updated for iOS-based two-point calibration
@@ -1440,5 +1462,6 @@ This UX PRD defines the complete user experience for the Aquavate iOS app. Upon 
 
 **Next Steps:**
 1. ✅ Phase 4.1-4.6 implementation (Complete)
-2. Phase 4.7 implementation (Calibration Wizard) - Optional/Future
-3. Begin Phase 5 (Advanced features)
+2. ✅ Pull-to-Refresh sync (Complete - 2026-01-18)
+3. Phase 4.7 implementation (Calibration Wizard) - Optional/Future
+4. Begin Phase 5 (Advanced features)

@@ -43,6 +43,16 @@ enum BLESyncState: String {
     }
 }
 
+/// Result of pull-to-refresh operation
+enum RefreshResult {
+    case synced(recordCount: Int)   // Successfully synced N records
+    case alreadySynced              // Connected but no records to sync
+    case bottleAsleep               // Scan timeout - no devices found
+    case bluetoothOff               // Bluetooth not available
+    case connectionFailed(String)   // Connection error with message
+    case syncFailed(String)         // Sync error with message
+}
+
 /// BLE Manager for Aquavate device communication
 @MainActor
 class BLEManager: NSObject, ObservableObject {
@@ -143,6 +153,10 @@ class BLEManager: NSObject, ObservableObject {
     private var connectedPeripheral: CBPeripheral?
     private var scanTimer: Timer?
     private var connectionTimer: Timer?
+    private var idleDisconnectTimer: Timer?
+
+    /// How long to stay connected after sync when app is in foreground (seconds)
+    private let idleDisconnectInterval: TimeInterval = 60.0
 
     /// Discovered characteristics keyed by UUID
     private var characteristics: [CBUUID: CBCharacteristic] = [:]
@@ -267,6 +281,10 @@ class BLEManager: NSObject, ObservableObject {
     func disconnect() {
         guard let peripheral = connectedPeripheral else { return }
 
+        // Cancel idle timer if active
+        idleDisconnectTimer?.invalidate()
+        idleDisconnectTimer = nil
+
         logger.info("Disconnecting from peripheral")
         centralManager.cancelPeripheralConnection(peripheral)
     }
@@ -274,6 +292,29 @@ class BLEManager: NSObject, ObservableObject {
     /// Check if a specific characteristic is available
     func hasCharacteristic(_ uuid: CBUUID) -> Bool {
         characteristics[uuid] != nil
+    }
+
+    /// Start or reset the idle disconnect timer
+    /// After the interval, automatically disconnects to save bottle battery
+    func startIdleDisconnectTimer() {
+        // Cancel existing timer
+        idleDisconnectTimer?.invalidate()
+
+        // Start new timer
+        idleDisconnectTimer = Timer.scheduledTimer(withTimeInterval: idleDisconnectInterval, repeats: false) { [weak self] _ in
+            guard let self = self else { return }
+            if self.connectionState.isConnected {
+                self.logger.info("Idle timeout - disconnecting to save battery")
+                self.disconnect()
+            }
+        }
+        logger.info("Idle disconnect timer started (\(Int(self.idleDisconnectInterval))s)")
+    }
+
+    /// Cancel the idle disconnect timer (e.g., when user interacts)
+    func cancelIdleDisconnectTimer() {
+        idleDisconnectTimer?.invalidate()
+        idleDisconnectTimer = nil
     }
 
     // MARK: - Private Methods
@@ -702,12 +743,13 @@ extension BLEManager: CBPeripheralDelegate {
     private func handleDrinkDataUpdate(_ data: Data) {
         // Debug: log raw data for troubleshooting
         let hexString = data.map { String(format: "%02X", $0) }.joined(separator: " ")
-        logger.info("Drink Data raw (\(data.count) bytes): \(hexString)")
+        logger.debug("Drink Data raw (\(data.count) bytes): \(hexString)")
 
         // Minimum size check with better error message
         guard data.count >= BLEDrinkDataChunk.headerSize else {
-            logger.warning("Drink Data too short (\(data.count) bytes, need \(BLEDrinkDataChunk.headerSize) for header) - ignoring")
-            return  // Don't fail sync, firmware may send empty/status notifications
+            // This can happen if characteristic has no initial value set (0 bytes on subscribe)
+            logger.debug("Drink Data too short (\(data.count) bytes) - ignoring initial empty notification")
+            return
         }
 
         guard let chunk = BLEDrinkDataChunk.parse(from: data) else {
@@ -721,6 +763,12 @@ extension BLEManager: CBPeripheralDelegate {
                 logger.error("Expected data size: \(6 + Int(recordCount) * 10) bytes, got \(data.count)")
             }
             handleSyncFailure("Invalid drink data chunk")
+            return
+        }
+
+        // Ignore empty initial value (firmware sets this on init to prevent 0-byte notification)
+        if chunk.totalChunks == 0 && chunk.recordCount == 0 {
+            logger.debug("Ignoring empty initial drink data chunk")
             return
         }
 
@@ -974,5 +1022,165 @@ extension BLEManager: CBPeripheralDelegate {
 
         peripheral.readValue(for: characteristic)
         logger.info("Requested bottle config read")
+    }
+
+    // MARK: - Pull-to-Refresh (Async API)
+
+    /// Perform a complete refresh: connect (if needed) and sync
+    /// Stays connected for 1 minute after sync (idle timeout handles disconnect)
+    /// This is the main entry point for pull-to-refresh
+    func performRefresh() async -> RefreshResult {
+        logger.info("performRefresh: starting")
+
+        // Check Bluetooth availability
+        guard isBluetoothReady else {
+            logger.warning("performRefresh: Bluetooth not ready")
+            return .bluetoothOff
+        }
+
+        // Connect if not already connected
+        if !connectionState.isConnected {
+            logger.info("performRefresh: not connected, attempting connection")
+            let connectResult = await attemptConnection()
+            switch connectResult {
+            case .success:
+                logger.info("performRefresh: connection successful")
+            case .failure(let result):
+                logger.warning("performRefresh: connection failed")
+                return result
+            }
+        } else {
+            logger.info("performRefresh: already connected")
+        }
+
+        // Perform sync
+        let syncResult = await performSyncOnly()
+        logger.info("performRefresh: sync result = \(String(describing: syncResult))")
+
+        // Start/reset idle disconnect timer (1 minute)
+        // Connection will stay open for viewing real-time updates
+        startIdleDisconnectTimer()
+
+        return syncResult
+    }
+
+    /// Result of connection attempt (internal)
+    private enum ConnectionResult {
+        case success
+        case failure(RefreshResult)
+    }
+
+    /// Attempt to connect to the bottle, returning success or failure result
+    /// Uses simple polling - same mechanism as Settings scan button
+    private func attemptConnection() async -> ConnectionResult {
+        // Already connected? Return success immediately
+        if connectionState.isConnected {
+            return .success
+        }
+
+        // Start scanning (this triggers auto-connect when device found)
+        startScanning()
+
+        // Poll connection state until connected, failed, or timeout
+        let timeout: TimeInterval = 15.0 // seconds
+        let pollInterval: UInt64 = 100_000_000 // 100ms in nanoseconds
+        let startTime = Date()
+
+        while Date().timeIntervalSince(startTime) < timeout {
+            // Check if connected
+            if connectionState.isConnected {
+                return .success
+            }
+
+            // Check if scan timed out with no devices (bottle asleep)
+            if connectionState == .disconnected {
+                if discoveredDevices.isEmpty && errorMessage?.contains("No Aquavate devices found") == true {
+                    return .failure(.bottleAsleep)
+                }
+                if let error = errorMessage, error.contains("timeout") || error.contains("Failed") {
+                    return .failure(.connectionFailed(error))
+                }
+            }
+
+            // Wait a bit before checking again
+            try? await Task.sleep(nanoseconds: pollInterval)
+        }
+
+        // Timeout - stop scanning and return failure
+        stopScanning()
+        return .failure(.connectionFailed("Connection timeout"))
+    }
+
+    /// Perform sync when already connected, waiting for completion
+    /// Uses polling for reliability
+    private func performSyncOnly() async -> RefreshResult {
+        logger.info("performSyncOnly: starting, unsyncedCount=\(self.unsyncedCount), lastStateUpdateTime=\(String(describing: self.lastStateUpdateTime))")
+
+        // Wait for Current State update if we haven't received one yet
+        // This ensures unsyncedCount is accurate before deciding whether to sync
+        let stateTimeout: TimeInterval = 5.0
+        let startTime = Date()
+        while lastStateUpdateTime == nil && Date().timeIntervalSince(startTime) < stateTimeout {
+            logger.info("performSyncOnly: waiting for Current State update...")
+            try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
+        }
+
+        logger.info("performSyncOnly: after wait, unsyncedCount=\(self.unsyncedCount), connected=\(self.connectionState.isConnected)")
+
+        // Check we're still connected
+        guard connectionState.isConnected else {
+            logger.warning("performSyncOnly: disconnected while waiting for state")
+            return .connectionFailed("Disconnected unexpectedly")
+        }
+
+        // Check if there are records to sync
+        guard unsyncedCount > 0 else {
+            logger.info("performSyncOnly: no records to sync")
+            return .alreadySynced
+        }
+
+        // If sync is already in progress, just wait for it
+        if !syncState.isActive {
+            // Start the sync
+            logger.info("performSyncOnly: starting sync for \(self.unsyncedCount) records")
+            startDrinkSync()
+        } else {
+            logger.info("performSyncOnly: sync already in progress, waiting")
+        }
+
+        // Wait for sync to complete using polling
+        let syncTimeout: TimeInterval = 30.0
+        let syncStartTime = Date()
+        while Date().timeIntervalSince(syncStartTime) < syncTimeout {
+            // Check if sync completed
+            if syncState == .idle && syncedRecordCount > 0 {
+                logger.info("performSyncOnly: sync completed with \(self.syncedRecordCount) records")
+                return .synced(recordCount: syncedRecordCount)
+            }
+
+            // Check if sync failed
+            if syncState == .failed {
+                let message = errorMessage ?? "Unknown error"
+                logger.error("performSyncOnly: sync failed - \(message)")
+                return .syncFailed(message)
+            }
+
+            // Check if disconnected
+            if !connectionState.isConnected {
+                logger.warning("performSyncOnly: disconnected during sync")
+                return .syncFailed("Disconnected during sync")
+            }
+
+            // Check if sync completed with no records (already synced case)
+            if syncState == .idle && unsyncedCount == 0 {
+                logger.info("performSyncOnly: sync completed, no more unsynced records")
+                return syncedRecordCount > 0 ? .synced(recordCount: syncedRecordCount) : .alreadySynced
+            }
+
+            try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
+        }
+
+        logger.error("performSyncOnly: sync timeout")
+        return .syncFailed("Sync timeout")
     }
 }

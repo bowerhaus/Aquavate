@@ -12,6 +12,11 @@ struct HomeView: View {
     @EnvironmentObject var bleManager: BLEManager
     @Environment(\.managedObjectContext) private var viewContext
 
+    // Alert state for pull-to-refresh
+    @State private var showBottleAsleepAlert = false
+    @State private var showErrorAlert = false
+    @State private var errorAlertMessage = ""
+
     // Fetch all drinks from CoreData, sorted by most recent first
     // Filter to today's drinks in computed property to ensure dynamic date comparison
     @FetchRequest(
@@ -111,34 +116,39 @@ struct HomeView: View {
     }
 
     var body: some View {
-        NavigationView {
-            ScrollView {
-                VStack(spacing: 24) {
-                    // Connection status indicator
-                    HStack(spacing: 6) {
-                        Circle()
-                            .fill(connectionStatusColor)
-                            .frame(width: 8, height: 8)
-                        Text(connectionStatusText)
+        VStack(spacing: 0) {
+            // Fixed header bar
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(connectionStatusColor)
+                    .frame(width: 8, height: 8)
+                Text(connectionStatusText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                // Battery indicator (when connected)
+                if bleManager.connectionState.isConnected {
+                    HStack(spacing: 4) {
+                        Image(systemName: batteryIconName)
+                            .font(.caption)
+                            .foregroundStyle(batteryColor)
+                        Text("\(bleManager.batteryPercent)%")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-
-                        if bleManager.connectionState.isConnected {
-                            Spacer()
-                            // Battery indicator
-                            HStack(spacing: 4) {
-                                Image(systemName: batteryIconName)
-                                    .font(.caption)
-                                    .foregroundStyle(batteryColor)
-                                Text("\(bleManager.batteryPercent)%")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
                     }
-                    .padding(.horizontal)
-                    .padding(.top, 8)
+                }
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 10)
+            .background(Color(.systemBackground))
 
+            Divider()
+
+            // Scrollable content
+            ScrollView {
+                VStack(spacing: 24) {
                     // Status warnings (when connected)
                     if bleManager.connectionState.isConnected {
                         HStack(spacing: 12) {
@@ -161,6 +171,7 @@ struct HomeView: View {
                             }
                         }
                         .padding(.horizontal)
+                        .padding(.top, 8)
                     }
 
                     // Human figure progress - daily goal (PRIMARY FOCUS)
@@ -228,7 +239,45 @@ struct HomeView: View {
                     Spacer(minLength: 20)
                 }
             }
-            .navigationTitle("Aquavate")
+            .refreshable {
+                await handleRefresh()
+            }
+        }
+        .alert("Bottle is Asleep", isPresented: $showBottleAsleepAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("Tilt your bottle to wake it up, then pull down to try again.")
+        }
+        .alert("Sync Error", isPresented: $showErrorAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(errorAlertMessage)
+        }
+    }
+
+    // MARK: - Pull-to-Refresh
+
+    private func handleRefresh() async {
+        let result = await bleManager.performRefresh()
+
+        switch result {
+        case .synced(let count):
+            // Success - records synced and disconnected
+            print("Synced \(count) records")
+        case .alreadySynced:
+            // Success - no new records, disconnected
+            print("Already synced")
+        case .bottleAsleep:
+            showBottleAsleepAlert = true
+        case .bluetoothOff:
+            errorAlertMessage = "Bluetooth is turned off. Please enable Bluetooth in Settings."
+            showErrorAlert = true
+        case .connectionFailed(let message):
+            errorAlertMessage = "Connection failed: \(message)"
+            showErrorAlert = true
+        case .syncFailed(let message):
+            errorAlertMessage = "Sync failed: \(message)"
+            showErrorAlert = true
         }
     }
 
