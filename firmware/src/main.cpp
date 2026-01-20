@@ -1462,14 +1462,19 @@ void loop() {
     ) {
         unsigned long total_awake_time = millis() - g_continuous_awake_start;
         if (total_awake_time >= (g_extended_sleep_threshold_sec * 1000)) {
+            // Reset extended sleep timer when bottle is upright and stable (not in backpack)
+            if (gesture == GESTURE_UPRIGHT_STABLE) {
+                // Bottle is stationary - reset timer, normal sleep will handle this
+                g_continuous_awake_start = millis();
+            }
             // Block extended sleep when BLE is connected (same as normal sleep - conditional)
 #if ENABLE_BLE
-            if (bleIsConnected()) {
+            else if (bleIsConnected()) {
                 Serial.println("Extended sleep blocked - BLE connected");
                 g_continuous_awake_start = millis(); // Reset timer while connected
-            } else
+            }
 #endif
-            {
+            else {
                 Serial.print("Extended sleep: Continuous awake threshold exceeded (");
                 Serial.print(total_awake_time / 1000);
                 Serial.print("s >= ");
