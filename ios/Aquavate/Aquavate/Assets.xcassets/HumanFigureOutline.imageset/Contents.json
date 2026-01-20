@@ -1,0 +1,15 @@
+{
+  "images" : [
+    {
+      "filename" : "human_figure_outline.svg",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  },
+  "properties" : {
+    "preserves-vector-data" : true
+  }
+}

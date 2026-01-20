@@ -333,29 +333,14 @@ struct DailySummary {
 
 ### 3. Screens
 
-#### Home Screen
-- Current bottle level (large circular progress)
-- Today's intake vs goal
-- Recent drinks list (last 5)
-- Quick actions: Sync, Settings
+For detailed screen specifications, layouts, and UX flows, see [iOS-UX-PRD.md](iOS-UX-PRD.md).
 
-#### History Screen
-- Calendar view with daily totals
-- Tap day for detailed drink list
-- Weekly/monthly summary charts
-
-#### Bottle Setup Screen
-- Scan for Aquavate devices
-- Pair and configure bottle
-- Set capacity, name, daily goal
-- Tare calibration wizard
-
-#### Settings Screen
-- Daily goal adjustment
-- Notification preferences
-- HealthKit permissions
-- Unit preferences (ml/oz)
-- About/Support
+**Screen Summary:**
+- **Home Screen:** Daily goal progress (large circular, PRIMARY), bottle level (small bar, SECONDARY), recent drinks
+- **History Screen:** 7-day calendar with daily totals, drink list for selected day
+- **Settings Screen:** Device configuration, commands, preferences
+- **Pairing Screen:** BLE device discovery and connection
+- **Calibration Wizard:** Two-point calibration flow (iOS-based)
 
 ### 4. BLE Manager
 

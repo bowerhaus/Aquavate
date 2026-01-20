@@ -14,18 +14,28 @@
 #include "weight.h"
 #include "storage.h"
 #include "calibration.h"
+#if ENABLE_STANDALONE_CALIBRATION
 #include "ui_calibration.h"
+#endif
 
-// Serial commands for time setting
+// Serial commands for time setting (conditional)
+#if ENABLE_SERIAL_COMMANDS
 #include "serial_commands.h"
+#endif
 #include <sys/time.h>
 #include <time.h>
+#include <nvs_flash.h>
 
 // Daily intake tracking
 #include "drinks.h"
 
 // Display state tracking
 #include "display.h"
+
+// BLE service (conditional)
+#if ENABLE_BLE
+#include "ble_service.h"
+#endif
 
 
 // FIX Bug #4: Sensor snapshot to prevent multiple reads per loop
@@ -63,7 +73,9 @@ RTC_DATA_ATTR unsigned long rtc_continuous_awake_start = 0;
 // Calibration state
 CalibrationData g_calibration;
 bool g_calibrated = false;
+#if ENABLE_STANDALONE_CALIBRATION
 CalibrationState g_last_cal_state = CAL_IDLE;
+#endif
 
 // Time state
 int8_t g_timezone_offset = 0;  // UTC offset in hours
@@ -529,6 +541,45 @@ void drawWelcomeScreen() {
 
     display.display();
 }
+
+// Helper function to force display refresh (called by serial commands like TARE)
+void forceDisplayRefresh() {
+#if defined(BOARD_ADAFRUIT_FEATHER)
+    if (!nauReady || !g_calibrated) {
+        Serial.println("Display refresh skipped - NAU7802 not ready or not calibrated");
+        return;
+    }
+
+    // Read current sensor values
+    int32_t current_adc = nau.read();
+    float water_ml = calibrationGetWaterWeight(current_adc, g_calibration);
+
+    // Get current daily state
+    DailyState daily_state;
+    drinksGetState(daily_state);
+
+    // Get current time
+    uint8_t time_hour = 0, time_minute = 0;
+    if (g_time_valid) {
+        struct timeval tv;
+        gettimeofday(&tv, NULL);
+        time_t now = tv.tv_sec + (g_timezone_offset * 3600);
+        struct tm timeinfo;
+        gmtime_r(&now, &timeinfo);
+        time_hour = timeinfo.tm_hour;
+        time_minute = timeinfo.tm_min;
+    }
+
+    // Get battery percent
+    uint8_t battery_pct = 50;
+    float voltage = getBatteryVoltage();
+    battery_pct = getBatteryPercent(voltage);
+
+    Serial.println("Forcing display refresh...");
+    displayForceUpdate(water_ml, daily_state.daily_total_ml,
+                      time_hour, time_minute, battery_pct, false);
+#endif
+}
 #endif
 
 void setup() {
@@ -766,10 +817,12 @@ void setup() {
         Serial.println("Storage initialization failed");
     }
 
-    // Initialize serial command handler
+    // Initialize serial command handler (conditional)
+#if ENABLE_SERIAL_COMMANDS
     serialCommandsInit();
     serialCommandsSetTimeCallback(onTimeSet);
     Serial.println("Serial command handler initialized");
+#endif
 
     // Initialize gesture detection
     if (lisReady) {
@@ -807,6 +860,7 @@ void setup() {
     }
 
     // Initialize calibration state machine
+#if ENABLE_STANDALONE_CALIBRATION
     calibrationInit();
     Serial.println("Calibration state machine initialized");
 
@@ -832,6 +886,7 @@ void setup() {
         display.display();
     }
 #endif
+#endif // ENABLE_STANDALONE_CALIBRATION
 
     // Initialize drink tracking system (only if time is valid)
     if (g_time_valid) {
@@ -865,6 +920,38 @@ void setup() {
     // Note: Display will update on first stable check to ensure correct values shown
 #endif
 
+    // Initialize NVS (required by ESP-IDF BLE)
+    Serial.println("Initializing NVS flash...");
+    esp_err_t ret = nvs_flash_init();
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        Serial.println("NVS: Erasing and reinitializing...");
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        ret = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(ret);
+    Serial.println("NVS initialized!");
+
+    // Initialize BLE service (conditional)
+#if ENABLE_BLE
+    Serial.println("Initializing BLE service...");
+    if (bleInit()) {
+        Serial.println("BLE service initialized!");
+
+        // Start advertising on motion wake (not timer wake)
+        if (wakeup_reason == ESP_SLEEP_WAKEUP_EXT0) {
+            Serial.println("Motion wake detected - starting BLE advertising");
+            bleStartAdvertising();
+        } else if (wakeup_reason == ESP_SLEEP_WAKEUP_UNDEFINED) {
+            Serial.println("Power on/reset - starting BLE advertising");
+            bleStartAdvertising();
+        } else {
+            Serial.println("Timer wake - BLE advertising NOT started (power conservation)");
+        }
+    } else {
+        Serial.println("BLE initialization failed!");
+    }
+#endif
+
     Serial.println("Setup complete!");
     Serial.print("Will sleep in ");
     Serial.print(AWAKE_DURATION_MS / 1000);
@@ -872,8 +959,32 @@ void setup() {
 }
 
 void loop() {
-    // Check for serial commands
+    // Check for serial commands (conditional)
+#if ENABLE_SERIAL_COMMANDS
     serialCommandsUpdate();
+#endif
+
+    // Update BLE service (conditional)
+#if ENABLE_BLE
+    bleUpdate();
+#endif
+
+    // Handle BLE commands (Phase 3C - conditional)
+#if ENABLE_BLE
+    if (bleCheckResetDailyRequested()) {
+        Serial.println("BLE Command: RESET_DAILY");
+        drinksResetDaily();
+        wakeTime = millis(); // Reset sleep timer
+    }
+
+    if (bleCheckClearHistoryRequested()) {
+        Serial.println("BLE Command: CLEAR_HISTORY");
+        drinksClearAll();
+        wakeTime = millis(); // Reset sleep timer
+    }
+
+    // Note: TARE_NOW command will be handled below in the weight reading section
+#endif
 
     // FIX Bug #4: READ SENSORS ONCE - create snapshot for this loop iteration
     SensorSnapshot sensors;
@@ -890,6 +1001,24 @@ void loop() {
         }
     }
 
+    // Handle BLE TARE command (must be after ADC read - conditional)
+#if ENABLE_BLE
+    if (bleCheckTareRequested() && g_calibrated && nauReady) {
+        Serial.println("BLE Command: TARE_NOW");
+        // Update empty bottle ADC to current reading (tare weight)
+        g_calibration.empty_bottle_adc = sensors.adc_reading;
+        // Recalculate full bottle ADC (empty + 830ml * scale_factor)
+        g_calibration.full_bottle_adc = g_calibration.empty_bottle_adc + (int32_t)(830.0f * g_calibration.scale_factor);
+        // Save updated calibration to NVS
+        if (storageSaveCalibration(g_calibration)) {
+            Serial.println("BLE Command: Tare complete, calibration updated");
+        } else {
+            Serial.println("BLE Command: Tare failed - could not save calibration");
+        }
+        wakeTime = millis(); // Reset sleep timer
+    }
+#endif
+
     // Read accelerometer and get gesture (ONCE)
     if (lisReady) {
         sensors.gesture = gesturesUpdate(sensors.water_ml);
@@ -900,9 +1029,14 @@ void loop() {
     float current_water_ml = sensors.water_ml;
     GestureType gesture = sensors.gesture;
 
-    // Check calibration state
+    // Check calibration state (used in display logic even if standalone calibration disabled)
+#if ENABLE_STANDALONE_CALIBRATION
     CalibrationState cal_state = calibrationGetState();
+#else
+    CalibrationState cal_state = CAL_IDLE;  // Always idle when standalone calibration disabled
+#endif
 
+#if ENABLE_STANDALONE_CALIBRATION
     // If not in calibration mode, check for calibration trigger
     if (cal_state == CAL_IDLE) {
         // Check for calibration trigger gesture (hold inverted for 5s)
@@ -1047,6 +1181,7 @@ void loop() {
 #endif
         }
     }
+#endif // ENABLE_STANDALONE_CALIBRATION
 
     // Periodically check display state and update if needed (smart tracking)
     static unsigned long last_level_check = 0;
@@ -1081,24 +1216,34 @@ void loop() {
     }
     last_gesture = gesture;
 
-    // Check display ONLY when bottle is upright stable (prevents flicker during movement)
-    if (cal_state == CAL_IDLE && g_calibrated && gesture == GESTURE_UPRIGHT_STABLE) {
+    // Check display when bottle is upright stable OR if display not yet initialized
+    // This ensures the display updates from splash screen even with negative weight
+    bool display_not_initialized = false;
+#if defined(BOARD_ADAFRUIT_FEATHER)
+    DisplayState display_state = displayGetState();
+    display_not_initialized = !display_state.initialized;
+#endif
+
+    if (cal_state == CAL_IDLE && g_calibrated &&
+        (gesture == GESTURE_UPRIGHT_STABLE || display_not_initialized)) {
 
         // Check every DISPLAY_UPDATE_INTERVAL_MS when bottle is upright stable
-        if (millis() - last_level_check >= DISPLAY_UPDATE_INTERVAL_MS) {
+        // OR immediately if display not initialized
+        if (display_not_initialized || (millis() - last_level_check >= DISPLAY_UPDATE_INTERVAL_MS)) {
             last_level_check = millis();
 
 #if defined(BOARD_ADAFRUIT_FEATHER)
             if (nauReady) {
                 // FIX Bug #4: Use snapshot data instead of reading sensors again
+                // Don't clamp negative values - display needs to see them to show "?" indicator
                 float display_water_ml = current_water_ml;
 
-                // Clamp to valid range
-                if (display_water_ml < 0) display_water_ml = 0;
+                // Only clamp upper bound
                 if (display_water_ml > 830) display_water_ml = 830;
 
                 // Process drink tracking (we're already UPRIGHT_STABLE)
-                if (g_time_valid) {
+                // Only track drinks if weight is valid (>= -50ml threshold)
+                if (g_time_valid && display_water_ml >= -50.0f) {
                     drinksUpdate(current_adc, g_calibration);
                 }
 
@@ -1145,6 +1290,16 @@ void loop() {
                     if (time_interval_elapsed) last_time_check = millis();
                     if (battery_interval_elapsed) last_battery_check = millis();
                 }
+
+                // Update BLE Current State (send notifications if connected - conditional)
+#if ENABLE_BLE
+                bleUpdateCurrentState(daily_state, current_adc, g_calibration,
+                                    battery_pct, g_calibrated, g_time_valid,
+                                    gesture == GESTURE_UPRIGHT_STABLE);
+
+                // Update BLE battery level (separate characteristic)
+                bleUpdateBatteryLevel(battery_pct);
+#endif
             }
 #endif
         }
@@ -1213,28 +1368,56 @@ void loop() {
     }
 
     // Check for extended sleep trigger (backpack mode - continuous motion prevents normal sleep)
-    if (!g_in_extended_sleep_mode && !calibrationIsActive()) {
+    if (!g_in_extended_sleep_mode
+#if ENABLE_STANDALONE_CALIBRATION
+        && !calibrationIsActive()
+#endif
+    ) {
         unsigned long total_awake_time = millis() - g_continuous_awake_start;
         if (total_awake_time >= (g_extended_sleep_threshold_sec * 1000)) {
-            Serial.print("Extended sleep: Continuous awake threshold exceeded (");
-            Serial.print(total_awake_time / 1000);
-            Serial.print("s >= ");
-            Serial.print(g_extended_sleep_threshold_sec);
-            Serial.println("s)");
-            Serial.println("Extended sleep: Switching to extended sleep mode");
-            g_in_extended_sleep_mode = true;
-            enterExtendedDeepSleep();
-            // Will not return from deep sleep
+            // Block extended sleep when BLE is connected (same as normal sleep - conditional)
+#if ENABLE_BLE
+            if (bleIsConnected()) {
+                Serial.println("Extended sleep blocked - BLE connected");
+                g_continuous_awake_start = millis(); // Reset timer while connected
+            } else
+#endif
+            {
+                Serial.print("Extended sleep: Continuous awake threshold exceeded (");
+                Serial.print(total_awake_time / 1000);
+                Serial.print("s >= ");
+                Serial.print(g_extended_sleep_threshold_sec);
+                Serial.println("s)");
+                Serial.println("Extended sleep: Switching to extended sleep mode");
+                g_in_extended_sleep_mode = true;
+                enterExtendedDeepSleep();
+                // Will not return from deep sleep
+            }
         }
     }
 
     // Check if it's time to sleep (only if sleep enabled)
     if (g_sleep_timeout_ms > 0 && millis() - wakeTime >= g_sleep_timeout_ms) {
+        bool sleep_blocked = false;
+
         // Prevent sleep during active calibration
+#if ENABLE_STANDALONE_CALIBRATION
         if (calibrationIsActive()) {
             Serial.println("Sleep blocked - calibration in progress");
             wakeTime = millis(); // Reset timer to prevent immediate sleep after calibration
-        } else {
+            sleep_blocked = true;
+        }
+#endif
+        // Prevent sleep when BLE is connected (conditional)
+#if ENABLE_BLE
+        if (!sleep_blocked && bleIsConnected()) {
+            Serial.println("Sleep blocked - BLE connected");
+            wakeTime = millis(); // Reset timer while connected
+            sleep_blocked = true;
+        }
+#endif
+
+        if (!sleep_blocked) {
 #if DISPLAY_SLEEP_INDICATOR
             // Show Zzzz indicator before sleeping
             Serial.println("Displaying Zzzz indicator...");

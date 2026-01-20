@@ -10,8 +10,9 @@
 #include "gestures.h"
 #include "weight.h"
 #include "storage.h"
+#include "config.h"
 
-// Calibration states
+// Calibration states (always defined - used in display logic)
 enum CalibrationState {
     CAL_IDLE,              // Not in calibration mode
     CAL_TRIGGERED,         // User held bottle inverted - entering calibration
@@ -24,6 +25,12 @@ enum CalibrationState {
     CAL_COMPLETE,          // Calibration successful
     CAL_ERROR,             // Error occurred
 };
+
+#if ENABLE_STANDALONE_CALIBRATION
+
+// ==================== Standalone Calibration State Machine ====================
+// Only available when ENABLE_STANDALONE_CALIBRATION is enabled
+// In iOS mode, calibration is performed by the iOS app itself
 
 // Calibration result
 struct CalibrationResult {
@@ -55,6 +62,21 @@ CalibrationResult calibrationGetResult();
 // Cancel calibration and return to IDLE
 void calibrationCancel();
 
+// Get state name as string (for debugging)
+const char* calibrationGetStateName(CalibrationState state);
+
+#else
+
+// Stub function for when standalone calibration is disabled
+inline const char* calibrationGetStateName(CalibrationState state) {
+    return "IDLE";  // Always idle when standalone calibration disabled
+}
+
+#endif // ENABLE_STANDALONE_CALIBRATION
+
+// ==================== Core Calibration Functions ====================
+// These functions are ALWAYS available - needed for weight calculations
+
 // Calculate scale factor from two-point calibration
 // empty_adc: ADC reading of empty bottle
 // full_adc: ADC reading of full bottle
@@ -67,8 +89,5 @@ float calibrationCalculateScaleFactor(int32_t empty_adc, int32_t full_adc, float
 // cal: Calibration data
 // Returns: Water weight in grams (negative if empty/tared)
 float calibrationGetWaterWeight(int32_t current_adc, const CalibrationData& cal);
-
-// Get state name as string (for debugging)
-const char* calibrationGetStateName(CalibrationState state);
 
 #endif // CALIBRATION_H

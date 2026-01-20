@@ -5,6 +5,10 @@
 #ifndef SERIAL_COMMANDS_H
 #define SERIAL_COMMANDS_H
 
+#include "config.h"
+
+#if ENABLE_SERIAL_COMMANDS
+
 #include <Arduino.h>
 
 // Callback function type for time set events
@@ -22,5 +26,7 @@ void serialCommandsUpdate();
 // Register callback for time set events
 // callback: Function to call when time is successfully set
 void serialCommandsSetTimeCallback(OnTimeSetCallback callback);
+
+#endif // ENABLE_SERIAL_COMMANDS
 
 #endif // SERIAL_COMMANDS_H

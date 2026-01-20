@@ -71,12 +71,35 @@ Two prototype configurations are being evaluated:
 - [firmware/src/drinks.cpp](firmware/src/drinks.cpp) - Daily intake tracking and drink detection
 - [firmware/src/storage.cpp](firmware/src/storage.cpp) - NVS storage for calibration and settings
 - [firmware/src/storage_drinks.cpp](firmware/src/storage_drinks.cpp) - NVS circular buffer for drink records
-- [firmware/src/serial_commands.cpp](firmware/src/serial_commands.cpp) - USB serial commands for configuration
-- [firmware/src/ui_calibration.cpp](firmware/src/ui_calibration.cpp) - E-paper calibration UI screens
+- [firmware/src/serial_commands.cpp](firmware/src/serial_commands.cpp) - USB serial commands for configuration (conditionally compiled)
+- [firmware/src/ui_calibration.cpp](firmware/src/ui_calibration.cpp) - E-paper calibration UI screens (conditionally compiled)
 - [firmware/src/display.cpp](firmware/src/display.cpp) - Smart display state tracking and rendering
-- [firmware/include/config.h](firmware/include/config.h) - Debug flags, power management, sensor thresholds, display config
+- [firmware/include/config.h](firmware/include/config.h) - Debug flags, power management, sensor thresholds, IOS_MODE flag
 - [firmware/include/aquavate.h](firmware/include/aquavate.h) - Version info and shared declarations
 - [firmware/platformio.ini](firmware/platformio.ini) - Dual environment config (Adafruit Feather / SparkFun Qwiic)
+
+### IRAM Constraints (Temporary - ESP32 V2 only)
+The current ESP32 Feather V2 has limited IRAM (131KB). To fit BLE + all features, we use conditional compilation:
+
+**IOS_MODE flag** in [config.h](firmware/include/config.h) - single flag that controls three mutually exclusive features:
+- `IOS_MODE=1` (Production - default):
+  - BLE enabled (iOS app communication)
+  - Serial commands disabled (saves ~3.7KB IRAM)
+  - Standalone calibration disabled (saves ~1KB IRAM)
+  - IRAM: 125KB / 131KB (95.3%)
+- `IOS_MODE=0` (Development/USB mode):
+  - BLE disabled (saves ~45.5KB IRAM)
+  - Serial commands enabled (USB configuration)
+  - Standalone calibration enabled (inverted-hold gesture trigger)
+  - IRAM: 82KB / 131KB (62.4%)
+
+See [Plans/020-serial-commands-removal.md](Plans/020-serial-commands-removal.md) for implementation details.
+
+**TODO - Future Hardware Upgrade:** When upgrading to ESP32-S3 Feather (512KB IRAM):
+- Remove IOS_MODE and all related conditional compilation
+- Remove `#if ENABLE_BLE`, `#if ENABLE_SERIAL_COMMANDS`, `#if ENABLE_STANDALONE_CALIBRATION` blocks
+- Enable all features simultaneously (BLE + serial commands + standalone calibration)
+- Simplify [config.h](firmware/include/config.h), [main.cpp](firmware/src/main.cpp), [ble_service.cpp](firmware/src/ble_service.cpp), [serial_commands.cpp](firmware/src/serial_commands.cpp), [ui_calibration.cpp](firmware/src/ui_calibration.cpp)
 
 ### Build Commands
 ```bash
@@ -86,6 +109,8 @@ cd firmware
 ~/.platformio/penv/bin/platformio run -t upload          # Upload to connected board
 ~/.platformio/penv/bin/platformio device monitor         # Serial monitor
 ```
+
+**Note:** The user will handle firmware uploads and device restarts manually. Do not attempt to upload firmware or wait for upload confirmation - just build and inform the user when ready.
 
 ## Reference Documentation
 

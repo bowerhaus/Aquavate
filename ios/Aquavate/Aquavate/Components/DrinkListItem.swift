@@ -24,27 +24,27 @@ struct DrinkListItem: View {
                 .foregroundStyle(.blue)
                 .frame(width: 32)
 
-            // Drink details
+            // Drink details - amount consumed emphasized
             VStack(alignment: .leading, spacing: 4) {
-                Text(timeString)
+                Text("\(drink.amountMl)ml")
                     .font(.headline)
 
-                Text("\(drink.amountMl)ml consumed")
+                Text(timeString)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
 
             Spacer()
 
-            // Remaining level
+            // Remaining level - de-emphasized
             VStack(alignment: .trailing, spacing: 4) {
                 Text("\(drink.bottleLevelMl)ml")
                     .font(.subheadline)
-                    .fontWeight(.medium)
+                    .foregroundStyle(.secondary)
 
                 Text("remaining")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.tertiary)
             }
         }
         .padding(.vertical, 4)

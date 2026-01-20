@@ -6,6 +6,44 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
+#include <stdint.h>  // For uint8_t, uint32_t types
+
+// ==================== Feature Flags ====================
+
+// Master Mode Selection
+// Set IOS_MODE to control build configuration:
+//   IOS_MODE=1: iOS App Mode (Production - default)
+//     - BLE enabled for iOS app communication
+//     - Serial commands disabled (saves ~3.7KB IRAM)
+//     - Standalone calibration disabled (saves ~2.4KB IRAM)
+//     - IRAM usage: ~125KB / 131KB (95.3%)
+//     - Headroom: ~6.1KB
+//
+//   IOS_MODE=0: Standalone USB Mode (Development/Configuration)
+//     - BLE disabled (saves ~45.5KB IRAM)
+//     - Serial commands enabled for USB configuration
+//     - Standalone calibration enabled (inverted-hold trigger + UI)
+//     - IRAM usage: ~82KB / 131KB (62.4%)
+//     - Headroom: ~49.2KB
+
+#define IOS_MODE    1
+
+// Auto-configure feature flags based on IOS_MODE
+#if IOS_MODE
+    #define ENABLE_BLE                      1
+    #define ENABLE_SERIAL_COMMANDS          0
+    #define ENABLE_STANDALONE_CALIBRATION   0   // Saves ~2.4KB IRAM
+#else
+    #define ENABLE_BLE                      0
+    #define ENABLE_SERIAL_COMMANDS          1
+    #define ENABLE_STANDALONE_CALIBRATION   1   // Keep for USB mode
+#endif
+
+// Sanity check: Verify mutual exclusivity
+#if ENABLE_BLE && ENABLE_SERIAL_COMMANDS
+#error "Cannot enable both ENABLE_BLE and ENABLE_SERIAL_COMMANDS - IRAM overflow! Check IOS_MODE configuration."
+#endif
+
 // ==================== Debug Configuration ====================
 
 // Debug levels (runtime control via serial commands '0'-'4', '9')
@@ -23,7 +61,7 @@
 #define DEBUG_DISPLAY_UPDATES           1   // 0 = disable display update messages
 #define DEBUG_DRINK_TRACKING            1   // 0 = disable drink detection debug
 #define DEBUG_CALIBRATION               1   // 0 = disable calibration debug
-#define DEBUG_BLE                       0   // 0 = disable BLE debug (not yet implemented)
+#define DEBUG_BLE                       1   // 0 = disable BLE debug, 1 = enable BLE debug
 
 // Runtime debug control - these extern declarations allow runtime debug control
 // Use these macros in your code instead of #if DEBUG_* for runtime control
@@ -70,7 +108,7 @@ extern uint8_t g_daily_intake_display_mode;
 // Extended deep sleep configuration (backpack mode)
 // When device is continuously awake for threshold duration (e.g., in backpack),
 // switch to timer-based wake instead of motion wake to conserve battery
-#define EXTENDED_SLEEP_THRESHOLD_SEC    120     // 2 minutes continuous awake triggers extended sleep
+#define EXTENDED_SLEEP_THRESHOLD_SEC    300     // 5 minutes continuous awake triggers extended sleep
 #define EXTENDED_SLEEP_TIMER_SEC        60      // 1 minute timer wake in extended mode
 
 // Display "Zzzz" indicator before entering deep sleep

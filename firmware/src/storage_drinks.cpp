@@ -166,3 +166,214 @@ bool storageSaveBufferMetadata(const CircularBufferMetadata& meta) {
 
     return true;
 }
+
+bool storageGetDrinkRecord(uint16_t index, DrinkRecord& record) {
+    // Load metadata to validate index
+    CircularBufferMetadata meta;
+    if (!storageLoadBufferMetadata(meta) || meta.record_count == 0) {
+        Serial.println("No drink records in storage");
+        return false;
+    }
+
+    // Validate logical index
+    if (index >= meta.record_count) {
+        Serial.print("ERROR: Invalid record index: ");
+        Serial.print(index);
+        Serial.print(" (max: ");
+        Serial.print(meta.record_count - 1);
+        Serial.println(")");
+        return false;
+    }
+
+    // Calculate physical NVS index
+    // If buffer is full (record_count == 600), oldest record is at write_index
+    // If buffer is partial, oldest record is at index 0
+    uint16_t physical_index;
+    if (meta.record_count < DRINK_MAX_RECORDS) {
+        // Buffer not full yet, records start at 0
+        physical_index = index;
+    } else {
+        // Buffer full, oldest record is at write_index
+        physical_index = (meta.write_index + index) % DRINK_MAX_RECORDS;
+    }
+
+    // Generate key and load record
+    char key[16];
+    getDrinkRecordKey(physical_index, key, sizeof(key));
+
+    Preferences prefs;
+    if (!prefs.begin(NVS_NAMESPACE, true)) {
+        Serial.println("ERROR: Failed to open NVS for drink record read");
+        return false;
+    }
+
+    size_t read_size = prefs.getBytes(key, &record, sizeof(DrinkRecord));
+    prefs.end();
+
+    if (read_size != sizeof(DrinkRecord)) {
+        Serial.print("ERROR: Failed to read drink record at index ");
+        Serial.println(index);
+        return false;
+    }
+
+    return true;
+}
+
+bool storageMarkSynced(uint16_t start_index, uint16_t count) {
+    (void)start_index; // Not used - we mark the first N unsynced records
+
+    // Load metadata
+    CircularBufferMetadata meta;
+    if (!storageLoadBufferMetadata(meta) || meta.record_count == 0) {
+        Serial.println("No drink records to mark synced");
+        return false;
+    }
+
+    Preferences prefs;
+    if (!prefs.begin(NVS_NAMESPACE, false)) {
+        Serial.println("ERROR: Failed to open NVS for mark synced");
+        return false;
+    }
+
+    // Iterate through all records and mark the first 'count' unsynced ones as synced
+    // This matches the logic in storageGetUnsyncedRecords
+    uint16_t marked = 0;
+    for (uint16_t i = 0; i < meta.record_count && marked < count; i++) {
+        // Calculate physical index (same logic as storageGetUnsyncedRecords)
+        uint16_t physical_index;
+        if (meta.record_count < DRINK_MAX_RECORDS) {
+            physical_index = i;
+        } else {
+            physical_index = (meta.write_index + i) % DRINK_MAX_RECORDS;
+        }
+
+        // Load record
+        char key[16];
+        getDrinkRecordKey(physical_index, key, sizeof(key));
+
+        DrinkRecord record;
+        size_t read_size = prefs.getBytes(key, &record, sizeof(DrinkRecord));
+        if (read_size != sizeof(DrinkRecord)) {
+            Serial.print("WARNING: Failed to read record at physical index ");
+            Serial.println(physical_index);
+            continue;
+        }
+
+        // Only mark if currently unsynced (bit 0 not set)
+        if ((record.flags & 0x01) == 0) {
+            // Set synced flag
+            record.flags |= 0x01;
+
+            // Write back
+            size_t written = prefs.putBytes(key, &record, sizeof(DrinkRecord));
+            if (written != sizeof(DrinkRecord)) {
+                Serial.print("WARNING: Failed to write synced flag at physical index ");
+                Serial.println(physical_index);
+            } else {
+                marked++;
+            }
+        }
+    }
+
+    prefs.end();
+
+    Serial.print("Marked ");
+    Serial.print(marked);
+    Serial.println(" records as synced");
+
+    return true;
+}
+
+uint16_t storageGetUnsyncedCount() {
+    // Load metadata
+    CircularBufferMetadata meta;
+    if (!storageLoadBufferMetadata(meta) || meta.record_count == 0) {
+        return 0;
+    }
+
+    Preferences prefs;
+    if (!prefs.begin(NVS_NAMESPACE, true)) {
+        Serial.println("ERROR: Failed to open NVS for unsynced count");
+        return 0;
+    }
+
+    uint16_t unsynced_count = 0;
+
+    // Iterate through all records
+    for (uint16_t i = 0; i < meta.record_count; i++) {
+        // Calculate physical index
+        uint16_t physical_index;
+        if (meta.record_count < DRINK_MAX_RECORDS) {
+            physical_index = i;
+        } else {
+            physical_index = (meta.write_index + i) % DRINK_MAX_RECORDS;
+        }
+
+        // Load record
+        char key[16];
+        getDrinkRecordKey(physical_index, key, sizeof(key));
+
+        DrinkRecord record;
+        size_t read_size = prefs.getBytes(key, &record, sizeof(DrinkRecord));
+        if (read_size == sizeof(DrinkRecord)) {
+            // Check if unsynced (bit 0 not set)
+            if ((record.flags & 0x01) == 0) {
+                unsynced_count++;
+            }
+        }
+    }
+
+    prefs.end();
+
+    return unsynced_count;
+}
+
+bool storageGetUnsyncedRecords(DrinkRecord* buffer, uint16_t max_count, uint16_t& out_count) {
+    out_count = 0;
+
+    // Load metadata
+    CircularBufferMetadata meta;
+    if (!storageLoadBufferMetadata(meta) || meta.record_count == 0) {
+        Serial.println("No drink records in storage");
+        return true; // Not an error, just empty
+    }
+
+    Preferences prefs;
+    if (!prefs.begin(NVS_NAMESPACE, true)) {
+        Serial.println("ERROR: Failed to open NVS for unsynced records");
+        return false;
+    }
+
+    // Iterate through all records in chronological order
+    for (uint16_t i = 0; i < meta.record_count && out_count < max_count; i++) {
+        // Calculate physical index
+        uint16_t physical_index;
+        if (meta.record_count < DRINK_MAX_RECORDS) {
+            physical_index = i;
+        } else {
+            physical_index = (meta.write_index + i) % DRINK_MAX_RECORDS;
+        }
+
+        // Load record
+        char key[16];
+        getDrinkRecordKey(physical_index, key, sizeof(key));
+
+        DrinkRecord record;
+        size_t read_size = prefs.getBytes(key, &record, sizeof(DrinkRecord));
+        if (read_size == sizeof(DrinkRecord)) {
+            // Check if unsynced (bit 0 not set)
+            if ((record.flags & 0x01) == 0) {
+                buffer[out_count] = record;
+                out_count++;
+            }
+        }
+    }
+
+    prefs.end();
+
+    Serial.print("Retrieved ");
+    Serial.print(out_count);
+    Serial.println(" unsynced records");
+
+    return true;
+}
