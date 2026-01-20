@@ -124,6 +124,11 @@ void drinksInit() {
         Serial.printf("  Last drink: %u\n", g_daily_state.last_drink_timestamp);
     }
 
+    // IMPORTANT: Always reset baseline ADC on cold boot
+    // The bottle state may have changed while powered off, so we need to
+    // establish a fresh baseline to avoid false drink detection
+    g_daily_state.last_recorded_adc = 0;
+
     g_drinks_initialized = true;
 }
 
@@ -146,8 +151,23 @@ void drinksUpdate(int32_t current_adc, const CalibrationData& cal) {
     float current_ml = calibrationGetWaterWeight(current_adc, cal);
 
     // Initialize baseline on first call (or after reset)
-    if (g_daily_state.last_recorded_adc == 0) {
-        Serial.println("Establishing baseline after reset");
+    // Also re-establish baseline if stored ADC produces an unreasonable water level
+    // This handles cold boot with stale NVS data or corrupted values
+    bool needs_baseline = (g_daily_state.last_recorded_adc == 0);
+
+    if (!needs_baseline) {
+        // Validate that stored baseline produces a reasonable water level
+        float stored_baseline_ml = calibrationGetWaterWeight(g_daily_state.last_recorded_adc, cal);
+        // Valid range: -100ml to 1000ml (allows for some drift/tare error)
+        if (stored_baseline_ml < -100.0f || stored_baseline_ml > 1000.0f) {
+            Serial.printf("Drinks: Invalid baseline detected (%.1fml) - re-establishing\n", stored_baseline_ml);
+            needs_baseline = true;
+        }
+    }
+
+    if (needs_baseline) {
+        Serial.printf("Drinks: Establishing baseline (ADC=%d, %.1fml)\n",
+                      current_adc, current_ml);
         g_daily_state.last_recorded_adc = current_adc;
         storageSaveDailyState(g_daily_state);
         return;  // Wait for next reading before detecting drinks

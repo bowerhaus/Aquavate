@@ -24,6 +24,10 @@ static uint32_t g_weight_stable_start = 0;
 static int32_t g_last_stable_weight = 0;
 static bool g_weight_is_stable = false;
 
+// Timeout tracking for user prompts
+static uint32_t g_wait_empty_start = 0;   // For 60s timeout
+static uint32_t g_wait_full_start = 0;    // For 120s timeout
+
 // External references (set by main.cpp or UI module)
 extern Adafruit_NAU7802 nau;
 
@@ -38,6 +42,8 @@ void calibrationInit() {
     g_weight_stable_start = 0;
     g_last_stable_weight = 0;
     g_weight_is_stable = false;
+    g_wait_empty_start = 0;
+    g_wait_full_start = 0;
 }
 
 void calibrationStart() {
@@ -51,6 +57,8 @@ void calibrationStart() {
     g_weight_stable_start = 0;
     g_last_stable_weight = 0;
     g_weight_is_stable = false;
+    g_wait_empty_start = 0;
+    g_wait_full_start = 0;
 }
 
 CalibrationState calibrationUpdate(GestureType gesture, int32_t load_reading) {
@@ -61,14 +69,45 @@ CalibrationState calibrationUpdate(GestureType gesture, int32_t load_reading) {
             break;
 
         case CAL_TRIGGERED:
-            // Just entered calibration mode - transition to waiting for empty bottle
-            Serial.println("Calibration: Triggered - waiting for empty bottle");
-            g_state = CAL_WAIT_EMPTY;
+            // Just entered calibration mode - show "Calibration Started" screen
+            Serial.println("Calibration: Triggered - showing started screen");
+            g_state = CAL_STARTED;
             g_state_start_time = millis();
             break;
 
+        case CAL_STARTED:
+            // Check for abort gesture (inverted hold)
+            if (gesture == GESTURE_INVERTED_HOLD) {
+                Serial.println("Calibration: Aborted by user (inverted hold during STARTED)");
+                calibrationCancel();
+                return g_state;
+            }
+
+            // Show "Calibration Started" for 3 seconds
+            if (millis() - g_state_start_time >= CAL_STARTED_DISPLAY_DURATION) {
+                Serial.println("Calibration: Starting - waiting for empty bottle");
+                g_state = CAL_WAIT_EMPTY;
+                g_wait_empty_start = millis();
+            }
+            break;
+
         case CAL_WAIT_EMPTY:
+            // Check for abort gesture (inverted hold)
+            if (gesture == GESTURE_INVERTED_HOLD) {
+                Serial.println("Calibration: Aborted by user (inverted hold during WAIT_EMPTY)");
+                calibrationCancel();
+                return g_state;
+            }
+
             // Waiting for user to place empty bottle upright
+            // Check for timeout first
+            if (millis() - g_wait_empty_start >= CAL_WAIT_EMPTY_TIMEOUT) {
+                Serial.println("Calibration: Empty bottle timeout");
+                g_state = CAL_ERROR;
+                g_result.error_message = "Timeout - try again";
+                break;
+            }
+
             if (gesture == GESTURE_UPRIGHT_STABLE) {
                 Serial.println("Calibration: Empty bottle detected - measuring...");
                 g_state = CAL_MEASURE_EMPTY;
@@ -77,22 +116,22 @@ CalibrationState calibrationUpdate(GestureType gesture, int32_t load_reading) {
             break;
 
         case CAL_MEASURE_EMPTY:
+            // Check for abort gesture (inverted hold)
+            if (gesture == GESTURE_INVERTED_HOLD) {
+                Serial.println("Calibration: Aborted by user (inverted hold during MEASURE_EMPTY)");
+                calibrationCancel();
+                return g_state;
+            }
+
             // Measure empty bottle weight
             {
                 Serial.println("Calibration: Taking empty measurement...");
                 WeightMeasurement measurement = weightMeasureStable();
 
-                if (!measurement.valid) {
-                    Serial.println("Calibration: Empty measurement failed");
-                    g_state = CAL_ERROR;
-                    g_result.error_message = "Empty measurement failed";
-                    break;
-                }
-
-                if (!measurement.stable) {
-                    Serial.println("Calibration: Empty measurement not stable");
-                    g_state = CAL_ERROR;
-                    g_result.error_message = "Hold bottle still";
+                if (!measurement.valid || !measurement.stable) {
+                    Serial.println("Calibration: Empty measurement failed - retry");
+                    g_state = CAL_WAIT_EMPTY;
+                    g_wait_empty_start = millis();  // Reset timeout
                     break;
                 }
 
@@ -103,7 +142,7 @@ CalibrationState calibrationUpdate(GestureType gesture, int32_t load_reading) {
                 // Skip confirmation - go directly to filling
                 Serial.println("Calibration: Empty recorded - fill bottle to 830ml");
                 g_state = CAL_WAIT_FULL;
-                g_state_start_time = millis();
+                g_wait_full_start = millis();
                 // Reset weight stability tracking
                 g_weight_stable_start = 0;
                 g_last_stable_weight = 0;
@@ -119,7 +158,22 @@ CalibrationState calibrationUpdate(GestureType gesture, int32_t load_reading) {
             break;
 
         case CAL_WAIT_FULL:
+            // Check for abort gesture (inverted hold)
+            if (gesture == GESTURE_INVERTED_HOLD) {
+                Serial.println("Calibration: Aborted by user (inverted hold during WAIT_FULL)");
+                calibrationCancel();
+                return g_state;
+            }
+
             // Waiting for user to fill bottle and place upright with stable weight
+            // Check for timeout first
+            if (millis() - g_wait_full_start >= CAL_WAIT_FULL_TIMEOUT) {
+                Serial.println("Calibration: Full bottle timeout");
+                g_state = CAL_ERROR;
+                g_result.error_message = "Timeout - try again";
+                break;
+            }
+
             // Check if bottle is upright and stable (gesture)
             if (gesture == GESTURE_UPRIGHT_STABLE) {
                 // Check if weight has changed significantly from empty
@@ -196,22 +250,23 @@ CalibrationState calibrationUpdate(GestureType gesture, int32_t load_reading) {
             break;
 
         case CAL_MEASURE_FULL:
+            // Check for abort gesture (inverted hold)
+            if (gesture == GESTURE_INVERTED_HOLD) {
+                Serial.println("Calibration: Aborted by user (inverted hold during MEASURE_FULL)");
+                calibrationCancel();
+                return g_state;
+            }
+
             // Measure full bottle weight
             {
                 Serial.println("Calibration: Taking full measurement...");
                 WeightMeasurement measurement = weightMeasureStable();
 
-                if (!measurement.valid) {
-                    Serial.println("Calibration: Full measurement failed");
-                    g_state = CAL_ERROR;
-                    g_result.error_message = "Full measurement failed";
-                    break;
-                }
-
-                if (!measurement.stable) {
-                    Serial.println("Calibration: Full measurement not stable");
-                    g_state = CAL_ERROR;
-                    g_result.error_message = "Hold bottle still";
+                if (!measurement.valid || !measurement.stable) {
+                    Serial.println("Calibration: Full measurement failed - retry");
+                    g_state = CAL_WAIT_FULL;
+                    g_wait_full_start = millis();  // Reset timeout
+                    g_weight_is_stable = false;
                     break;
                 }
 
@@ -308,12 +363,15 @@ void calibrationCancel() {
     g_weight_stable_start = 0;
     g_last_stable_weight = 0;
     g_weight_is_stable = false;
+    g_wait_empty_start = 0;
+    g_wait_full_start = 0;
 }
 
 const char* calibrationGetStateName(CalibrationState state) {
     switch (state) {
         case CAL_IDLE: return "IDLE";
         case CAL_TRIGGERED: return "TRIGGERED";
+        case CAL_STARTED: return "STARTED";
         case CAL_WAIT_EMPTY: return "WAIT_EMPTY";
         case CAL_MEASURE_EMPTY: return "MEASURE_EMPTY";
         case CAL_CONFIRM_EMPTY: return "CONFIRM_EMPTY";

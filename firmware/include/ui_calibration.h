@@ -29,6 +29,18 @@
 // "Calibration Mode" + "Empty bottle completely"
 void uiCalibrationShowStart();
 
+// Show calibration started acknowledgment screen
+// "Calibration / Started" (3x size)
+void uiCalibrationShowStarted();
+
+// Show empty bottle prompt with "?" graphic
+// Empty bottle (0.0 fill) + "?" + "Empty bottle"
+void uiCalibrationShowEmptyPrompt();
+
+// Show full bottle prompt with "?" graphic
+// Full bottle (1.0 fill) + "?" + "Fill to 830ml"
+void uiCalibrationShowFullPrompt();
+
 // Show measuring empty screen
 // "Measuring empty..." (static during 10s measurement)
 void uiCalibrationShowMeasuringEmpty();
@@ -54,8 +66,12 @@ void uiCalibrationShowFullConfirm(int32_t adc);
 void uiCalibrationShowComplete(float scale_factor);
 
 // Show calibration error screen
-// "Error: <message>" + "Try again"
+// "Calibration / Error" (3x size, matches Started screen)
 void uiCalibrationShowError(const char* message);
+
+// Show calibration aborted screen
+// "Calibration / Aborted" (3x size, matches Started screen)
+void uiCalibrationShowAborted();
 
 // Update display for current calibration state
 // Automatically selects appropriate screen based on state

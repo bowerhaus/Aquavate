@@ -77,6 +77,7 @@ CalibrationData g_calibration;
 bool g_calibrated = false;
 #if ENABLE_STANDALONE_CALIBRATION
 CalibrationState g_last_cal_state = CAL_IDLE;
+bool g_cal_just_cancelled = false;  // Prevent immediate re-trigger after abort
 #endif
 
 // Time state
@@ -1018,10 +1019,16 @@ void loop() {
     // If not in calibration mode, check for calibration trigger
     if (cal_state == CAL_IDLE) {
         // Check for calibration trigger gesture (hold inverted for 5s)
+        // But don't re-trigger immediately after an abort - require gesture release first
         if (gesture == GESTURE_INVERTED_HOLD) {
-            Serial.println("Main: Calibration triggered!");
-            calibrationStart();
-            cal_state = calibrationGetState();
+            if (!g_cal_just_cancelled) {
+                Serial.println("Main: Calibration triggered!");
+                calibrationStart();
+                cal_state = calibrationGetState();
+            }
+        } else {
+            // Gesture released - allow new calibration trigger
+            g_cal_just_cancelled = false;
         }
 
         // If calibrated, show water level
@@ -1059,25 +1066,20 @@ void loop() {
             uiCalibrationUpdateForState(new_state, display_adc, result.data.scale_factor);
 #endif
 
-            g_last_cal_state = new_state;
-        }
+            // Check for calibration error BEFORE updating g_last_cal_state
+            if (new_state == CAL_ERROR) {
+                CalibrationResult result = calibrationGetResult();
+                Serial.print("Main: Calibration error: ");
+                Serial.println(result.error_message);
 
-        // Check if calibration completed
-        if (new_state == CAL_COMPLETE && g_last_cal_state != CAL_COMPLETE) {
-            CalibrationResult result = calibrationGetResult();
-            if (result.success) {
-                Serial.println("Main: Calibration completed successfully!");
-                g_calibration = result.data;
-                g_calibrated = true;
-
-                // Show complete screen for 5 seconds
-                delay(5000);
+                // Show error screen for 3 seconds (matches other info screens)
+                delay(CAL_STARTED_DISPLAY_DURATION);
 
                 // Return to IDLE and redraw main screen
                 calibrationCancel();
                 g_last_cal_state = CAL_IDLE;
                 wakeTime = millis();  // Reset sleep timer - give user 30 more seconds
-                Serial.println("Main: Returning to main screen");
+                Serial.println("Main: Returning to main screen after error");
 #if defined(BOARD_ADAFRUIT_FEATHER)
                 // Get current values for force update
                 float water_ml = 0.0f;
@@ -1109,54 +1111,105 @@ void loop() {
                 displayForceUpdate(water_ml, daily_state.daily_total_ml,
                                   time_hour, time_minute, battery_pct, false);
 #endif
+                return;  // Exit early - don't update g_last_cal_state
             }
-        }
 
-        // Check for calibration error
-        if (new_state == CAL_ERROR && g_last_cal_state != CAL_ERROR) {
-            CalibrationResult result = calibrationGetResult();
-            Serial.print("Main: Calibration error: ");
-            Serial.println(result.error_message);
+            // Check if calibration was aborted (returned to IDLE with inverted hold)
+            if (new_state == CAL_IDLE && gesture == GESTURE_INVERTED_HOLD) {
+                Serial.println("Main: Calibration aborted - showing aborted screen");
+                g_cal_just_cancelled = true;
+                g_last_cal_state = CAL_IDLE;
 
-            // Show error screen for 5 seconds
-            delay(5000);
-
-            // Return to IDLE and redraw main screen
-            calibrationCancel();
-            g_last_cal_state = CAL_IDLE;
-            wakeTime = millis();  // Reset sleep timer - give user 30 more seconds
-            Serial.println("Main: Returning to main screen after error");
 #if defined(BOARD_ADAFRUIT_FEATHER)
-            // Get current values for force update
-            float water_ml = 0.0f;
-            if (nauReady && nau.available()) {
-                int32_t adc = nau.read();
-                water_ml = calibrationGetWaterWeight(adc, g_calibration);
-                if (water_ml < 0) water_ml = 0;
-                if (water_ml > 830) water_ml = 830;
-            }
+                // Show "Calibration Aborted" screen for 3 seconds
+                uiCalibrationShowAborted();
+                delay(CAL_STARTED_DISPLAY_DURATION);
 
-            DailyState daily_state;
-            drinksGetState(daily_state);
+                // Then redraw main screen
+                float water_ml = 0.0f;
+                if (nauReady && nau.available()) {
+                    int32_t adc = nau.read();
+                    water_ml = calibrationGetWaterWeight(adc, g_calibration);
+                    if (water_ml < 0) water_ml = 0;
+                    if (water_ml > 830) water_ml = 830;
+                }
 
-            uint8_t time_hour = 0, time_minute = 0;
-            if (g_time_valid) {
-                struct timeval tv;
-                gettimeofday(&tv, NULL);
-                time_t now = tv.tv_sec + (g_timezone_offset * 3600);
-                struct tm timeinfo;
-                gmtime_r(&now, &timeinfo);
-                time_hour = timeinfo.tm_hour;
-                time_minute = timeinfo.tm_min;
-            }
+                DailyState daily_state;
+                drinksGetState(daily_state);
 
-            uint8_t battery_pct = 50;
-            float voltage = getBatteryVoltage();
-            battery_pct = getBatteryPercent(voltage);
+                uint8_t time_hour = 0, time_minute = 0;
+                if (g_time_valid) {
+                    struct timeval tv;
+                    gettimeofday(&tv, NULL);
+                    time_t now = tv.tv_sec + (g_timezone_offset * 3600);
+                    struct tm timeinfo;
+                    gmtime_r(&now, &timeinfo);
+                    time_hour = timeinfo.tm_hour;
+                    time_minute = timeinfo.tm_min;
+                }
 
-            displayForceUpdate(water_ml, daily_state.daily_total_ml,
-                              time_hour, time_minute, battery_pct, false);
+                uint8_t battery_pct = 50;
+                float voltage = getBatteryVoltage();
+                battery_pct = getBatteryPercent(voltage);
+
+                displayForceUpdate(water_ml, daily_state.daily_total_ml,
+                                  time_hour, time_minute, battery_pct, false);
 #endif
+                return;  // Exit early
+            }
+
+            // Check if calibration completed
+            if (new_state == CAL_COMPLETE) {
+                CalibrationResult result = calibrationGetResult();
+                if (result.success) {
+                    Serial.println("Main: Calibration completed successfully!");
+                    g_calibration = result.data;
+                    g_calibrated = true;
+
+                    // Show complete screen for 3 seconds (matches other info screens)
+                    delay(CAL_STARTED_DISPLAY_DURATION);
+
+                    // Return to IDLE and redraw main screen
+                    calibrationCancel();
+                    g_last_cal_state = CAL_IDLE;
+                    wakeTime = millis();  // Reset sleep timer - give user 30 more seconds
+                    Serial.println("Main: Returning to main screen");
+#if defined(BOARD_ADAFRUIT_FEATHER)
+                // Get current values for force update
+                float water_ml = 0.0f;
+                if (nauReady && nau.available()) {
+                    int32_t adc = nau.read();
+                    water_ml = calibrationGetWaterWeight(adc, g_calibration);
+                    if (water_ml < 0) water_ml = 0;
+                    if (water_ml > 830) water_ml = 830;
+                }
+
+                DailyState daily_state;
+                drinksGetState(daily_state);
+
+                uint8_t time_hour = 0, time_minute = 0;
+                if (g_time_valid) {
+                    struct timeval tv;
+                    gettimeofday(&tv, NULL);
+                    time_t now = tv.tv_sec + (g_timezone_offset * 3600);
+                    struct tm timeinfo;
+                    gmtime_r(&now, &timeinfo);
+                    time_hour = timeinfo.tm_hour;
+                    time_minute = timeinfo.tm_min;
+                }
+
+                uint8_t battery_pct = 50;
+                float voltage = getBatteryVoltage();
+                battery_pct = getBatteryPercent(voltage);
+
+                displayForceUpdate(water_ml, daily_state.daily_total_ml,
+                                  time_hour, time_minute, battery_pct, false);
+#endif
+                }
+                return;  // Exit early - don't update g_last_cal_state
+            }
+
+            g_last_cal_state = new_state;
         }
     }
 #endif // ENABLE_STANDALONE_CALIBRATION

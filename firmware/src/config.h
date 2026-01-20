@@ -184,7 +184,7 @@ extern uint8_t g_daily_intake_display_mode;
 #define GESTURE_SAMPLE_WINDOW_SIZE      10      // Number of samples for variance calculation
 
 // Weight measurement
-#define WEIGHT_MEASUREMENT_DURATION     10      // Measurement duration in seconds
+#define WEIGHT_MEASUREMENT_DURATION     5       // Measurement duration in seconds
 #define WEIGHT_VARIANCE_THRESHOLD       6000.0f // Stable if variance < this (ADC units squared)
 #define WEIGHT_MIN_SAMPLES              8       // Minimum samples required for valid measurement
 #define WEIGHT_OUTLIER_STD_DEVS         2.0f    // Outlier threshold in standard deviations
@@ -192,6 +192,11 @@ extern uint8_t g_daily_intake_display_mode;
 // Calibration parameters
 #define CALIBRATION_BOTTLE_VOLUME_ML    830.0f  // Full bottle volume (ml)
 #define CALIBRATION_WATER_DENSITY       1.0f    // Water density (g/ml)
+
+// Calibration UI timeouts (milliseconds)
+#define CAL_STARTED_DISPLAY_DURATION    3000    // 3 seconds - "Calibration Started" screen
+#define CAL_WAIT_EMPTY_TIMEOUT          60000   // 60 seconds - Empty bottle prompt timeout
+#define CAL_WAIT_FULL_TIMEOUT           120000  // 120 seconds - Full bottle prompt timeout
 
 // Display update parameters
 #define DISPLAY_UPDATE_INTERVAL_MS      5000    // Check for water level changes every 5 seconds

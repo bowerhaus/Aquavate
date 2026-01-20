@@ -4,6 +4,7 @@
  */
 
 #include "ui_calibration.h"
+#include "display.h"
 #include "config.h"
 
 #if ENABLE_STANDALONE_CALIBRATION
@@ -57,6 +58,53 @@ void uiCalibrationShowStart() {
     // Instructions
     printLeft("Empty bottle", 10, 60, 2);
     printLeft("completely", 10, 80, 2);
+
+    g_display->display(); // Full refresh
+}
+
+void uiCalibrationShowStarted() {
+    if (!g_initialized || !g_display) return;
+
+    Serial.println("UI: Showing calibration started screen");
+
+    g_display->clearBuffer();
+    g_display->setTextColor(EPD_BLACK);
+
+    // Large "Calibration / Started" text
+    printCentered("Calibration", 35, 3);
+    printCentered("Started", 70, 3);
+
+    g_display->display(); // Full refresh
+}
+
+void uiCalibrationShowEmptyPrompt() {
+    if (!g_initialized || !g_display) return;
+
+    Serial.println("UI: Showing empty bottle prompt");
+
+    g_display->clearBuffer();
+    g_display->setTextColor(EPD_BLACK);
+
+    // Draw empty bottle graphic with "?" (40x90px bottle)
+    // Center horizontally: (250 - 40) / 2 = 105
+    // Center vertically: (122 - 90) / 2 = 16
+    drawBottleGraphic(105, 16, 0.0f, true);
+
+    g_display->display(); // Full refresh
+}
+
+void uiCalibrationShowFullPrompt() {
+    if (!g_initialized || !g_display) return;
+
+    Serial.println("UI: Showing full bottle prompt");
+
+    g_display->clearBuffer();
+    g_display->setTextColor(EPD_BLACK);
+
+    // Draw full bottle graphic with "?" (40x90px bottle)
+    // Center horizontally: (250 - 40) / 2 = 105
+    // Center vertically: (122 - 90) / 2 = 16
+    drawBottleGraphic(105, 16, 1.0f, true);
 
     g_display->display(); // Full refresh
 }
@@ -137,6 +185,7 @@ void uiCalibrationShowFullConfirm(int32_t adc) {
 }
 
 void uiCalibrationShowComplete(float scale_factor) {
+    (void)scale_factor;  // No longer displayed
     if (!g_initialized || !g_display) return;
 
     Serial.println("UI: Showing calibration complete screen");
@@ -144,22 +193,15 @@ void uiCalibrationShowComplete(float scale_factor) {
     g_display->clearBuffer();
     g_display->setTextColor(EPD_BLACK);
 
-    // Title
-    printCentered("Complete!", 20, 2);
-
-    // Scale factor
-    char scale_str[32];
-    snprintf(scale_str, sizeof(scale_str), "Scale: %.2f", scale_factor);
-    printCentered(scale_str, 55, 1);
-    printCentered("ADC/gram", 70, 1);
-
-    // Success message
-    printCentered("Ready to use!", 95, 1);
+    // Large "Calibration / Complete" text (matches Started screen)
+    printCentered("Calibration", 35, 3);
+    printCentered("Complete", 70, 3);
 
     g_display->display(); // Full refresh
 }
 
 void uiCalibrationShowError(const char* message) {
+    (void)message;  // No longer displayed
     if (!g_initialized || !g_display) return;
 
     Serial.print("UI: Showing error screen: ");
@@ -168,27 +210,61 @@ void uiCalibrationShowError(const char* message) {
     g_display->clearBuffer();
     g_display->setTextColor(EPD_BLACK);
 
-    // Title
-    printCentered("Error", 20, 2);
+    // Large "Calibration / Error" text (matches Started screen)
+    printCentered("Calibration", 35, 3);
+    printCentered("Error", 70, 3);
 
-    // Error message (may need to wrap)
-    printLeft(message, 10, 60, 1);
+    g_display->display(); // Full refresh
+}
 
-    // Instructions
-    printLeft("Try again", 10, 95, 1);
+void uiCalibrationShowAborted() {
+    if (!g_initialized || !g_display) return;
+
+    Serial.println("UI: Showing calibration aborted screen");
+
+    g_display->clearBuffer();
+    g_display->setTextColor(EPD_BLACK);
+
+    // Large "Calibration / Aborted" text (matches Started screen)
+    printCentered("Calibration", 35, 3);
+    printCentered("Aborted", 70, 3);
 
     g_display->display(); // Full refresh
 }
 
 void uiCalibrationUpdateForState(CalibrationState state, int32_t adc_value, float scale_factor) {
+    // Track last displayed state to avoid unnecessary refreshes
+    static CalibrationState last_displayed_state = CAL_IDLE;
+
+    // Group states that show the same screen
+    CalibrationState display_state = state;
+    if (state == CAL_MEASURE_EMPTY) {
+        display_state = CAL_WAIT_EMPTY;  // Same screen as WAIT_EMPTY
+    } else if (state == CAL_MEASURE_FULL) {
+        display_state = CAL_WAIT_FULL;   // Same screen as WAIT_FULL
+    }
+
+    // Only update if the display state actually changed
+    if (display_state == last_displayed_state) {
+        return;  // No change, skip refresh
+    }
+
+    last_displayed_state = display_state;
+
     switch (state) {
         case CAL_TRIGGERED:
-        case CAL_WAIT_EMPTY:
+            // Old flow - no longer used (goes straight to CAL_STARTED)
             uiCalibrationShowStart();
             break;
 
+        case CAL_STARTED:
+            uiCalibrationShowStarted();
+            break;
+
+        case CAL_WAIT_EMPTY:
         case CAL_MEASURE_EMPTY:
-            uiCalibrationShowMeasuringEmpty();
+            // Stay on empty bottle prompt during measurement
+            uiCalibrationShowEmptyPrompt();
             break;
 
         case CAL_CONFIRM_EMPTY:
@@ -197,11 +273,9 @@ void uiCalibrationUpdateForState(CalibrationState state, int32_t adc_value, floa
             break;
 
         case CAL_WAIT_FULL:
-            uiCalibrationShowFillBottle();
-            break;
-
         case CAL_MEASURE_FULL:
-            uiCalibrationShowMeasuringFull();
+            // Stay on full bottle prompt during measurement
+            uiCalibrationShowFullPrompt();
             break;
 
         case CAL_CONFIRM_FULL:
