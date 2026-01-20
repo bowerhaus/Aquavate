@@ -80,6 +80,21 @@ struct HomeView: View {
         Array(todaysDrinks.prefix(5))
     }
 
+    // CDDrinkRecords for recent drinks (for deletion)
+    private var recentDrinksCD: [CDDrinkRecord] {
+        Array(todaysDrinksCD.prefix(5))
+    }
+
+    // Delete recent drinks at given offsets
+    private func deleteRecentDrinks(at offsets: IndexSet) {
+        for index in offsets {
+            let cdRecord = recentDrinksCD[index]
+            if let id = cdRecord.id {
+                PersistenceController.shared.deleteDrinkRecord(id: id)
+            }
+        }
+    }
+
     // Connection status text
     private var connectionStatusText: String {
         switch bleManager.connectionState {
@@ -212,27 +227,29 @@ struct HomeView: View {
                         .padding(.horizontal)
 
                     // Recent drinks list
-                    VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 0) {
                         Text("Recent Drinks")
                             .font(.headline)
                             .padding(.horizontal)
+                            .padding(.bottom, 8)
 
-                        if recentDrinks.isEmpty {
+                        if recentDrinksCD.isEmpty {
                             Text("No drinks recorded today")
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 32)
                         } else {
-                            ForEach(recentDrinks) { drink in
-                                DrinkListItem(drink: drink)
-                                    .padding(.horizontal)
-
-                                if drink.id != recentDrinks.last?.id {
-                                    Divider()
-                                        .padding(.leading, 60)
+                            List {
+                                ForEach(recentDrinksCD) { cdRecord in
+                                    DrinkListItem(drink: cdRecord.toDrinkRecord())
+                                        .frame(minHeight: 44)
                                 }
+                                .onDelete(perform: deleteRecentDrinks)
                             }
+                            .listStyle(.plain)
+                            .scrollDisabled(true)
+                            .frame(height: CGFloat(recentDrinksCD.count) * 56)
                         }
                     }
 

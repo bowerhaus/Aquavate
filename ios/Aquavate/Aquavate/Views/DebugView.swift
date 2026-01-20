@@ -126,6 +126,8 @@ struct DebugView: View {
                     Button("Reset Daily Total") {
                         addLog("Sent RESET_DAILY command", type: .success)
                         bleManager.sendResetDailyCommand()
+                        PersistenceController.shared.deleteTodaysDrinkRecords()
+                        addLog("Deleted today's CoreData records", type: .info)
                     }
                     .disabled(!bleManager.connectionState.isConnected)
 

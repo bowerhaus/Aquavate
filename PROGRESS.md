@@ -1,32 +1,20 @@
 # Aquavate - Active Development Progress
 
 **Last Updated:** 2026-01-20
-**Current Branch:** `improved-calibration-ui`
+**Current Branch:** `shake-to-cancel-gesture`
 
 ---
 
 ## Current Status
 
-**In Progress:** Shake-to-Empty Gesture - [Plan 025](Plans/025-shake-to-empty-gesture.md)
-
-### Implementation Complete - Ready for Hardware Testing
-- [x] Configuration constants added to config.h
-- [x] GESTURE_SHAKE_WHILE_INVERTED enum added
-- [x] Shake detection logic in gestures.cpp
-- [x] drinksCancelLast() function in drinks.cpp
-- [x] uiShowBottleEmptied() confirmation screen
-- [x] Main loop integration with weight verification
-- [x] Firmware builds successfully
-
-### Hardware Testing Required
-- [ ] Test shake gesture detection (shake vs hold still)
-- [ ] Test cancellation with empty bottle
-- [ ] Test normal drink recording when bottle not empty
+**Completed and Tested:** Swipe-to-Delete Drinks & Enhanced Reset Daily - [Plan 026](Plans/026-swipe-to-delete-drinks.md)
 
 ---
 
 ## Recently Completed
 
+- ✅ Swipe-to-Delete Drinks & Enhanced Reset Daily - [Plan 026](Plans/026-swipe-to-delete-drinks.md)
+- ✅ Shake-to-Empty Gesture - [Plan 025](Plans/025-shake-to-empty-gesture.md) (ready for hardware testing)
 - ✅ Improved Calibration UI - [Plan 024](Plans/024-improved-calibration-ui.md)
 - ✅ ADXL343 Accelerometer Migration - [Plan 023](Plans/023-adxl343-accelerometer-migration.md)
 - ✅ DS3231 RTC Integration - [Plan 022](Plans/022-ds3231-rtc-integration.md)

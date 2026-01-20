@@ -279,6 +279,7 @@ struct SettingsView: View {
 
                         Button {
                             bleManager.sendResetDailyCommand()
+                            PersistenceController.shared.deleteTodaysDrinkRecords()
                         } label: {
                             HStack {
                                 Image(systemName: "arrow.uturn.backward")

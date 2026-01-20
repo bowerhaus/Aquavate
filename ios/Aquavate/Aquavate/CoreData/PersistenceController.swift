@@ -227,6 +227,45 @@ struct PersistenceController {
             print("[CoreData] Error deleting drink records: \(error)")
         }
     }
+
+    /// Delete a single drink record by ID
+    func deleteDrinkRecord(id: UUID) {
+        let request: NSFetchRequest<CDDrinkRecord> = CDDrinkRecord.fetchRequest()
+        request.predicate = NSPredicate(format: "id == %@", id as CVarArg)
+        request.fetchLimit = 1
+
+        do {
+            let results = try viewContext.fetch(request)
+            if let record = results.first {
+                viewContext.delete(record)
+                try viewContext.save()
+                viewContext.processPendingChanges()
+                print("[CoreData] Deleted drink record: \(id)")
+            }
+        } catch {
+            print("[CoreData] Error deleting drink record: \(error)")
+        }
+    }
+
+    /// Delete all drink records from today
+    func deleteTodaysDrinkRecords() {
+        let startOfDay = Calendar.current.startOfDay(for: Date())
+        let request: NSFetchRequest<CDDrinkRecord> = CDDrinkRecord.fetchRequest()
+        request.predicate = NSPredicate(format: "timestamp >= %@", startOfDay as CVarArg)
+
+        do {
+            let records = try viewContext.fetch(request)
+            let count = records.count
+            for record in records {
+                viewContext.delete(record)
+            }
+            try viewContext.save()
+            viewContext.processPendingChanges()
+            print("[CoreData] Deleted \(count) today's drink records")
+        } catch {
+            print("[CoreData] Error deleting today's drink records: \(error)")
+        }
+    }
 }
 
 // MARK: - CDDrinkRecord Extension for DrinkRecord Conversion

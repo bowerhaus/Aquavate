@@ -56,6 +56,26 @@ struct HistoryView: View {
             .sorted { $0.timestamp > $1.timestamp }
     }
 
+    // Get CDDrinkRecords for selected date (for deletion)
+    private var drinksForSelectedDateCD: [CDDrinkRecord] {
+        let calendar = Calendar.current
+        let targetDay = calendar.startOfDay(for: selectedDate)
+
+        return recentDrinksCD
+            .filter { calendar.startOfDay(for: $0.timestamp ?? .distantPast) == targetDay }
+            .sorted { ($0.timestamp ?? .distantPast) > ($1.timestamp ?? .distantPast) }
+    }
+
+    // Delete drinks at given offsets
+    private func deleteDrinks(at offsets: IndexSet) {
+        for index in offsets {
+            let cdRecord = drinksForSelectedDateCD[index]
+            if let id = cdRecord.id {
+                PersistenceController.shared.deleteDrinkRecord(id: id)
+            }
+        }
+    }
+
     var body: some View {
         NavigationView {
             VStack(spacing: 0) {
@@ -93,9 +113,11 @@ struct HistoryView: View {
                 } else {
                     List {
                         Section {
-                            ForEach(drinksForSelectedDate) { drink in
-                                DrinkListItem(drink: drink)
+                            ForEach(drinksForSelectedDateCD) { cdRecord in
+                                DrinkListItem(drink: cdRecord.toDrinkRecord())
+                                    .frame(minHeight: 44)
                             }
+                            .onDelete(perform: deleteDrinks)
                         } header: {
                             Text("Drinks for \(formattedDate(selectedDate))")
                         } footer: {

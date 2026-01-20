@@ -1,10 +1,11 @@
 # Aquavate iOS App - UX Product Requirements Document
 
-**Version:** 1.2
-**Date:** 2026-01-18
-**Status:** Approved (Updated for Pull-to-Refresh)
+**Version:** 1.3
+**Date:** 2026-01-20
+**Status:** Approved and Tested (Swipe-to-Delete)
 
 **Changelog:**
+- **v1.3 (2026-01-20):** Added swipe-to-delete for drink records (Section 4 Gestures). Updated Reset Daily to also clear today's CoreData records.
 - **v1.2 (2026-01-18):** Added Pull-to-Refresh sync for Home screen (Section 2.4). Connection stays open 60s for real-time updates. Settings connection controls wrapped in `#if DEBUG` (Section 2.6).
 - **v1.1 (2026-01-17):** Updated Calibration Wizard (Section 2.3) - iOS now performs two-point calibration instead of firmware. Added live ADC readings, stability indicators, and BLE integration details.
 - **v1.0 (2026-01-16):** Initial approved version
@@ -485,13 +486,13 @@ Sarah's Bluetooth is accidentally turned off. When she opens the app, she sees a
 └─────────────────────────────────┘
 ```
 
-**Command Actions (Updated 2026-01-17):**
+**Command Actions (Updated 2026-01-20):**
 
 | Command | Tap Behavior | Confirmation |
 |---------|--------------|--------------|
 | Calibrate Bottle | Opens Calibration Wizard modal (NEW) | None (wizard has own confirm flow) |
 | Tare Bottle | Sends TARE_NOW (0x01) - Quick tare keeping scale factor | None (instant) |
-| Reset Daily Total | Sends RESET_DAILY (0x05) | Alert: "Reset today's total?" |
+| Reset Daily Total | Sends RESET_DAILY (0x05) + deletes today's CoreData records | None (instant) |
 | Clear History | Sends CLEAR_HISTORY (0x06) | Alert: "This cannot be undone." |
 
 **Command Feedback:**
@@ -830,7 +831,35 @@ Command sent to puck (TARE_NOW 0x01)
 | Tap | Buttons, list items, tabs | Primary interaction |
 | Pull-to-refresh | Home, History | Trigger manual sync |
 | Swipe horizontal | History calendar | Navigate weeks |
+| Swipe left | Drink list items | Delete drink record (iOS only) |
 | Long-press | Not used (MVP) | Reserved for future |
+
+### Swipe-to-Delete (Drink Records)
+
+**Purpose:** Allow users to remove individual drink records from iOS storage
+
+**Availability:**
+- HomeView: Recent Drinks list
+- HistoryView: Selected day's drink list
+
+**Behavior:**
+- Standard iOS swipe-left gesture reveals red "Delete" button
+- Single tap on Delete removes the record immediately
+- No confirmation dialog (follows iOS standard pattern)
+- Deletion is iOS-only (CoreData) - firmware records remain but won't re-sync due to timestamp deduplication
+
+**Visual:**
+```
+┌───────────────────────────────┐
+│  💧  200ml        420ml       │ ← Swipe left
+│      2:30 PM      remaining   │
+└───────────────────────────────┘
+                      ┌─────────┐
+                      │ Delete  │ ← Red background
+                      └─────────┘
+```
+
+**Known Limitation:** Deleted records may reappear when syncing to a new device/app (firmware retains all records). User can simply delete them again if needed.
 
 ### Transitions
 
