@@ -15,7 +15,7 @@
 #include "weight.h"
 #include "storage.h"
 #include "calibration.h"
-#include "ui_calibration.h"  // Always include - has uiShowBottleEmptied for shake-to-cancel
+#include "ui_calibration.h"  // Always include - has uiShowBottleEmptied for shake-to-empty
 
 // Serial commands for time setting (conditional)
 #if ENABLE_SERIAL_COMMANDS
@@ -83,7 +83,7 @@ int8_t g_timezone_offset = 0;  // UTC offset in hours
 bool g_time_valid = false;     // Has time been set?
 bool g_rtc_ds3231_present = false;  // DS3231 RTC detected (future)
 
-// Bottle emptied gesture state (shake-while-inverted)
+// Shake to empty gesture state (shake-while-inverted)
 bool g_cancel_drink_pending = false;  // Set when shake gesture detected, cleared on upright stable
 
 // Runtime debug control (non-persistent, reset on boot)
@@ -1011,7 +1011,7 @@ void loop() {
     float current_water_ml = sensors.water_ml;
     GestureType gesture = sensors.gesture;
 
-    // Handle shake-while-inverted gesture (bottle emptied - cancel last drink)
+    // Handle shake-while-inverted gesture (shake to empty)
     if (gesture == GESTURE_SHAKE_WHILE_INVERTED) {
         if (!g_cancel_drink_pending) {
             g_cancel_drink_pending = true;

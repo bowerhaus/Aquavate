@@ -1,14 +1,14 @@
-# Plan 025: "Shake While Inverted" Gesture to Cancel Last Drink
+# Plan 025: "Shake to Empty" Gesture
 
 ## Summary
 
-Add a new gesture that detects when the bottle is inverted (90°+) and shaken for 1-2 seconds. This indicates the bottle has been emptied and the last recorded drink should be cancelled. A "Bottle Emptied" confirmation screen is shown for 3 seconds.
+Add a new gesture that detects when the bottle is inverted (90°+) and shaken for 1-2 seconds. This indicates the bottle has been emptied and the last recorded drink should be removed from the daily total. A "Bottle Emptied" confirmation screen is shown for 3 seconds.
 
 ## User Requirements (Confirmed)
 
 1. **Gesture:** Shake while tilted 90°+ (inverted) for 1-2 seconds
-2. **Trigger:** Sets "cancel pending" flag → executes when bottle returns to UPRIGHT_STABLE
-3. **Weight verification:** Only cancel if bottle is approximately empty (<50ml) when returned upright
+2. **Trigger:** Sets "empty pending" flag → executes when bottle returns to UPRIGHT_STABLE
+3. **Weight verification:** Only process if bottle is approximately empty (<50ml) when returned upright
 4. **Normal drink if not empty:** If bottle still has liquid (≥50ml), count as normal drink instead
 5. **Edge case:** Silently ignore if no drinks recorded today
 6. **Feedback:** Show "Bottle Emptied" screen for 3 seconds (same style as calibration screens)
@@ -84,7 +84,7 @@ Track implementation status here. Check off each step as completed.
 ### 1. firmware/src/config.h
 Add new configuration parameters:
 ```cpp
-// Shake-while-inverted gesture (cancel last drink / bottle emptied)
+// Shake-while-inverted gesture (shake to empty / bottle emptied)
 #define GESTURE_SHAKE_INVERTED_Y_THRESHOLD  -0.3f   // Y > -0.3g for ~70° tilt
 #define GESTURE_SHAKE_VARIANCE_THRESHOLD    0.08f   // Variance > 0.08g² indicates shaking
 #define GESTURE_SHAKE_DURATION_MS           1500    // 1.5 seconds of shaking required
@@ -94,7 +94,7 @@ Add new configuration parameters:
 ### 2. firmware/include/gestures.h
 Add to `GestureType` enum:
 ```cpp
-GESTURE_SHAKE_WHILE_INVERTED,  // Shake while inverted (cancel last drink)
+GESTURE_SHAKE_WHILE_INVERTED,  // Shake while inverted (shake to empty)
 ```
 
 ### 3. firmware/src/gestures.cpp

@@ -7,7 +7,7 @@
 
 ## Current Status
 
-**In Progress:** Shake-to-Cancel Gesture - [Plan 025](Plans/025-shake-to-cancel-gesture.md)
+**In Progress:** Shake-to-Empty Gesture - [Plan 025](Plans/025-shake-to-empty-gesture.md)
 
 ### Implementation Complete - Ready for Hardware Testing
 - [x] Configuration constants added to config.h

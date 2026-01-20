@@ -40,7 +40,7 @@ static float g_last_stable_weight = 0.0f;
 static uint32_t g_upright_start_time = 0;
 static bool g_upright_active = false;
 
-// Shake-while-inverted tracking (cancel last drink)
+// Shake-while-inverted tracking (shake to empty)
 static uint32_t g_shake_start_time = 0;
 static bool g_shake_active = false;
 static bool g_shake_triggered = false;
@@ -132,7 +132,7 @@ GestureType gesturesUpdate(float weight_ml) {
     // Add to sample history
     addSample(g_current_x, g_current_y, g_current_z);
 
-    // Check for shake-while-inverted gesture (cancel last drink)
+    // Check for shake-while-inverted gesture (shake to empty)
     // Y > -0.3g indicates bottle tilted 70°+ from vertical (nearly inverted)
     // Must be shaking (high variance) to trigger - distinguishes from INVERTED_HOLD (still)
     if (g_current_y > GESTURE_SHAKE_INVERTED_Y_THRESHOLD) {

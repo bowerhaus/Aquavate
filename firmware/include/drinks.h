@@ -76,7 +76,7 @@ void drinksResetDaily();
 /**
  * Cancel the most recent drink record
  * Subtracts the last drink amount from daily total and decrements drink count
- * Used when bottle is emptied (shake-while-inverted gesture)
+ * Used when bottle is emptied (shake to empty gesture)
  *
  * @return true if a drink was cancelled, false if no drinks to cancel
  */

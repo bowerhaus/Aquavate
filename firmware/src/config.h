@@ -183,7 +183,7 @@ extern uint8_t g_daily_intake_display_mode;
 #define GESTURE_STABILITY_VARIANCE      0.02f   // Max variance (g^2) for stable detection (relaxed from 0.01)
 #define GESTURE_SAMPLE_WINDOW_SIZE      10      // Number of samples for variance calculation
 
-// Shake-while-inverted gesture (cancel last drink / bottle emptied)
+// Shake-while-inverted gesture (shake to empty / bottle emptied)
 #define GESTURE_SHAKE_INVERTED_Y_THRESHOLD  -0.3f   // Y > -0.3g for ~70° tilt (inverted)
 #define GESTURE_SHAKE_VARIANCE_THRESHOLD    0.08f   // Variance > 0.08g² indicates shaking
 #define GESTURE_SHAKE_DURATION_MS           1500    // 1.5 seconds of shaking required
