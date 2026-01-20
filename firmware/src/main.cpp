@@ -181,10 +181,6 @@ void testInterruptState() {
     Serial.print(int_src, HEX);
     Serial.print(" - IA=");
     Serial.print((int_src & 0x40) ? "1" : "0");
-    Serial.print(", ZH=");
-    Serial.print((int_src & 0x20) ? "1" : "0");
-    Serial.print(", ZL=");
-    Serial.print((int_src & 0x04) ? "1" : "0");
     Serial.print(", YH=");
     Serial.print((int_src & 0x10) ? "1" : "0");
     Serial.print(", YL=");
@@ -192,19 +188,23 @@ void testInterruptState() {
     Serial.print(", XH=");
     Serial.print((int_src & 0x08) ? "1" : "0");
     Serial.print(", XL=");
-    Serial.println((int_src & 0x01) ? "1" : "0");
+    Serial.print((int_src & 0x01) ? "1" : "0");
+    Serial.print(", ZH=");
+    Serial.print((int_src & 0x20) ? "1" : "0");
+    Serial.print(", ZL=");
+    Serial.println((int_src & 0x04) ? "1" : "0");
 
     Serial.print("INT1_CFG: 0x");
     Serial.print(int_cfg, HEX);
     Serial.print(" (AOI=");
     Serial.print((int_cfg & 0x80) ? "1" : "0");
     Serial.print(", enabled: ");
-    if (int_cfg & 0x20) Serial.print("ZHIE ");
-    if (int_cfg & 0x04) Serial.print("ZLIE ");
-    if (int_cfg & 0x10) Serial.print("YHIE ");
+    if (int_cfg & 0x08) Serial.print("YHIE ");
     if (int_cfg & 0x02) Serial.print("YLIE ");
-    if (int_cfg & 0x08) Serial.print("XHIE ");
+    if (int_cfg & 0x04) Serial.print("XHIE ");
     if (int_cfg & 0x01) Serial.print("XLIE ");
+    if (int_cfg & 0x20) Serial.print("ZHIE ");
+    if (int_cfg & 0x10) Serial.print("ZLIE ");
     Serial.println(")");
 
     Serial.print("Threshold: 0x");
@@ -216,21 +216,22 @@ void testInterruptState() {
     Serial.print("INT pin state: ");
     Serial.println(pin_state ? "HIGH (interrupt active)" : "LOW (no interrupt)");
 
-    Serial.print("Expected: Z=");
-    Serial.print(z_g, 3);
+    Serial.print("Expected: |Y|=");
+    Serial.print(fabs(y_g), 3);
     Serial.print("g should be ");
-    Serial.print((z_g < (int_ths * 0.016f)) ? "BELOW" : "ABOVE");
+    Serial.print((fabs(y_g) < (int_ths * 0.016f)) ? "BELOW" : "ABOVE");
     Serial.print(" threshold ");
     Serial.print(int_ths * 0.016f, 3);
     Serial.print("g -> ");
-    Serial.println((z_g < (int_ths * 0.016f)) ? "SHOULD TRIGGER" : "should NOT trigger");
+    Serial.println((fabs(y_g) < (int_ths * 0.016f)) ? "SHOULD TRIGGER" : "should NOT trigger");
 
     Serial.println("=========================\n");
 }
 
 void configureLIS3DHInterrupt() {
-    // Configure LIS3DH to wake when Z-axis < threshold (tilted >80° from vertical)
-    // ORIGINAL CONFIGURATION - reverted from experimental multi-axis interrupt
+    // Configure LIS3DH to wake when |Y-axis| < threshold (tilted >80° from vertical)
+    // Accelerometer re-ordered: Y-axis now points up (Y=-1.0g when vertical)
+    // Trigger on Y-Low to detect when |Y| drops below threshold (bottle tilts)
 
     Serial.println("Configuring LIS3DH interrupt for wake-on-tilt...");
 
@@ -262,9 +263,14 @@ void configureLIS3DHInterrupt() {
     // INT1_DURATION: 0 (immediate)
     writeAccelReg(LIS3DH_REG_INT1DUR, 0x00);
 
-    // INT1_CFG: Trigger on Z-low event only (bit 1)
-    // 0x02 = ZLIE (Z Low Interrupt Enable)
-    writeAccelReg(LIS3DH_REG_INT1CFG, 0x02);
+    // INT1_CFG: Trigger on Y-low event only
+    // 0x04 = YLIE (Y Low Interrupt Enable)
+    // Changed from Z-axis to Y-axis after accelerometer chip re-ordering
+    // When upright: Y = -1.0g (pointing down in sensor frame)
+    // When tilted: |Y| decreases (Y rises toward 0g from -1.0g)
+    // Y-Low interrupt triggers when |Y| < threshold (0.80g)
+    // This detects when bottle tilts away from vertical
+    writeAccelReg(LIS3DH_REG_INT1CFG, 0x04);
 
     delay(50);
 
@@ -319,8 +325,8 @@ void configureLIS3DHInterrupt() {
     Serial.println(" (INT polarity)");
     Serial.print("  INT1_CFG: 0x");
     Serial.print(int_cfg, HEX);
-    Serial.print(" (ZLIE=");
-    Serial.print((int_cfg & 0x02) ? "1" : "0");
+    Serial.print(" (YLIE=");
+    Serial.print((int_cfg & 0x04) ? "1" : "0");
     Serial.print(", AOI=");
     Serial.print((int_cfg & 0x80) ? "1" : "0");
     Serial.println(")");
@@ -335,8 +341,8 @@ void configureLIS3DHInterrupt() {
     Serial.println(int_dur, HEX);
     Serial.print("  INT1_SRC: 0x");
     Serial.print(int_src, HEX);
-    Serial.print(" (ZL=");
-    Serial.print((int_src & 0x04) ? "1" : "0");
+    Serial.print(" (YL=");
+    Serial.print((int_src & 0x02) ? "1" : "0");
     Serial.print(", IA=");
     Serial.print((int_src & 0x40) ? "1" : "0");
     Serial.println(")");
@@ -349,7 +355,7 @@ void configureLIS3DHInterrupt() {
     Serial.print("g, Z=");
     Serial.print(z_g, 3);
     Serial.println("g");
-    Serial.println("Wake condition: Z-axis drops below threshold (tilt in any direction)");
+    Serial.println("Wake condition: |Y-axis| drops below threshold (tilt in any direction)");
 }
 
 // Save extended sleep state to RTC memory

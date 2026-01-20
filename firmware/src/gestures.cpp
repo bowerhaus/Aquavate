@@ -127,7 +127,9 @@ GestureType gesturesUpdate(float weight_ml) {
     addSample(g_current_x, g_current_y, g_current_z);
 
     // Check for inverted hold gesture (highest priority - triggers calibration)
-    if (g_current_z < g_config.inverted_z_threshold) {
+    // UPDATED: Y-axis now points up (Y=-1.0g when vertical)
+    // When inverted: Y rises toward +1.0g
+    if (g_current_y > -g_config.inverted_z_threshold) {  // Y > +0.7g indicates inverted
         uint32_t now = millis();
 
         // FIX Bug #3: Only start new detection if cooldown expired
@@ -135,8 +137,8 @@ GestureType gesturesUpdate(float weight_ml) {
             g_inverted_active = true;
             g_inverted_triggered = false;
             g_inverted_start_time = now;
-            Serial.print("Gestures: Inverted detected! Z=");
-            Serial.print(g_current_z);
+            Serial.print("Gestures: Inverted detected! Y=");
+            Serial.print(g_current_y);
             Serial.println("g - hold for 5 seconds...");
         } else if (!g_inverted_triggered) {
             // Check if held long enough
@@ -167,25 +169,29 @@ GestureType gesturesUpdate(float weight_ml) {
     }
 
     // Check for sideways tilt (confirmation gesture)
+    // UPDATED: Y-axis now points up, so sideways tilt is when X or Z is large
+    // When vertical: Y=-1.0g, X≈0, Z≈0
+    // When sideways: Y≈0, X or Z ≈±1.0g
     if (fabs(g_current_x) > g_config.sideways_threshold ||
-        fabs(g_current_y) > g_config.sideways_threshold) {
+        fabs(g_current_z) > g_config.sideways_threshold) {
         return GESTURE_SIDEWAYS_TILT;
     }
 
     // Check for upright (bottle placement on table)
+    // UPDATED: Y-axis now points up (Y=-1.0g when vertical)
     // Requirements for UPRIGHT:
-    // 1. Z-axis close to 1g (within ~25° of vertical: cos(25°) ≈ 0.906)
-    // 2. X and Y axes close to 0 (bottle not tilted sideways)
+    // 1. Y-axis close to -1g (within ~25° of vertical: cos(25°) ≈ 0.906)
+    // 2. X and Z axes close to 0 (bottle not tilted sideways)
     // 3. Weight is positive (bottle is on table, not in the air)
     // Additional requirement for UPRIGHT_STABLE:
     // 4. Low variance (bottle not moving - accelerometer stable)
     // 5. Weight stable for 2+ seconds
-    const float UPRIGHT_Z_MIN = 0.90f;   // Relaxed threshold for table bangs/impacts (allows ~25° tolerance)
-    const float TILT_XY_MAX = 0.174f;    // sin(10°) for minimal sideways tilt
+    const float UPRIGHT_Y_MAX = -0.90f;  // Y should be < -0.90g (more negative) when vertical
+    const float TILT_XZ_MAX = 0.174f;    // sin(10°) for minimal sideways tilt
 
-    bool z_ok = g_current_z >= UPRIGHT_Z_MIN;
-    bool x_ok = fabs(g_current_x) <= TILT_XY_MAX;
-    bool y_ok = fabs(g_current_y) <= TILT_XY_MAX;
+    bool y_ok = g_current_y <= UPRIGHT_Y_MAX;  // Y is negative when vertical
+    bool x_ok = fabs(g_current_x) <= TILT_XZ_MAX;
+    bool z_ok = fabs(g_current_z) <= TILT_XZ_MAX;
     bool weight_ok = weight_ml >= -50.0f;
     bool stable = gesturesIsStable();
     float variance = gesturesGetVariance();
@@ -208,12 +214,12 @@ GestureType gesturesUpdate(float weight_ml) {
                     Serial.println();
                 }
             } else {
-                Serial.print("Gestures: Conditions check - Z:");
-                Serial.print(z_ok ? "✓" : "✗");
+                Serial.print("Gestures: Conditions check - Y:");
+                Serial.print(y_ok ? "✓" : "✗");
                 Serial.print(" X:");
                 Serial.print(x_ok ? "✓" : "✗");
-                Serial.print(" Y:");
-                Serial.print(y_ok ? "✓" : "✗");
+                Serial.print(" Z:");
+                Serial.print(z_ok ? "✓" : "✗");
                 Serial.print(" Weight:");
                 Serial.println(weight_ok ? "✓" : "✗");
             }
@@ -221,7 +227,7 @@ GestureType gesturesUpdate(float weight_ml) {
     }
 
     // Check if bottle is upright (orientation check only - stability not required)
-    if (z_ok && x_ok && y_ok && weight_ok) {
+    if (y_ok && x_ok && z_ok && weight_ok) {
         // For UPRIGHT_STABLE, we need both accelerometer stability AND weight stability
         // For just UPRIGHT, orientation is enough (allows detection during table bangs, vibrations)
 
@@ -302,12 +308,12 @@ GestureType gesturesUpdate(float weight_ml) {
         if (g_debug_enabled && g_debug_calibration) {
             Serial.print("Gestures: Returning NONE - weight_ml=");
             Serial.print(weight_ml, 1);
-            Serial.print(" Z=");
-            Serial.print(g_current_z, 3);
+            Serial.print(" Y=");
+            Serial.print(g_current_y, 3);
             Serial.print(" X=");
             Serial.print(g_current_x, 3);
-            Serial.print(" Y=");
-            Serial.println(g_current_y, 3);
+            Serial.print(" Z=");
+            Serial.println(g_current_z, 3);
         }
     }
 

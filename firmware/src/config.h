@@ -148,11 +148,13 @@ extern uint8_t g_daily_intake_display_mode;
 #define LIS3DH_TILT_THRESHOLD_0_40G     0x19  // 25 × 0.016 = 0.40g
 
 // Active tilt threshold (change this to adjust sensitivity)
-// Using Z-low only: triggers when Z drops below this value (vertical Z=1.0g)
-// Measured Z values: Vertical=1.00g, Right=0.77g, Forward=0.47g, Backward=0.61g, Left=0.61g
-// Threshold must be between highest tilt (0.77g) and lowest vertical reading (~0.96g)
-// 0x32 (0.80g) catches all tilts while avoiding false triggers from minor vibrations
-#define LIS3DH_TILT_WAKE_THRESHOLD   0x32  // 50 × 0.016 = 0.80g
+// UPDATED: After accelerometer re-ordering, Y-axis now points up (Y=-1.0g when vertical)
+// Using Y-low: triggers when |Y| drops below this value (bottle tilts)
+// When vertical: Y = -1.0g, |Y| = 1.0g
+// When tilted: Y rises toward 0g, |Y| drops toward 0g
+// Threshold triggers when |Y| < 0.80g (bottle tilted away from vertical)
+// 0x32 (0.80g) - interrupt triggers when |Y| drops below 0.80g
+#define LIS3DH_TILT_WAKE_THRESHOLD   0x32  // 50 × 0.016 = 0.80g (magnitude)
 
 // ==================== Battery Monitoring ====================
 
