@@ -300,3 +300,36 @@ void uiCalibrationUpdateForState(CalibrationState state, int32_t adc_value, floa
 #endif // BOARD_ADAFRUIT_FEATHER
 
 #endif // ENABLE_STANDALONE_CALIBRATION
+
+// Bottle emptied confirmation screen (always available - not tied to calibration mode)
+#if defined(BOARD_ADAFRUIT_FEATHER)
+
+// Helper function to center text (duplicate for non-calibration use)
+static void printCenteredBottleEmptied(ThinkInk_213_Mono_GDEY0213B74* display, const char* text, int y, int textSize) {
+    if (!display) return;
+
+    display->setTextSize(textSize);
+    int charWidth = textSize * 6; // Approximate character width
+    int textWidth = strlen(text) * charWidth;
+    int x = (250 - textWidth) / 2; // Display width is 250px
+
+    if (x < 0) x = 5; // Left margin if text too long
+
+    display->setCursor(x, y);
+    display->print(text);
+}
+
+void uiShowBottleEmptied(ThinkInk_213_Mono_GDEY0213B74& display) {
+    Serial.println("UI: Showing bottle emptied screen");
+
+    display.clearBuffer();
+    display.setTextColor(EPD_BLACK);
+
+    // Large "Bottle / Emptied" text (matches calibration screen style)
+    printCenteredBottleEmptied(&display, "Bottle", 35, 3);
+    printCenteredBottleEmptied(&display, "Emptied", 70, 3);
+
+    display.display(); // Full refresh
+}
+
+#endif // BOARD_ADAFRUIT_FEATHER

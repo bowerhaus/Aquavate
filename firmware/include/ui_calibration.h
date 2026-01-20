@@ -13,11 +13,12 @@
 #include "calibration.h"
 #include "config.h"
 
-#if ENABLE_STANDALONE_CALIBRATION
-
+// Include display header for function declarations (needed even when calibration disabled)
 #if defined(BOARD_ADAFRUIT_FEATHER)
     #include "Adafruit_ThinkInk.h"
 #endif
+
+#if ENABLE_STANDALONE_CALIBRATION
 
 // Initialize calibration UI module
 // Pass reference to e-paper display object
@@ -78,5 +79,11 @@ void uiCalibrationShowAborted();
 void uiCalibrationUpdateForState(CalibrationState state, int32_t adc_value, float scale_factor);
 
 #endif // ENABLE_STANDALONE_CALIBRATION
+
+// Bottle emptied confirmation screen (always available - not tied to calibration mode)
+// Shows "Bottle / Emptied" in calibration screen style
+#if defined(BOARD_ADAFRUIT_FEATHER)
+    void uiShowBottleEmptied(ThinkInk_213_Mono_GDEY0213B74& display);
+#endif
 
 #endif // UI_CALIBRATION_H

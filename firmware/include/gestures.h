@@ -12,10 +12,11 @@
 // Gesture types
 enum GestureType {
     GESTURE_NONE,
-    GESTURE_INVERTED_HOLD,    // Z < -0.8g for 5s (calibration trigger)
-    GESTURE_UPRIGHT,          // Z > 0.985g, low variance (bottle on table - for display updates)
-    GESTURE_UPRIGHT_STABLE,   // Upright + weight stable for 2s (for drink tracking)
-    GESTURE_SIDEWAYS_TILT,    // |X| or |Y| > 0.5g (confirmation)
+    GESTURE_INVERTED_HOLD,        // Z < -0.8g for 5s (calibration trigger)
+    GESTURE_UPRIGHT,              // Z > 0.985g, low variance (bottle on table - for display updates)
+    GESTURE_UPRIGHT_STABLE,       // Upright + weight stable for 2s (for drink tracking)
+    GESTURE_SIDEWAYS_TILT,        // |X| or |Y| > 0.5g (confirmation)
+    GESTURE_SHAKE_WHILE_INVERTED, // Shake while inverted for 1.5s (cancel last drink)
 };
 
 // Gesture detection configuration

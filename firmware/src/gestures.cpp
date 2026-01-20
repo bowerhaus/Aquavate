@@ -40,6 +40,11 @@ static float g_last_stable_weight = 0.0f;
 static uint32_t g_upright_start_time = 0;
 static bool g_upright_active = false;
 
+// Shake-while-inverted tracking (cancel last drink)
+static uint32_t g_shake_start_time = 0;
+static bool g_shake_active = false;
+static bool g_shake_triggered = false;
+
 // Default configuration
 static GestureConfig getDefaultConfig() {
     GestureConfig config;
@@ -127,10 +132,54 @@ GestureType gesturesUpdate(float weight_ml) {
     // Add to sample history
     addSample(g_current_x, g_current_y, g_current_z);
 
-    // Check for inverted hold gesture (highest priority - triggers calibration)
+    // Check for shake-while-inverted gesture (cancel last drink)
+    // Y > -0.3g indicates bottle tilted 70°+ from vertical (nearly inverted)
+    // Must be shaking (high variance) to trigger - distinguishes from INVERTED_HOLD (still)
+    if (g_current_y > GESTURE_SHAKE_INVERTED_Y_THRESHOLD) {
+        float variance = gesturesGetVariance();
+        uint32_t now = millis();
+
+        // Check if actively shaking (high variance)
+        if (variance > GESTURE_SHAKE_VARIANCE_THRESHOLD) {
+            if (!g_shake_active) {
+                g_shake_active = true;
+                g_shake_triggered = false;
+                g_shake_start_time = now;
+                Serial.println("Gestures: Shake while inverted detected - keep shaking...");
+            } else if (!g_shake_triggered) {
+                uint32_t shake_duration = now - g_shake_start_time;
+                if (shake_duration >= GESTURE_SHAKE_DURATION_MS) {
+                    Serial.println("Gestures: SHAKE_WHILE_INVERTED gesture triggered!");
+                    g_shake_triggered = true;
+                    return GESTURE_SHAKE_WHILE_INVERTED;
+                }
+            } else {
+                // Already triggered - keep returning until bottle returns upright
+                return GESTURE_SHAKE_WHILE_INVERTED;
+            }
+            // When shaking, don't process INVERTED_HOLD (they are mutually exclusive)
+        } else {
+            // Not shaking - reset shake tracking
+            if (g_shake_active && !g_shake_triggered) {
+                Serial.println("Gestures: Shake stopped before trigger");
+            }
+            g_shake_active = false;
+            // Don't reset g_shake_triggered here - it stays latched until upright
+        }
+    } else {
+        // Bottle no longer inverted - reset shake state
+        if (g_shake_triggered) {
+            Serial.println("Gestures: Bottle returned upright after shake");
+        }
+        g_shake_active = false;
+        g_shake_triggered = false;
+    }
+
+    // Check for inverted hold gesture (triggers calibration)
     // Y-axis points up (Y=-1.0g when vertical/upright)
     // When inverted: Y rises toward +1.0g
-    if (g_current_y > -g_config.inverted_z_threshold) {  // Y > +0.7g indicates inverted
+    // Only check if NOT shaking (shake gesture takes priority)
+    if (g_current_y > -g_config.inverted_z_threshold && !g_shake_active) {
         uint32_t now = millis();
 
         // FIX Bug #3: Only start new detection if cooldown expired
@@ -160,7 +209,7 @@ GestureType gesturesUpdate(float weight_ml) {
             // Already triggered - keep returning the gesture until bottle is no longer inverted
             return GESTURE_INVERTED_HOLD;
         }
-    } else {
+    } else if (g_current_y <= -g_config.inverted_z_threshold) {
         // Reset inverted state if bottle no longer inverted
         if (g_inverted_active) {
             Serial.println("Gestures: Bottle returned to normal position");
@@ -368,4 +417,7 @@ void gesturesReset() {
     g_upright_active = false;
     g_upright_start_time = 0;
     g_last_stable_weight = 0.0f;
+    g_shake_active = false;
+    g_shake_triggered = false;
+    g_shake_start_time = 0;
 }

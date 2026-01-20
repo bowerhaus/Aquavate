@@ -15,9 +15,7 @@
 #include "weight.h"
 #include "storage.h"
 #include "calibration.h"
-#if ENABLE_STANDALONE_CALIBRATION
-#include "ui_calibration.h"
-#endif
+#include "ui_calibration.h"  // Always include - has uiShowBottleEmptied for shake-to-cancel
 
 // Serial commands for time setting (conditional)
 #if ENABLE_SERIAL_COMMANDS
@@ -84,6 +82,9 @@ bool g_cal_just_cancelled = false;  // Prevent immediate re-trigger after abort
 int8_t g_timezone_offset = 0;  // UTC offset in hours
 bool g_time_valid = false;     // Has time been set?
 bool g_rtc_ds3231_present = false;  // DS3231 RTC detected (future)
+
+// Bottle emptied gesture state (shake-while-inverted)
+bool g_cancel_drink_pending = false;  // Set when shake gesture detected, cleared on upright stable
 
 // Runtime debug control (non-persistent, reset on boot)
 // Global enable flag
@@ -319,6 +320,7 @@ bool isStillMovingConstantly() {
         case GESTURE_UPRIGHT_STABLE: Serial.print("UPRIGHT_STABLE"); break;
         case GESTURE_SIDEWAYS_TILT: Serial.print("SIDEWAYS_TILT"); break;
         case GESTURE_UPRIGHT: Serial.print("UPRIGHT"); break;
+        case GESTURE_SHAKE_WHILE_INVERTED: Serial.print("SHAKE_WHILE_INVERTED"); break;
         default: Serial.print("NONE"); break;
     }
     Serial.print(", Final gesture: ");
@@ -327,6 +329,7 @@ bool isStillMovingConstantly() {
         case GESTURE_UPRIGHT_STABLE: Serial.print("UPRIGHT_STABLE"); break;
         case GESTURE_SIDEWAYS_TILT: Serial.print("SIDEWAYS_TILT"); break;
         case GESTURE_UPRIGHT: Serial.print("UPRIGHT"); break;
+        case GESTURE_SHAKE_WHILE_INVERTED: Serial.print("SHAKE_WHILE_INVERTED"); break;
         default: Serial.print("NONE"); break;
     }
     Serial.println();
@@ -1008,6 +1011,57 @@ void loop() {
     float current_water_ml = sensors.water_ml;
     GestureType gesture = sensors.gesture;
 
+    // Handle shake-while-inverted gesture (bottle emptied - cancel last drink)
+    if (gesture == GESTURE_SHAKE_WHILE_INVERTED) {
+        if (!g_cancel_drink_pending) {
+            g_cancel_drink_pending = true;
+            Serial.println("Main: Shake gesture detected - cancel drink pending (return bottle upright to confirm)");
+        }
+    }
+
+    // Handle pending drink cancellation when bottle returns to upright stable
+    if (gesture == GESTURE_UPRIGHT_STABLE && g_cancel_drink_pending) {
+        g_cancel_drink_pending = false;
+
+        // Verify bottle is actually empty before cancelling
+        if (current_water_ml < BOTTLE_EMPTY_THRESHOLD_ML) {
+            // Bottle is empty - cancel the last drink
+            if (drinksCancelLast()) {
+                Serial.println("Main: Last drink cancelled - showing confirmation");
+#if defined(BOARD_ADAFRUIT_FEATHER)
+                uiShowBottleEmptied(display);
+                delay(3000);  // Show confirmation for 3 seconds
+
+                // Get current values for display update
+                DailyState daily_state;
+                drinksGetState(daily_state);
+
+                uint8_t time_hour = 0, time_minute = 0;
+                if (g_time_valid) {
+                    struct timeval tv;
+                    gettimeofday(&tv, NULL);
+                    time_t now = tv.tv_sec + (g_timezone_offset * 3600);
+                    struct tm timeinfo;
+                    gmtime_r(&now, &timeinfo);
+                    time_hour = timeinfo.tm_hour;
+                    time_minute = timeinfo.tm_min;
+                }
+
+                uint8_t battery_pct = getBatteryPercent(getBatteryVoltage());
+
+                displayForceUpdate(current_water_ml, daily_state.daily_total_ml,
+                                  time_hour, time_minute, battery_pct, false);
+#endif
+            }
+            // If drinksCancelLast() returns false (nothing to cancel), silently ignore
+        } else {
+            // Bottle still has liquid - ignore shake gesture, process as normal
+            Serial.printf("Main: Bottle not empty (%.1fml >= %dml) - ignoring shake gesture\n",
+                         current_water_ml, BOTTLE_EMPTY_THRESHOLD_ML);
+            // Normal drink detection will happen below via drinksUpdate()
+        }
+    }
+
     // Check calibration state (used in display logic even if standalone calibration disabled)
 #if ENABLE_STANDALONE_CALIBRATION
     CalibrationState cal_state = calibrationGetState();
@@ -1240,6 +1294,7 @@ void loop() {
                 case GESTURE_UPRIGHT_STABLE: Serial.print("UPRIGHT_STABLE"); break;
                 case GESTURE_SIDEWAYS_TILT: Serial.print("SIDEWAYS_TILT"); break;
                 case GESTURE_UPRIGHT: Serial.print("UPRIGHT"); break;
+                case GESTURE_SHAKE_WHILE_INVERTED: Serial.print("SHAKE_WHILE_INVERTED"); break;
                 default: Serial.print("NONE"); break;
             }
             Serial.println(")");
@@ -1356,6 +1411,7 @@ void loop() {
                 case GESTURE_INVERTED_HOLD: Serial.print("INVERTED_HOLD"); break;
                 case GESTURE_UPRIGHT_STABLE: Serial.print("UPRIGHT_STABLE"); break;
                 case GESTURE_SIDEWAYS_TILT: Serial.print("SIDEWAYS_TILT"); break;
+                case GESTURE_SHAKE_WHILE_INVERTED: Serial.print("SHAKE_WHILE_INVERTED"); break;
                 default: Serial.print("NONE"); break;
             }
 

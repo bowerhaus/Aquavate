@@ -278,6 +278,49 @@ void drinksResetDaily() {
     Serial.println("Daily intake reset to 0ml");
 }
 
+// Cancel the most recent drink record (bottle emptied gesture)
+bool drinksCancelLast() {
+    // Check if any drinks today
+    if (g_daily_state.drink_count_today == 0) {
+        Serial.println("Drinks: No drinks to cancel");
+        return false;
+    }
+
+    // Load last drink record
+    DrinkRecord last_drink;
+    if (!storageLoadLastDrinkRecord(last_drink)) {
+        Serial.println("Drinks: Failed to load last drink record");
+        return false;
+    }
+
+    // Verify it's a drink (positive amount) not a refill
+    if (last_drink.amount_ml <= 0) {
+        Serial.println("Drinks: Last record is a refill, not cancelling");
+        return false;
+    }
+
+    // Subtract from daily total
+    uint16_t cancel_amount = (uint16_t)last_drink.amount_ml;
+    if (g_daily_state.daily_total_ml >= cancel_amount) {
+        g_daily_state.daily_total_ml -= cancel_amount;
+    } else {
+        g_daily_state.daily_total_ml = 0;
+    }
+
+    // Decrement drink count
+    if (g_daily_state.drink_count_today > 0) {
+        g_daily_state.drink_count_today--;
+    }
+
+    // Save updated state
+    storageSaveDailyState(g_daily_state);
+
+    Serial.printf("Drinks: Cancelled last drink of %dml. New total: %dml (%d drinks)\n",
+                  cancel_amount, g_daily_state.daily_total_ml, g_daily_state.drink_count_today);
+
+    return true;
+}
+
 // Debug function: Clear all drink records (for testing)
 void drinksClearAll() {
     Serial.println("=== CLEARING ALL DRINK RECORDS ===");
