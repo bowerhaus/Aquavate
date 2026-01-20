@@ -1,13 +1,13 @@
 /**
  * Aquavate - Gesture Detection Module
- * Detects bottle gestures using LIS3DH accelerometer
+ * Detects bottle gestures using ADXL343 accelerometer
  */
 
 #ifndef GESTURES_H
 #define GESTURES_H
 
 #include <Arduino.h>
-#include <Adafruit_LIS3DH.h>
+#include <Adafruit_ADXL343.h>
 
 // Gesture types
 enum GestureType {
@@ -37,10 +37,10 @@ struct GestureConfig {
 };
 
 // Initialize gesture detection with default config
-void gesturesInit(Adafruit_LIS3DH& lis);
+void gesturesInit(Adafruit_ADXL343& adxl);
 
 // Initialize with custom config
-void gesturesInit(Adafruit_LIS3DH& lis, const GestureConfig& config);
+void gesturesInit(Adafruit_ADXL343& adxl, const GestureConfig& config);
 
 // Update gesture detection (call regularly in loop)
 // weight_ml: current weight reading in ml (negative if bottle is in the air)

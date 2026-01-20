@@ -27,8 +27,10 @@
 #define PIN_SPI_MISO        37
 #define PIN_SPI_SCK         36
 
-// LIS3DH interrupt pin for wake-on-tilt
-#define PIN_ACCEL_INT       33
+// ADXL343 interrupt pin for wake-on-tilt
+// NOTE: GPIO 33 conflicts with E-Paper FeatherWing DC pin
+// Using GPIO 27 (A10 on Feather silkscreen) - physically wire INT1 to this pin
+#define PIN_ACCEL_INT       27
 
 // Battery monitoring
 #define PIN_VBAT            A13  // Battery voltage divider

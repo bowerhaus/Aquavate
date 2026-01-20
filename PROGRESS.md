@@ -1,10 +1,54 @@
 # Aquavate - Active Development Progress
 
-**Last Updated:** 2026-01-20 (DS3231 RTC Integration)
+**Last Updated:** 2026-01-20 (ADXL343 Accelerometer Migration - Complete)
 
 ---
 
 ## Current Work
+
+### ADXL343 Accelerometer Migration (2026-01-20) ✅ COMPLETE
+**Status:** Implementation complete, hardware tested, wake-on-tilt working with aggressive motion filtering.
+
+**Goal:** Replace LIS3DH 3-axis accelerometer with ADXL343 while maintaining wake-on-tilt functionality.
+
+**Plan:** [Plans/023-adxl343-accelerometer-migration.md](Plans/023-adxl343-accelerometer-migration.md)
+
+**Final Configuration:**
+- **Wake Mode:** AC-coupled motion detection (not orientation-based like LIS3DH)
+- **Threshold:** 3.0g (extremely high - only strong deliberate motion)
+- **Duration:** 1.6 seconds (sustained motion required)
+- **Result:** Ignores table vibrations and train movement, requires deliberate shake/pick-up to wake
+
+**Key Learnings:**
+1. **ADXL343 vs LIS3DH differences:** ADXL343 lacks simple axis high/low threshold interrupts that LIS3DH had
+2. **DC-coupled activity mode doesn't work for orientation:** Compares absolute values, not deviations from gravity
+3. **AC-coupled motion detection required:** Must use very aggressive thresholds (3g + 1.6sec) to filter environmental vibrations
+4. **Trade-off accepted:** Users must shake bottle deliberately for ~2 seconds to wake (acceptable for battery life benefits)
+
+**Hardware Configuration:**
+- ADXL343 INT1 → GPIO 27 (A10 on Feather silkscreen)
+- Original orientation: Y=-1g when upright (easier installation)
+- E-Paper: EPD_DC=33, EPD_CS=15, EPD_BUSY=-1 (conflicts resolved)
+
+**Files Modified:**
+- [firmware/src/config/pins_adafruit.h](firmware/src/config/pins_adafruit.h) - PIN_ACCEL_INT=27
+- [firmware/src/main.cpp](firmware/src/main.cpp) - AC-coupled activity interrupt (3.0g, 1.6sec)
+- [firmware/src/gestures.cpp](firmware/src/gestures.cpp) - Gesture detection for Y=-1g upright orientation
+- All other ADXL343 migration files (I2C detection, gesture updates, datasheet-based configuration)
+
+**Testing Summary:**
+- ✅ Display working correctly
+- ✅ ADXL343 I2C communication working
+- ✅ Gesture detection (inverted hold, upright stable) working
+- ✅ Wake-on-tilt working with aggressive filtering
+- ✅ Ignores table vibrations and train movement
+- ✅ Deep sleep entry/wake cycle functioning
+
+**Current Branch:** `new-hardware`
+
+---
+
+## Recently Active
 
 ### DS3231 RTC Integration (2026-01-20) ✅ COMPLETE
 **Status:** Implementation and hardware testing complete

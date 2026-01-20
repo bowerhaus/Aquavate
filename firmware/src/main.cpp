@@ -5,7 +5,7 @@
 
 #include <Arduino.h>
 #include <Wire.h>
-#include <Adafruit_LIS3DH.h>
+#include <Adafruit_ADXL343.h>
 #include <RTClib.h>  // Adafruit RTClib for DS3231
 #include "aquavate.h"
 #include "config.h"
@@ -48,10 +48,10 @@ struct SensorSnapshot {
 };
 
 Adafruit_NAU7802 nau;
-Adafruit_LIS3DH lis = Adafruit_LIS3DH();
+Adafruit_ADXL343 adxl = Adafruit_ADXL343(12345);  // 12345 = sensor ID
 RTC_DS3231 rtc;  // DS3231 external RTC
 bool nauReady = false;
-bool lisReady = false;
+bool adxlReady = false;
 
 unsigned long wakeTime = 0;
 
@@ -132,34 +132,35 @@ void onTimeSet() {
 }
 
 void writeAccelReg(uint8_t reg, uint8_t value) {
-    Wire.beginTransmission(0x18);
+    Wire.beginTransmission(I2C_ADDR_ADXL343);
     Wire.write(reg);
     Wire.write(value);
     Wire.endTransmission();
 }
 
 uint8_t readAccelReg(uint8_t reg) {
-    Wire.beginTransmission(0x18);
+    Wire.beginTransmission(I2C_ADDR_ADXL343);
     Wire.write(reg);
     Wire.endTransmission();
-    Wire.requestFrom((uint8_t)0x18, (uint8_t)1);
+    Wire.requestFrom((uint8_t)I2C_ADDR_ADXL343, (uint8_t)1);
     return Wire.read();
 }
 
 void testInterruptState() {
-    // Manual test function - call this while bottle is tilted to see if interrupt triggers
-    if (!lisReady) {
-        Serial.println("LIS3DH not ready");
+    // Manual test function - move/tilt bottle to see if activity interrupt triggers
+    if (!adxlReady) {
+        Serial.println("ADXL343 not ready");
         return;
     }
 
     Serial.println("\n=== INTERRUPT STATE TEST ===");
 
     // Read current accelerometer values
-    lis.read();
-    float x_g = lis.x / 16000.0f;
-    float y_g = lis.y / 16000.0f;
-    float z_g = lis.z / 16000.0f;
+    int16_t x, y, z;
+    adxl.getXYZ(x, y, z);
+    float x_g = x / 256.0f;
+    float y_g = y / 256.0f;
+    float z_g = z / 256.0f;
 
     Serial.print("Current orientation: X=");
     Serial.print(x_g, 3);
@@ -169,195 +170,97 @@ void testInterruptState() {
     Serial.print(z_g, 3);
     Serial.println("g");
 
-    // Read interrupt registers (reading INT1_SRC clears the latch)
-    uint8_t int_src = readAccelReg(LIS3DH_REG_INT1SRC);
-    delay(10);  // Wait for latch to clear
+    // Read interrupt registers (ADXL343 auto-clears on read)
+    uint8_t int_source = readAccelReg(0x30);  // INT_SOURCE register
+    uint8_t int_enable = readAccelReg(0x2E);  // INT_ENABLE register
+    uint8_t thresh_act = readAccelReg(0x1C);  // THRESH_ACT register
+    uint8_t act_inact_ctl = readAccelReg(0x27);  // ACT_INACT_CTL register
+    int pin_state = digitalRead(PIN_ACCEL_INT);
 
-    // Read again to get current state after clearing
-    int_src = readAccelReg(LIS3DH_REG_INT1SRC);
-    uint8_t int_cfg = readAccelReg(LIS3DH_REG_INT1CFG);
-    uint8_t int_ths = readAccelReg(LIS3DH_REG_INT1THS);
-    int pin_state = digitalRead(LIS3DH_INT_PIN);
+    Serial.print("INT_SOURCE: 0x");
+    Serial.print(int_source, HEX);
+    Serial.print(" - Activity=");
+    Serial.println((int_source & 0x10) ? "1 (triggered!)" : "0");
 
-    Serial.print("INT1_SRC: 0x");
-    Serial.print(int_src, HEX);
-    Serial.print(" - IA=");
-    Serial.print((int_src & 0x40) ? "1" : "0");
-    Serial.print(", YH=");
-    Serial.print((int_src & 0x10) ? "1" : "0");
-    Serial.print(", YL=");
-    Serial.print((int_src & 0x02) ? "1" : "0");
-    Serial.print(", XH=");
-    Serial.print((int_src & 0x08) ? "1" : "0");
-    Serial.print(", XL=");
-    Serial.print((int_src & 0x01) ? "1" : "0");
-    Serial.print(", ZH=");
-    Serial.print((int_src & 0x20) ? "1" : "0");
-    Serial.print(", ZL=");
-    Serial.println((int_src & 0x04) ? "1" : "0");
-
-    Serial.print("INT1_CFG: 0x");
-    Serial.print(int_cfg, HEX);
-    Serial.print(" (AOI=");
-    Serial.print((int_cfg & 0x80) ? "1" : "0");
-    Serial.print(", enabled: ");
-    if (int_cfg & 0x08) Serial.print("YHIE ");
-    if (int_cfg & 0x02) Serial.print("YLIE ");
-    if (int_cfg & 0x04) Serial.print("XHIE ");
-    if (int_cfg & 0x01) Serial.print("XLIE ");
-    if (int_cfg & 0x20) Serial.print("ZHIE ");
-    if (int_cfg & 0x10) Serial.print("ZLIE ");
+    Serial.print("INT_ENABLE: 0x");
+    Serial.print(int_enable, HEX);
+    Serial.print(" (Activity=");
+    Serial.print((int_enable & 0x10) ? "enabled" : "disabled");
     Serial.println(")");
 
-    Serial.print("Threshold: 0x");
-    Serial.print(int_ths, HEX);
+    Serial.print("ACT_INACT_CTL: 0x");
+    Serial.print(act_inact_ctl, HEX);
+    Serial.print(" (Axes: ");
+    Serial.print((act_inact_ctl & 0x70) == 0x70 ? "X/Y/Z all enabled" : "partial");
+    Serial.println(")");
+
+    Serial.print("Activity Threshold: 0x");
+    Serial.print(thresh_act, HEX);
     Serial.print(" = ");
-    Serial.print(int_ths * 0.016f, 3);
+    Serial.print(thresh_act * 0.0625f, 3);
     Serial.println("g");
 
     Serial.print("INT pin state: ");
-    Serial.println(pin_state ? "HIGH (interrupt active)" : "LOW (no interrupt)");
+    Serial.println(pin_state ? "HIGH (interrupt active)" : "LOW (cleared)");
 
-    Serial.print("Expected: |Y|=");
-    Serial.print(fabs(y_g), 3);
-    Serial.print("g should be ");
-    Serial.print((fabs(y_g) < (int_ths * 0.016f)) ? "BELOW" : "ABOVE");
-    Serial.print(" threshold ");
-    Serial.print(int_ths * 0.016f, 3);
-    Serial.print("g -> ");
-    Serial.println((fabs(y_g) < (int_ths * 0.016f)) ? "SHOULD TRIGGER" : "should NOT trigger");
-
+    Serial.println("\nTo test: Move or tilt the bottle - INT should pulse HIGH");
     Serial.println("=========================\n");
 }
 
-void configureLIS3DHInterrupt() {
-    // Configure LIS3DH to wake when |Y-axis| < threshold (tilted >80° from vertical)
-    // Accelerometer re-ordered: Y-axis now points up (Y=-1.0g when vertical)
-    // Trigger on Y-Low to detect when |Y| drops below threshold (bottle tilts)
+void configureADXL343Interrupt() {
+    Serial.println("\n=== ADXL343 Interrupt Configuration ===");
 
-    Serial.println("Configuring LIS3DH interrupt for wake-on-tilt...");
+    // Set interrupt pin mode
+    pinMode(PIN_ACCEL_INT, INPUT_PULLDOWN);  // Active-high interrupt
 
-    // Configure interrupt pin with pulldown (INT is push-pull active high)
-    pinMode(LIS3DH_INT_PIN, INPUT_PULLDOWN);
+    // ADXL343 Register Definitions
+    const uint8_t THRESH_ACT = 0x1C;        // Activity threshold
+    const uint8_t TIME_ACT = 0x22;          // Activity duration
+    const uint8_t ACT_INACT_CTL = 0x27;     // Axis enable for activity/inactivity
+    const uint8_t POWER_CTL = 0x2D;         // Power control
+    const uint8_t INT_ENABLE = 0x2E;        // Interrupt enable
+    const uint8_t INT_MAP = 0x2F;           // Interrupt mapping
+    const uint8_t DATA_FORMAT = 0x31;       // Data format
 
-    // CTRL_REG1: 10Hz ODR, normal mode, all axes enabled
-    writeAccelReg(LIS3DH_REG_CTRL1, 0x27);
+    // Step 1: Configure data format (±2g range)
+    writeAccelReg(DATA_FORMAT, 0x00);       // ±2g, 13-bit resolution, right-justified
+    Serial.println("1. Data format: ±2g range");
 
-    // CTRL_REG2: No filters
-    writeAccelReg(LIS3DH_REG_CTRL2, 0x00);
+    // Step 2: Set activity threshold - EXTREMELY HIGH to only detect pick-up
+    // AC-coupled mode detects CHANGES in acceleration (motion)
+    // Threshold = 3.0g = 3000 mg (extremely aggressive - only very strong deliberate motion)
+    // Scale = 62.5 mg/LSB
+    // Value = 3000 / 62.5 = 48 (0x30)
+    writeAccelReg(THRESH_ACT, 0x30);        // ~3.0g activity threshold
+    Serial.println("2. Activity threshold: 0x30 (3.0g)");
 
-    // CTRL_REG3: AOI1 interrupt on INT1 pin
-    writeAccelReg(LIS3DH_REG_CTRL3, 0x40);
+    // Step 3: Set activity duration - require very sustained motion
+    // At 12.5 Hz sample rate: 1 LSB = 1/12.5 = 80ms
+    // Value = 20 → 1600ms (~1.6 seconds) of sustained motion required
+    writeAccelReg(TIME_ACT, 0x14);          // 20 samples = ~1600ms
+    Serial.println("3. Activity duration: 0x14 (~1600ms)");
 
-    // CTRL_REG4: ±2g full scale
-    writeAccelReg(LIS3DH_REG_CTRL4, 0x00);
+    // Step 4: Enable all axes for activity detection (AC-coupled)
+    // Bits: 7=ACT_acdc(1=AC), 6-4=ACT_X/Y/Z (111=all axes)
+    // ACT_INACT_CTL[7:4] = 1111b = 0xF0
+    writeAccelReg(ACT_INACT_CTL, 0xF0);     // All axes activity enable (AC-coupled)
+    Serial.println("4. Activity axes: X, Y, Z (AC-coupled)");
 
-    // CTRL_REG5: Latch interrupt on INT1
-    writeAccelReg(LIS3DH_REG_CTRL5, 0x08);
+    // Step 5: Enable measurement mode
+    writeAccelReg(POWER_CTL, 0x08);         // Measurement mode (bit 3)
+    Serial.println("5. Power mode: measurement");
 
-    // CTRL_REG6: INT1 active high
-    writeAccelReg(LIS3DH_REG_CTRL6, 0x00);
+    // Step 6: Enable activity interrupt
+    writeAccelReg(INT_ENABLE, 0x10);        // Activity interrupt (bit 4)
+    Serial.println("6. Interrupt enable: activity");
 
-    // INT1_THS: Threshold for tilt detection
-    // See config.h for calibration details
-    writeAccelReg(LIS3DH_REG_INT1THS, LIS3DH_TILT_WAKE_THRESHOLD);
+    // Step 7: Route activity to INT1 pin (bit 4 = 0 for INT1)
+    writeAccelReg(INT_MAP, 0x00);           // All interrupts to INT1
+    Serial.println("7. Interrupt routing: INT1");
 
-    // INT1_DURATION: 0 (immediate)
-    writeAccelReg(LIS3DH_REG_INT1DUR, 0x00);
-
-    // INT1_CFG: Trigger on Y-low event only
-    // 0x04 = YLIE (Y Low Interrupt Enable)
-    // Changed from Z-axis to Y-axis after accelerometer chip re-ordering
-    // When upright: Y = -1.0g (pointing down in sensor frame)
-    // When tilted: |Y| decreases (Y rises toward 0g from -1.0g)
-    // Y-Low interrupt triggers when |Y| < threshold (0.80g)
-    // This detects when bottle tilts away from vertical
-    writeAccelReg(LIS3DH_REG_INT1CFG, 0x04);
-
-    delay(50);
-
-    // Clear any pending interrupt
-    uint8_t int_src = readAccelReg(LIS3DH_REG_INT1SRC);
-    delay(10);
-
-    // Read current accelerometer values for diagnostics
-    lis.read();
-    float x_g = lis.x / 16000.0f;
-    float y_g = lis.y / 16000.0f;
-    float z_g = lis.z / 16000.0f;
-
-    // Verify interrupt configuration
-    uint8_t ctrl1 = readAccelReg(LIS3DH_REG_CTRL1);
-    uint8_t ctrl2 = readAccelReg(LIS3DH_REG_CTRL2);
-    uint8_t ctrl3 = readAccelReg(LIS3DH_REG_CTRL3);
-    uint8_t ctrl4 = readAccelReg(LIS3DH_REG_CTRL4);
-    uint8_t ctrl5 = readAccelReg(LIS3DH_REG_CTRL5);
-    uint8_t ctrl6 = readAccelReg(LIS3DH_REG_CTRL6);
-    uint8_t int_cfg = readAccelReg(LIS3DH_REG_INT1CFG);
-    uint8_t int_ths = readAccelReg(LIS3DH_REG_INT1THS);
-    uint8_t int_dur = readAccelReg(LIS3DH_REG_INT1DUR);
-    int pin_state = digitalRead(LIS3DH_INT_PIN);
-
-    Serial.println("LIS3DH interrupt configuration:");
-    Serial.print("  CTRL_REG1: 0x");
-    Serial.print(ctrl1, HEX);
-    Serial.print(" (ODR=");
-    Serial.print((ctrl1 >> 4) & 0x0F);
-    Serial.print(", Xen=");
-    Serial.print((ctrl1 & 0x01) ? "1" : "0");
-    Serial.print(", Yen=");
-    Serial.print((ctrl1 & 0x02) ? "1" : "0");
-    Serial.print(", Zen=");
-    Serial.print((ctrl1 & 0x04) ? "1" : "0");
-    Serial.println(")");
-    Serial.print("  CTRL_REG2: 0x");
-    Serial.print(ctrl2, HEX);
-    Serial.println(" (HP filter)");
-    Serial.print("  CTRL_REG3: 0x");
-    Serial.print(ctrl3, HEX);
-    Serial.println(" (INT1 routing)");
-    Serial.print("  CTRL_REG4: 0x");
-    Serial.print(ctrl4, HEX);
-    Serial.println(" (scale/resolution)");
-    Serial.print("  CTRL_REG5: 0x");
-    Serial.print(ctrl5, HEX);
-    Serial.println(" (latch enable)");
-    Serial.print("  CTRL_REG6: 0x");
-    Serial.print(ctrl6, HEX);
-    Serial.println(" (INT polarity)");
-    Serial.print("  INT1_CFG: 0x");
-    Serial.print(int_cfg, HEX);
-    Serial.print(" (YLIE=");
-    Serial.print((int_cfg & 0x04) ? "1" : "0");
-    Serial.print(", AOI=");
-    Serial.print((int_cfg & 0x80) ? "1" : "0");
-    Serial.println(")");
-    Serial.print("  INT1_THS: 0x");
-    Serial.print(int_ths, HEX);
-    Serial.print(" (");
-    Serial.print(int_ths);
-    Serial.print(" LSB = ");
-    Serial.print(int_ths * 0.016f, 3);
-    Serial.println("g)");
-    Serial.print("  INT1_DUR: 0x");
-    Serial.println(int_dur, HEX);
-    Serial.print("  INT1_SRC: 0x");
-    Serial.print(int_src, HEX);
-    Serial.print(" (YL=");
-    Serial.print((int_src & 0x02) ? "1" : "0");
-    Serial.print(", IA=");
-    Serial.print((int_src & 0x40) ? "1" : "0");
-    Serial.println(")");
-    Serial.print("  INT pin state: ");
-    Serial.println(pin_state ? "HIGH" : "LOW");
-    Serial.print("  Current accel: X=");
-    Serial.print(x_g, 3);
-    Serial.print("g, Y=");
-    Serial.print(y_g, 3);
-    Serial.print("g, Z=");
-    Serial.print(z_g, 3);
-    Serial.println("g");
-    Serial.println("Wake condition: |Y-axis| drops below threshold (tilt in any direction)");
+    Serial.println("\n=== Configuration Complete ===");
+    Serial.println("Wake condition: Very strong sustained motion (>3.0g for >1.6sec, AC-coupled)");
+    Serial.println("Expected: Table/train vibrations ignored, requires deliberate shake/pick-up\n");
 }
 
 // Save extended sleep state to RTC memory
@@ -392,7 +295,7 @@ bool extendedSleepRestoreFromRTC() {
 
 // Check if device is still experiencing constant motion (backpack scenario)
 bool isStillMovingConstantly() {
-    if (!lisReady) {
+    if (!adxlReady) {
         Serial.println("Extended sleep: LIS3DH not ready, assuming stationary");
         return false;
     }
@@ -475,11 +378,43 @@ void enterDeepSleep() {
     drinksSaveToRTC();
     extendedSleepSaveToRTC();
 
+    // CRITICAL FIX: Ensure ADXL343 interrupt is cleared before sleeping
+    // Wait for bottle to return upright (|Y| > 0.81g) so interrupt clears
+    if (adxlReady) {
+        Serial.println("Checking ADXL343 interrupt state before sleep...");
+        int attempts = 0;
+        while (digitalRead(PIN_ACCEL_INT) == HIGH && attempts < 50) {
+            Serial.print("  INT pin HIGH (bottle still tilted) - waiting for upright... ");
+
+            // Read current orientation
+            int16_t x, y, z;
+            adxl.getXYZ(x, y, z);
+            float y_g = y / 256.0f;
+            Serial.print("Y=");
+            Serial.print(y_g, 3);
+            Serial.println("g");
+
+            delay(100);
+            attempts++;
+        }
+
+        // Read INT_SOURCE to clear any pending interrupt (ADXL343 auto-clears on read)
+        uint8_t int_source = readAccelReg(0x30);
+
+        int pin_state = digitalRead(PIN_ACCEL_INT);
+        Serial.print("  INT pin final state: ");
+        Serial.println(pin_state ? "HIGH (WARNING!)" : "LOW (ready)");
+
+        if (pin_state == HIGH) {
+            Serial.println("  WARNING: INT pin still HIGH - may not wake properly!");
+        }
+    }
+
     Serial.flush();
 
-    // Configure wake-up interrupt from LIS3DH INT1 pin
+    // Configure wake-up interrupt from ADXL343 INT1 pin
     // Wake on HIGH level (interrupt pin goes HIGH when tilted)
-    esp_sleep_enable_ext0_wakeup((gpio_num_t)LIS3DH_INT_PIN, 1);
+    esp_sleep_enable_ext0_wakeup((gpio_num_t)PIN_ACCEL_INT, 1);
 
     // Enter deep sleep
     esp_deep_sleep_start();
@@ -607,7 +542,7 @@ void setup() {
         case ESP_SLEEP_WAKEUP_EXT0:
             Serial.println("Woke up from EXT0 (tilt/motion interrupt!)");
             Serial.print("GPIO ");
-            Serial.print(LIS3DH_INT_PIN);
+            Serial.print(PIN_ACCEL_INT);
             Serial.println(" triggered wake");
             break;
         case ESP_SLEEP_WAKEUP_TIMER:
@@ -695,40 +630,41 @@ void setup() {
         Serial.println("NAU7802 not found!");
     }
 
-    // Initialize LIS3DH accelerometer
-    Serial.println("Initializing LIS3DH...");
-    if (lis.begin(0x18)) {  // Default I2C address
-        Serial.println("LIS3DH found!");
-        lis.setRange(LIS3DH_RANGE_2_G);
-        lis.setDataRate(LIS3DH_DATARATE_10_HZ);
-        lisReady = true;
+    // Initialize ADXL343 accelerometer
+    Serial.println("Initializing ADXL343...");
+    if (adxl.begin(I2C_ADDR_ADXL343)) {
+        Serial.println("ADXL343 found!");
+        adxl.setRange(ADXL343_RANGE_2_G);
+        adxl.setDataRate(ADXL343_DATARATE_12_5_HZ);  // Closest to 10 Hz
+        adxlReady = true;
 
         // If we woke from EXT0, read current accelerometer state and clear interrupt
         if (wakeup_reason == ESP_SLEEP_WAKEUP_EXT0) {
             Serial.println("Checking accelerometer state after wake...");
-            lis.read();
-            float x = lis.x / 16000.0f;
-            float y = lis.y / 16000.0f;
-            float z = lis.z / 16000.0f;
+            int16_t x, y, z;
+            adxl.getXYZ(x, y, z);
+            float x_g = x / 256.0f;
+            float y_g = y / 256.0f;
+            float z_g = z / 256.0f;
             Serial.print("  Current orientation: X=");
-            Serial.print(x, 2);
+            Serial.print(x_g, 2);
             Serial.print("g Y=");
-            Serial.print(y, 2);
+            Serial.print(y_g, 2);
             Serial.print("g Z=");
-            Serial.print(z, 2);
+            Serial.print(z_g, 2);
             Serial.println("g");
 
-            // Read INT1_SRC to clear the interrupt latch
-            uint8_t int_src = readAccelReg(LIS3DH_REG_INT1SRC);
-            Serial.print("  INT1_SRC: 0x");
-            Serial.print(int_src, HEX);
+            // Read INT_SOURCE to clear the interrupt (ADXL343 auto-clears, but read for diagnostics)
+            uint8_t int_source = readAccelReg(0x30);  // INT_SOURCE register
+            Serial.print("  INT_SOURCE: 0x");
+            Serial.print(int_source, HEX);
             Serial.println(" (cleared)");
         }
 
         // Configure interrupt for wake-on-tilt
-        configureLIS3DHInterrupt();
+        configureADXL343Interrupt();
     } else {
-        Serial.println("LIS3DH not found!");
+        Serial.println("ADXL343 not found!");
     }
 
     // Initialize DS3231 RTC
@@ -867,8 +803,8 @@ void setup() {
 #endif
 
     // Initialize gesture detection
-    if (lisReady) {
-        gesturesInit(lis);
+    if (adxlReady) {
+        gesturesInit(adxl);
         Serial.println("Gesture detection initialized");
     }
 
@@ -1062,7 +998,7 @@ void loop() {
 #endif
 
     // Read accelerometer and get gesture (ONCE)
-    if (lisReady) {
+    if (adxlReady) {
         sensors.gesture = gesturesUpdate(sensors.water_ml);
     }
 
@@ -1350,7 +1286,7 @@ void loop() {
     // Debug output (only print periodically to reduce serial spam)
     if (g_debug_enabled && g_debug_accelerometer) {
         static unsigned long last_debug_print = 0;
-        if (lisReady && (millis() - last_debug_print >= 1000)) {
+        if (adxlReady && (millis() - last_debug_print >= 1000)) {
             last_debug_print = millis();
 
             float x, y, z;
@@ -1478,11 +1414,11 @@ void loop() {
             Serial.println("Entering sleep without display update (DISPLAY_SLEEP_INDICATOR=0)");
 #endif
 
-            if (lisReady) {
-                // Clear any pending interrupt before sleep
-                readAccelReg(LIS3DH_REG_INT1SRC);
+            if (adxlReady) {
+                // ADXL343 auto-clears interrupt, but read for diagnostics
+                readAccelReg(0x30);  // INT_SOURCE register
                 Serial.print("INT pin before sleep: ");
-                Serial.println(digitalRead(LIS3DH_INT_PIN));
+                Serial.println(digitalRead(PIN_ACCEL_INT));
             }
             enterDeepSleep();
         }

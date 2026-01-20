@@ -13,7 +13,7 @@ extern bool g_debug_accelerometer;
 extern bool g_debug_calibration;
 
 // Static variables
-static Adafruit_LIS3DH* g_lis = nullptr;
+static Adafruit_ADXL343* g_adxl = nullptr;
 static GestureConfig g_config;
 static bool g_initialized = false;
 
@@ -53,12 +53,12 @@ static GestureConfig getDefaultConfig() {
     return config;
 }
 
-void gesturesInit(Adafruit_LIS3DH& lis) {
-    gesturesInit(lis, getDefaultConfig());
+void gesturesInit(Adafruit_ADXL343& adxl) {
+    gesturesInit(adxl, getDefaultConfig());
 }
 
-void gesturesInit(Adafruit_LIS3DH& lis, const GestureConfig& config) {
-    g_lis = &lis;
+void gesturesInit(Adafruit_ADXL343& adxl, const GestureConfig& config) {
+    g_adxl = &adxl;
     g_config = config;
     g_initialized = true;
     g_sample_count = 0;
@@ -108,26 +108,27 @@ static void addSample(float x, float y, float z) {
 
 // Convert raw accelerometer reading to g units
 static float rawToGs(int16_t raw) {
-    // LIS3DH at ±2g range: 16-bit value, ~16000 = 1g
-    return raw / 16000.0f;
+    // ADXL343 at ±2g: 13-bit resolution, 256 LSB/g (4 mg/LSB)
+    return raw / 256.0f;
 }
 
 GestureType gesturesUpdate(float weight_ml) {
-    if (!g_initialized || !g_lis) {
+    if (!g_initialized || !g_adxl) {
         return GESTURE_NONE;
     }
 
     // Read accelerometer
-    g_lis->read();
-    g_current_x = rawToGs(g_lis->x);
-    g_current_y = rawToGs(g_lis->y);
-    g_current_z = rawToGs(g_lis->z);
+    int16_t x, y, z;
+    g_adxl->getXYZ(x, y, z);
+    g_current_x = rawToGs(x);
+    g_current_y = rawToGs(y);
+    g_current_z = rawToGs(z);
 
     // Add to sample history
     addSample(g_current_x, g_current_y, g_current_z);
 
     // Check for inverted hold gesture (highest priority - triggers calibration)
-    // UPDATED: Y-axis now points up (Y=-1.0g when vertical)
+    // Y-axis points up (Y=-1.0g when vertical/upright)
     // When inverted: Y rises toward +1.0g
     if (g_current_y > -g_config.inverted_z_threshold) {  // Y > +0.7g indicates inverted
         uint32_t now = millis();
@@ -169,7 +170,7 @@ GestureType gesturesUpdate(float weight_ml) {
     }
 
     // Check for sideways tilt (confirmation gesture)
-    // UPDATED: Y-axis now points up, so sideways tilt is when X or Z is large
+    // Y-axis points up, so sideways tilt is when X or Z is large
     // When vertical: Y=-1.0g, X≈0, Z≈0
     // When sideways: Y≈0, X or Z ≈±1.0g
     if (fabs(g_current_x) > g_config.sideways_threshold ||
@@ -178,7 +179,7 @@ GestureType gesturesUpdate(float weight_ml) {
     }
 
     // Check for upright (bottle placement on table)
-    // UPDATED: Y-axis now points up (Y=-1.0g when vertical)
+    // Y-axis points up (Y=-1.0g when vertical)
     // Requirements for UPRIGHT:
     // 1. Y-axis close to -1g (within ~25° of vertical: cos(25°) ≈ 0.906)
     // 2. X and Z axes close to 0 (bottle not tilted sideways)
