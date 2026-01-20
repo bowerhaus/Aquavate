@@ -1,10 +1,69 @@
 # Aquavate - Active Development Progress
 
-**Last Updated:** 2026-01-18 (Pull-to-Refresh Sync)
+**Last Updated:** 2026-01-20 (DS3231 RTC Integration)
 
 ---
 
 ## Current Work
+
+### DS3231 RTC Integration (2026-01-20) ✅ COMPLETE
+**Status:** Implementation and hardware testing complete
+
+**Goal:** Enable DS3231 external RTC module as primary time source with battery-backed timekeeping and graceful fallback to ESP32 internal RTC.
+
+**Plan:** [Plans/022-ds3231-rtc-integration.md](Plans/022-ds3231-rtc-integration.md)
+
+**Key Benefits:**
+- Accuracy: ±2-3 min/year vs ±2-10 min/day (100-500x improvement)
+- Battery-backed: Maintains time through power loss (CR1220, ~8 year life)
+- Deep sleep compatible: Runs from backup battery during sleep, zero main battery impact
+- Set and forget: No more weekly USB time resyncs
+
+**Implementation Approach:**
+- Boot-time sync: ESP32 RTC ← DS3231 on every wake
+- During wake: Use ESP32 RTC (fast, no I2C overhead)
+- During sleep: DS3231 runs from CR1220 backup (~3µA), ESP32 RTC continues
+- USB commands: Update both RTCs when setting time
+- Graceful fallback: If DS3231 not detected, use ESP32 internal RTC
+
+**Files to Modify:**
+1. [firmware/src/main.cpp](firmware/src/main.cpp) - DS3231 detection, boot-time sync, global RTC object
+2. [firmware/src/serial_commands.cpp](firmware/src/serial_commands.cpp) - Update DS3231 during USB time-setting, enhanced diagnostics
+3. [firmware/include/config.h](firmware/include/config.h) - Constants (if needed)
+
+**Implementation Progress:**
+- [x] Add RTClib includes and RTC_DS3231 global object to main.cpp
+- [x] DS3231 detection in setup() (~line 700)
+- [x] Boot-time sync from DS3231 → ESP32 RTC
+- [x] Update handleSetDateTime() to sync both RTCs
+- [x] Update handleSetDate() to sync both RTCs
+- [x] Update handleSetTime() to sync both RTCs
+- [x] Enhanced GET TIME diagnostics showing RTC source
+- [x] Build verification - Flash: 57.7%, RAM: 11.1%
+- [x] Hardware testing - DS3231 detected successfully
+- [x] Bug fix: g_time_valid now correctly set to true when DS3231 present (was being overwritten by NVS load)
+- [x] Set initial time via USB - DS3231 and ESP32 RTC both updated correctly
+- [x] Verify USB time-setting updates both RTCs - confirmed working
+- [x] Verify time persistence through deep sleep cycles - confirmed working
+- [x] Test fallback when DS3231 disconnected - confirmed working
+- [x] Verify 24-hour accuracy - time stays accurate within seconds
+
+**Hardware Testing Summary:**
+All tests passed successfully. DS3231 RTC integration working as designed:
+- Boot-time sync from DS3231 → ESP32 RTC functioning correctly
+- USB time-setting updates both RTCs
+- Time persists accurately through deep sleep cycles
+- Graceful fallback to ESP32 internal RTC when DS3231 disconnected
+- Time accuracy maintained (±2-3 min/year vs ±2-10 min/day previously)
+
+**Files Modified:**
+- [firmware/platformio.ini](firmware/platformio.ini) - Added RTClib@^2.1.0 dependency
+- [firmware/src/main.cpp](firmware/src/main.cpp) - DS3231 init, boot-time sync
+- [firmware/src/serial_commands.cpp](firmware/src/serial_commands.cpp) - Dual RTC sync, diagnostics
+
+---
+
+## Recently Active
 
 ### Pull-to-Refresh Sync for HomeView (2026-01-18) ✅ COMPLETE & TESTED
 **Status:** Implementation complete and verified on hardware

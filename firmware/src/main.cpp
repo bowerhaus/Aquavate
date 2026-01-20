@@ -6,6 +6,7 @@
 #include <Arduino.h>
 #include <Wire.h>
 #include <Adafruit_LIS3DH.h>
+#include <RTClib.h>  // Adafruit RTClib for DS3231
 #include "aquavate.h"
 #include "config.h"
 
@@ -48,6 +49,7 @@ struct SensorSnapshot {
 
 Adafruit_NAU7802 nau;
 Adafruit_LIS3DH lis = Adafruit_LIS3DH();
+RTC_DS3231 rtc;  // DS3231 external RTC
 bool nauReady = false;
 bool lisReady = false;
 
@@ -729,6 +731,29 @@ void setup() {
         Serial.println("LIS3DH not found!");
     }
 
+    // Initialize DS3231 RTC
+    Serial.println("Initializing DS3231 RTC...");
+    if (!rtc.begin()) {
+        Serial.println("DS3231 not detected - using ESP32 internal RTC");
+        g_rtc_ds3231_present = false;
+    } else {
+        Serial.println("DS3231 detected");
+        g_rtc_ds3231_present = true;
+
+        // Sync ESP32 RTC from DS3231 on every boot/wake
+        DateTime now = rtc.now();
+        struct timeval tv = {
+            .tv_sec = now.unixtime(),
+            .tv_usec = 0
+        };
+        settimeofday(&tv, NULL);
+        g_time_valid = true;  // DS3231 is always valid (battery-backed)
+
+        Serial.printf("ESP32 RTC synced from DS3231: %04d-%02d-%02d %02d:%02d:%02d\n",
+                      now.year(), now.month(), now.day(),
+                      now.hour(), now.minute(), now.second());
+    }
+
     // Initialize calibration system
     Serial.println("Initializing calibration system...");
 
@@ -755,6 +780,12 @@ void setup() {
         // Load timezone and time_valid from NVS
         g_timezone_offset = storageLoadTimezone();
         g_time_valid = storageLoadTimeValid();
+
+        // DS3231 overrides NVS time_valid - battery-backed time is always valid
+        if (g_rtc_ds3231_present) {
+            g_time_valid = true;
+            Serial.println("Time valid: true (DS3231 battery-backed)");
+        }
 
         // Load display mode from NVS
         g_daily_intake_display_mode = storageLoadDisplayMode();
@@ -795,14 +826,19 @@ void setup() {
             // On wake from deep sleep, ESP32 RTC continues running and has correct time
             if (wakeup_reason == ESP_SLEEP_WAKEUP_UNDEFINED) {
                 // Cold boot - restore from NVS (RTC was reset)
-                uint32_t last_boot_time = storageLoadLastBootTime();
-                if (last_boot_time > 0) {
-                    struct timeval tv;
-                    tv.tv_sec = last_boot_time;
-                    tv.tv_usec = 0;
-                    settimeofday(&tv, NULL);
-                    Serial.println("  RTC restored from NVS (cold boot)");
-                    Serial.println("  WARNING: Time may be inaccurate (DS3231 RTC recommended)");
+                // Skip if DS3231 is present (already synced from DS3231)
+                if (!g_rtc_ds3231_present) {
+                    uint32_t last_boot_time = storageLoadLastBootTime();
+                    if (last_boot_time > 0) {
+                        struct timeval tv;
+                        tv.tv_sec = last_boot_time;
+                        tv.tv_usec = 0;
+                        settimeofday(&tv, NULL);
+                        Serial.println("  RTC restored from NVS (cold boot)");
+                        Serial.println("  WARNING: Time may be inaccurate (ESP32 internal RTC drift)");
+                    }
+                } else {
+                    Serial.println("  RTC synced from DS3231 (cold boot)");
                 }
             } else {
                 // Wake from deep sleep - RTC time is still valid, don't overwrite

@@ -15,6 +15,7 @@
 #include <Preferences.h>
 #include <sys/time.h>
 #include <time.h>
+#include <RTClib.h>  // Adafruit RTClib for DS3231
 
 // Command buffer for serial input
 #define CMD_BUFFER_SIZE 128
@@ -26,6 +27,8 @@ static OnTimeSetCallback g_onTimeSetCallback = nullptr;
 
 // External variables (managed in main.cpp)
 extern int8_t g_timezone_offset;
+extern bool g_rtc_ds3231_present;
+extern RTC_DS3231 rtc;
 
 // Runtime debug control variables (managed in main.cpp)
 extern bool g_debug_enabled;
@@ -186,6 +189,12 @@ static void handleSetDateTime(char* args) {
         return;
     }
 
+    // Also update DS3231 if present
+    if (g_rtc_ds3231_present) {
+        rtc.adjust(DateTime(timestamp));
+        Serial.println("DS3231 RTC updated");
+    }
+
     // Save timezone offset to NVS
     if (!storageSaveTimezone(timezone_offset)) {
         Serial.println("WARNING: Failed to save timezone to NVS");
@@ -269,7 +278,15 @@ static void handleGetTime() {
     }
     Serial.println(timeStr);
     Serial.println("Time valid: Yes");
-    Serial.println("RTC drift: ~3-5 minutes/day (resync recommended weekly)");
+
+    // Show RTC source and accuracy
+    if (g_rtc_ds3231_present) {
+        Serial.println("RTC source: DS3231 external RTC (\u00b12-3min/year)");
+        Serial.println("Battery-backed: Yes (CR1220)");
+    } else {
+        Serial.println("RTC source: ESP32 internal RTC (\u00b12-10min/day)");
+        Serial.println("Resync recommended: Weekly via USB");
+    }
 }
 
 // Handle SET DATE command
@@ -322,6 +339,12 @@ static void handleSetDate(char* args) {
     if (settimeofday(&tv, NULL) != 0) {
         Serial.println("ERROR: Failed to set RTC");
         return;
+    }
+
+    // Also update DS3231 if present
+    if (g_rtc_ds3231_present) {
+        rtc.adjust(DateTime(new_timestamp));
+        Serial.println("DS3231 RTC updated");
     }
 
     // Save current timestamp to NVS for time persistence
@@ -402,6 +425,12 @@ static void handleSetTime(char* args) {
     if (settimeofday(&tv, NULL) != 0) {
         Serial.println("ERROR: Failed to set RTC");
         return;
+    }
+
+    // Also update DS3231 if present
+    if (g_rtc_ds3231_present) {
+        rtc.adjust(DateTime(new_timestamp));
+        Serial.println("DS3231 RTC updated");
     }
 
     // Save current timestamp to NVS for time persistence
