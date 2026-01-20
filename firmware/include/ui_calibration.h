@@ -13,11 +13,12 @@
 #include "calibration.h"
 #include "config.h"
 
-#if ENABLE_STANDALONE_CALIBRATION
-
+// Include display header for function declarations (needed even when calibration disabled)
 #if defined(BOARD_ADAFRUIT_FEATHER)
     #include "Adafruit_ThinkInk.h"
 #endif
+
+#if ENABLE_STANDALONE_CALIBRATION
 
 // Initialize calibration UI module
 // Pass reference to e-paper display object
@@ -28,6 +29,18 @@
 // Show calibration start screen
 // "Calibration Mode" + "Empty bottle completely"
 void uiCalibrationShowStart();
+
+// Show calibration started acknowledgment screen
+// "Calibration / Started" (3x size)
+void uiCalibrationShowStarted();
+
+// Show empty bottle prompt with "?" graphic
+// Empty bottle (0.0 fill) + "?" + "Empty bottle"
+void uiCalibrationShowEmptyPrompt();
+
+// Show full bottle prompt with "?" graphic
+// Full bottle (1.0 fill) + "?" + "Fill to 830ml"
+void uiCalibrationShowFullPrompt();
 
 // Show measuring empty screen
 // "Measuring empty..." (static during 10s measurement)
@@ -54,13 +67,23 @@ void uiCalibrationShowFullConfirm(int32_t adc);
 void uiCalibrationShowComplete(float scale_factor);
 
 // Show calibration error screen
-// "Error: <message>" + "Try again"
+// "Calibration / Error" (3x size, matches Started screen)
 void uiCalibrationShowError(const char* message);
+
+// Show calibration aborted screen
+// "Calibration / Aborted" (3x size, matches Started screen)
+void uiCalibrationShowAborted();
 
 // Update display for current calibration state
 // Automatically selects appropriate screen based on state
 void uiCalibrationUpdateForState(CalibrationState state, int32_t adc_value, float scale_factor);
 
 #endif // ENABLE_STANDALONE_CALIBRATION
+
+// Bottle emptied confirmation screen (always available - not tied to calibration mode)
+// Shows "Bottle / Emptied" in calibration screen style
+#if defined(BOARD_ADAFRUIT_FEATHER)
+    void uiShowBottleEmptied(ThinkInk_213_Mono_GDEY0213B74& display);
+#endif
 
 #endif // UI_CALIBRATION_H

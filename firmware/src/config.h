@@ -117,42 +117,28 @@ extern uint8_t g_daily_intake_display_mode;
 #define DISPLAY_SLEEP_INDICATOR     0
 #define EXTENDED_SLEEP_INDICATOR    1           // Show "Zzzz" before extended sleep (1=enabled)
 
-// ==================== LIS3DH Accelerometer ====================
+// ==================== ADXL343 Accelerometer ====================
 
-// GPIO pin for accelerometer interrupt (must be RTC-capable for wake)
-#define LIS3DH_INT_PIN      27
+// Note: PIN_ACCEL_INT is defined in board-specific pins_*.h files
+// (pins_adafruit.h: pin 33, pins_sparkfun.h: pin 5)
 
 // Tilt detection threshold for wake-on-tilt
-// This value determines when the bottle is considered "tilted" enough to wake
-// Threshold unit: LSB at ±2g scale (each LSB ≈ 16mg)
+// ADXL343 at ±2g: 13-bit resolution, 256 LSB/g (4 mg/LSB)
+// Threshold scale: 62.5 mg/LSB (different from data read resolution!)
 //
-// Calibrated values:
-// - Vertical (0°): Z-axis reads ~15808 (~1g)
-// - At 80° tilt: Z-axis reads ~4000 (~0.25g)
-// - Threshold 0x38 (56 LSB) = wake when tilted >80° from vertical
-#define LIS3DH_TILT_THRESHOLD_80_DEG    0x38
+// Physical orientation: Y-axis points up (Y ≈ -1.0g when upright)
+// Using inactivity interrupt: triggers when |Y| drops below threshold (bottle tilts)
+//
+// Threshold calculation: register_value × 0.0625g = threshold in g
+// Threshold = 0.80g = 800 mg → 800 / 62.5 = 12.8 ≈ 13 (0x0D)
+//
+// When upright: Y ≈ -1.0g (|Y| = 1.0g) → no interrupt
+// When tilted >12°: |Y| < 0.81g → interrupt triggers
+#define ADXL343_TILT_WAKE_THRESHOLD   0x0D  // 13 × 62.5mg = 0.8125g
 
 // Alternative threshold values (for experimentation):
-// #define LIS3DH_TILT_THRESHOLD_70_DEG    0x30  // More sensitive (wakes at 70°)
-// #define LIS3DH_TILT_THRESHOLD_85_DEG    0x40  // Less sensitive (wakes at 85°)
-
-// Threshold calculation: register_value × 0.016g = threshold in g
-// For Z-low interrupt: triggers when Z drops BELOW threshold
-// Based on actual measurements:
-//   Vertical: Z=1.00g  |  Left: Z=0.61g  |  Right: Z=0.77g
-//   Forward: Z=0.47g   |  Backward: Z=0.61g
-#define LIS3DH_TILT_THRESHOLD_0_70G     0x2C  // 44 × 0.016 = 0.70g
-#define LIS3DH_TILT_THRESHOLD_0_60G     0x26  // 38 × 0.016 = 0.61g
-#define LIS3DH_TILT_THRESHOLD_0_50G     0x20  // 32 × 0.016 = 0.51g
-#define LIS3DH_TILT_THRESHOLD_0_45G     0x1C  // 28 × 0.016 = 0.45g
-#define LIS3DH_TILT_THRESHOLD_0_40G     0x19  // 25 × 0.016 = 0.40g
-
-// Active tilt threshold (change this to adjust sensitivity)
-// Using Z-low only: triggers when Z drops below this value (vertical Z=1.0g)
-// Measured Z values: Vertical=1.00g, Right=0.77g, Forward=0.47g, Backward=0.61g, Left=0.61g
-// Threshold must be between highest tilt (0.77g) and lowest vertical reading (~0.96g)
-// 0x32 (0.80g) catches all tilts while avoiding false triggers from minor vibrations
-#define LIS3DH_TILT_WAKE_THRESHOLD   0x32  // 50 × 0.016 = 0.80g
+// #define ADXL343_TILT_THRESHOLD_0_75G    0x0C  // 12 × 62.5mg = 0.75g (more sensitive)
+// #define ADXL343_TILT_THRESHOLD_0_875G   0x0E  // 14 × 62.5mg = 0.875g (less sensitive)
 
 // ==================== Battery Monitoring ====================
 
@@ -197,8 +183,14 @@ extern uint8_t g_daily_intake_display_mode;
 #define GESTURE_STABILITY_VARIANCE      0.02f   // Max variance (g^2) for stable detection (relaxed from 0.01)
 #define GESTURE_SAMPLE_WINDOW_SIZE      10      // Number of samples for variance calculation
 
+// Shake-while-inverted gesture (shake to empty / bottle emptied)
+#define GESTURE_SHAKE_INVERTED_Y_THRESHOLD  -0.3f   // Y > -0.3g for ~70° tilt (inverted)
+#define GESTURE_SHAKE_VARIANCE_THRESHOLD    0.08f   // Variance > 0.08g² indicates shaking
+#define GESTURE_SHAKE_DURATION_MS           1500    // 1.5 seconds of shaking required
+#define BOTTLE_EMPTY_THRESHOLD_ML           50      // Bottle considered empty if <50ml remaining
+
 // Weight measurement
-#define WEIGHT_MEASUREMENT_DURATION     10      // Measurement duration in seconds
+#define WEIGHT_MEASUREMENT_DURATION     5       // Measurement duration in seconds
 #define WEIGHT_VARIANCE_THRESHOLD       6000.0f // Stable if variance < this (ADC units squared)
 #define WEIGHT_MIN_SAMPLES              8       // Minimum samples required for valid measurement
 #define WEIGHT_OUTLIER_STD_DEVS         2.0f    // Outlier threshold in standard deviations
@@ -206,6 +198,11 @@ extern uint8_t g_daily_intake_display_mode;
 // Calibration parameters
 #define CALIBRATION_BOTTLE_VOLUME_ML    830.0f  // Full bottle volume (ml)
 #define CALIBRATION_WATER_DENSITY       1.0f    // Water density (g/ml)
+
+// Calibration UI timeouts (milliseconds)
+#define CAL_STARTED_DISPLAY_DURATION    3000    // 3 seconds - "Calibration Started" screen
+#define CAL_WAIT_EMPTY_TIMEOUT          60000   // 60 seconds - Empty bottle prompt timeout
+#define CAL_WAIT_FULL_TIMEOUT           120000  // 120 seconds - Full bottle prompt timeout
 
 // Display update parameters
 #define DISPLAY_UPDATE_INTERVAL_MS      5000    // Check for water level changes every 5 seconds

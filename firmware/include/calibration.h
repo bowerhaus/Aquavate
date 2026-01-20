@@ -16,6 +16,7 @@
 enum CalibrationState {
     CAL_IDLE,              // Not in calibration mode
     CAL_TRIGGERED,         // User held bottle inverted - entering calibration
+    CAL_STARTED,           // Show "Calibration Started" for 3s
     CAL_WAIT_EMPTY,        // Waiting for empty bottle placement
     CAL_MEASURE_EMPTY,     // Measuring empty bottle (10s)
     CAL_CONFIRM_EMPTY,     // Waiting for sideways tilt confirmation

@@ -366,8 +366,8 @@ static void drawSleepIndicator(int x, int y, bool sleeping) {
     }
 }
 
-// Helper: Draw bottle graphic
-static void drawBottleGraphic(int x, int y, float fill_percent, bool show_question_mark) {
+// Helper: Draw bottle graphic (exported for calibration UI)
+void drawBottleGraphic(int16_t x, int16_t y, float fill_percent, bool show_question_mark) {
     int bottle_width = 40;
     int bottle_height = 90;
     int bottle_body_height = 70;
@@ -390,18 +390,22 @@ static void drawBottleGraphic(int x, int y, float fill_percent, bool show_questi
     int cap_x = neck_x + 2;
     g_display_ptr->fillRect(cap_x, y, cap_width, cap_height, EPD_BLACK);
 
+    // Draw water fill if needed
+    if (fill_height > 0) {
+        int water_y = y + cap_height + neck_height + bottle_body_height - fill_height;
+        g_display_ptr->fillRoundRect(x + 4, water_y,
+                                     bottle_width - 8, fill_height - 2, 4, EPD_BLACK);
+    }
+
+    // Draw question mark on top if requested
     if (show_question_mark) {
-        // Draw a large question mark in the center of the empty bottle
         g_display_ptr->setTextSize(3);
-        g_display_ptr->setTextColor(EPD_BLACK);
+        // Use white text for filled bottles (> 50%), black for empty
+        g_display_ptr->setTextColor(fill_percent > 0.5f ? EPD_WHITE : EPD_BLACK);
         int question_x = x + (bottle_width / 2) - 6;  // Center the "?" (shifted right 3px)
         int question_y = y + cap_height + neck_height + (bottle_body_height / 2) - 12;
         g_display_ptr->setCursor(question_x, question_y);
         g_display_ptr->print("?");
-    } else if (fill_height > 0) {
-        int water_y = y + cap_height + neck_height + bottle_body_height - fill_height;
-        g_display_ptr->fillRoundRect(x + 4, water_y,
-                                     bottle_width - 8, fill_height - 2, 4, EPD_BLACK);
     }
 }
 

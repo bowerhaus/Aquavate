@@ -25,7 +25,7 @@
 
 // I2C device addresses
 #define I2C_ADDR_NAU7802    0x2A
-#define I2C_ADDR_LIS3DH     0x18
+#define I2C_ADDR_ADXL343    0x53  // Default with SDO=LOW
 #define I2C_ADDR_DS3231     0x68
 
 // BLE configuration

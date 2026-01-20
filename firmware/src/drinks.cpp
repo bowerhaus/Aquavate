@@ -124,6 +124,11 @@ void drinksInit() {
         Serial.printf("  Last drink: %u\n", g_daily_state.last_drink_timestamp);
     }
 
+    // IMPORTANT: Always reset baseline ADC on cold boot
+    // The bottle state may have changed while powered off, so we need to
+    // establish a fresh baseline to avoid false drink detection
+    g_daily_state.last_recorded_adc = 0;
+
     g_drinks_initialized = true;
 }
 
@@ -146,8 +151,23 @@ void drinksUpdate(int32_t current_adc, const CalibrationData& cal) {
     float current_ml = calibrationGetWaterWeight(current_adc, cal);
 
     // Initialize baseline on first call (or after reset)
-    if (g_daily_state.last_recorded_adc == 0) {
-        Serial.println("Establishing baseline after reset");
+    // Also re-establish baseline if stored ADC produces an unreasonable water level
+    // This handles cold boot with stale NVS data or corrupted values
+    bool needs_baseline = (g_daily_state.last_recorded_adc == 0);
+
+    if (!needs_baseline) {
+        // Validate that stored baseline produces a reasonable water level
+        float stored_baseline_ml = calibrationGetWaterWeight(g_daily_state.last_recorded_adc, cal);
+        // Valid range: -100ml to 1000ml (allows for some drift/tare error)
+        if (stored_baseline_ml < -100.0f || stored_baseline_ml > 1000.0f) {
+            Serial.printf("Drinks: Invalid baseline detected (%.1fml) - re-establishing\n", stored_baseline_ml);
+            needs_baseline = true;
+        }
+    }
+
+    if (needs_baseline) {
+        Serial.printf("Drinks: Establishing baseline (ADC=%d, %.1fml)\n",
+                      current_adc, current_ml);
         g_daily_state.last_recorded_adc = current_adc;
         storageSaveDailyState(g_daily_state);
         return;  // Wait for next reading before detecting drinks
@@ -256,6 +276,49 @@ void drinksResetDaily() {
     Serial.println("=== MANUAL DAILY RESET ===");
     performAtomicDailyReset(getCurrentUnixTime());
     Serial.println("Daily intake reset to 0ml");
+}
+
+// Cancel the most recent drink record (bottle emptied gesture)
+bool drinksCancelLast() {
+    // Check if any drinks today
+    if (g_daily_state.drink_count_today == 0) {
+        Serial.println("Drinks: No drinks to cancel");
+        return false;
+    }
+
+    // Load last drink record
+    DrinkRecord last_drink;
+    if (!storageLoadLastDrinkRecord(last_drink)) {
+        Serial.println("Drinks: Failed to load last drink record");
+        return false;
+    }
+
+    // Verify it's a drink (positive amount) not a refill
+    if (last_drink.amount_ml <= 0) {
+        Serial.println("Drinks: Last record is a refill, not cancelling");
+        return false;
+    }
+
+    // Subtract from daily total
+    uint16_t cancel_amount = (uint16_t)last_drink.amount_ml;
+    if (g_daily_state.daily_total_ml >= cancel_amount) {
+        g_daily_state.daily_total_ml -= cancel_amount;
+    } else {
+        g_daily_state.daily_total_ml = 0;
+    }
+
+    // Decrement drink count
+    if (g_daily_state.drink_count_today > 0) {
+        g_daily_state.drink_count_today--;
+    }
+
+    // Save updated state
+    storageSaveDailyState(g_daily_state);
+
+    Serial.printf("Drinks: Cancelled last drink of %dml. New total: %dml (%d drinks)\n",
+                  cancel_amount, g_daily_state.daily_total_ml, g_daily_state.drink_count_today);
+
+    return true;
 }
 
 // Debug function: Clear all drink records (for testing)

@@ -42,4 +42,10 @@ void displayMarkInitialized();
 void displaySaveToRTC();
 bool displayRestoreFromRTC();
 
+// Draw bottle graphic (exported for calibration UI)
+// x, y: top-left position
+// fill_percent: 0.0 to 1.0 (water level)
+// show_question_mark: true to show "?" above bottle
+void drawBottleGraphic(int16_t x, int16_t y, float fill_percent, bool show_question_mark);
+
 #endif
