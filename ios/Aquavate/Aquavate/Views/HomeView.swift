@@ -28,8 +28,9 @@ struct HomeView: View {
     private var allDrinksCD: FetchedResults<CDDrinkRecord>
 
     // Filter to today's drinks dynamically (not at compile time)
+    // Uses 4am boundary to match firmware DRINK_DAILY_RESET_HOUR
     private var todaysDrinksCD: [CDDrinkRecord] {
-        let startOfDay = Calendar.current.startOfDay(for: Date())
+        let startOfDay = Calendar.current.startOfAquavateDay(for: Date())
         return allDrinksCD.filter { ($0.timestamp ?? .distantPast) >= startOfDay }
     }
 

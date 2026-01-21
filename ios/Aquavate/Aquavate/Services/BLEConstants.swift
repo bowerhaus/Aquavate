@@ -119,4 +119,54 @@ enum BLEConstants {
 
     /// Key for storing last connected peripheral identifier
     static let lastConnectedPeripheralKey = "lastConnectedPeripheralIdentifier"
+
+    // MARK: - Day Boundary
+
+    /// Hour at which daily totals reset (4am, matching firmware DRINK_DAILY_RESET_HOUR)
+    static let dailyResetHour = 4
+}
+
+// MARK: - Calendar Extension for 4am Day Boundary
+
+extension Calendar {
+    /// Returns the start of the "Aquavate day" for the given date.
+    /// The Aquavate day starts at 4am, not midnight, to handle late-night drinking.
+    /// For example:
+    /// - 3:00am on Jan 15 → returns 4:00am on Jan 14 (still "yesterday")
+    /// - 4:00am on Jan 15 → returns 4:00am on Jan 15 (new day)
+    /// - 11:00pm on Jan 15 → returns 4:00am on Jan 15
+    func startOfAquavateDay(for date: Date) -> Date {
+        let components = self.dateComponents([.year, .month, .day, .hour], from: date)
+        let hour = components.hour ?? 0
+
+        // If before 4am, we're still in "yesterday's" Aquavate day
+        var dayComponents = DateComponents()
+        dayComponents.year = components.year
+        dayComponents.month = components.month
+        dayComponents.day = components.day
+        dayComponents.hour = BLEConstants.dailyResetHour
+        dayComponents.minute = 0
+        dayComponents.second = 0
+
+        if hour < BLEConstants.dailyResetHour {
+            // Before 4am - go back one day
+            if let midnight = self.date(from: dayComponents) {
+                return self.date(byAdding: .day, value: -1, to: midnight) ?? midnight
+            }
+        }
+
+        return self.date(from: dayComponents) ?? date
+    }
+
+    /// Returns true if the given date falls within today's Aquavate day (4am to 4am).
+    func isDateInAquavateToday(_ date: Date) -> Bool {
+        let todayStart = startOfAquavateDay(for: Date())
+        let dateStart = startOfAquavateDay(for: date)
+        return todayStart == dateStart
+    }
+
+    /// Returns true if two dates fall within the same Aquavate day (4am to 4am).
+    func isDate(_ date1: Date, inSameAquavateDayAs date2: Date) -> Bool {
+        return startOfAquavateDay(for: date1) == startOfAquavateDay(for: date2)
+    }
 }
