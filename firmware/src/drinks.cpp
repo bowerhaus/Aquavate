@@ -278,6 +278,64 @@ void drinksResetDaily() {
     Serial.println("Daily intake reset to 0ml");
 }
 
+// Recalculate daily total from non-deleted drink records
+// Called after a record is soft-deleted via BLE command
+uint16_t drinksRecalculateTotal() {
+    uint32_t current_time = getCurrentUnixTime();
+
+    // Calculate today's 4am boundary
+    time_t current_t = current_time;
+    struct tm current_tm;
+    gmtime_r(&current_t, &current_tm);
+
+    // Calculate timestamp for 4am today (or yesterday if before 4am)
+    struct tm reset_tm = current_tm;
+    reset_tm.tm_hour = DRINK_DAILY_RESET_HOUR;
+    reset_tm.tm_min = 0;
+    reset_tm.tm_sec = 0;
+    uint32_t today_reset_timestamp = (uint32_t)mktime(&reset_tm);
+
+    // If we're before 4am today, use yesterday's 4am as the reset boundary
+    if (current_tm.tm_hour < DRINK_DAILY_RESET_HOUR) {
+        today_reset_timestamp -= 24 * 3600;  // Subtract 24 hours
+    }
+
+    // Load metadata
+    CircularBufferMetadata meta;
+    if (!storageLoadBufferMetadata(meta) || meta.record_count == 0) {
+        g_daily_state.daily_total_ml = 0;
+        g_daily_state.drink_count_today = 0;
+        storageSaveDailyState(g_daily_state);
+        Serial.println("Drinks: Recalculated total = 0ml (no records)");
+        return 0;
+    }
+
+    // Sum all today's non-deleted drink records
+    uint16_t total_ml = 0;
+    uint16_t drink_count = 0;
+
+    for (uint16_t i = 0; i < meta.record_count; i++) {
+        DrinkRecord record;
+        if (storageGetDrinkRecord(i, record)) {
+            // Check: from today (after 4am reset), not deleted, is a drink (positive amount)
+            if (record.timestamp >= today_reset_timestamp &&
+                (record.flags & 0x04) == 0 &&  // Not deleted
+                record.amount_ml > 0) {         // Drink, not refill
+                total_ml += (uint16_t)record.amount_ml;
+                drink_count++;
+            }
+        }
+    }
+
+    // Update daily state
+    g_daily_state.daily_total_ml = total_ml;
+    g_daily_state.drink_count_today = drink_count;
+    storageSaveDailyState(g_daily_state);
+
+    Serial.printf("Drinks: Recalculated total = %dml (%d drinks)\n", total_ml, drink_count);
+    return total_ml;
+}
+
 // Cancel the most recent drink record (bottle emptied gesture)
 bool drinksCancelLast() {
     // Check if any drinks today
@@ -335,6 +393,7 @@ void drinksClearAll() {
     meta.write_index = 0;
     meta.record_count = 0;
     meta.total_writes = 0;
+    meta.next_record_id = 1;  // Start IDs at 1 (0 = invalid/unassigned)
     meta._reserved = 0;
     storageSaveBufferMetadata(meta);
 

@@ -18,8 +18,13 @@ bool storageSaveDrinkRecord(const DrinkRecord& record) {
         meta.write_index = 0;
         meta.record_count = 0;
         meta.total_writes = 0;
+        meta.next_record_id = 1;  // Start IDs at 1 (0 = invalid/unassigned)
         meta._reserved = 0;
     }
+
+    // Create a copy of the record to assign the ID
+    DrinkRecord record_with_id = record;
+    record_with_id.record_id = meta.next_record_id;
 
     // Generate key for current write position
     char key[16];
@@ -32,7 +37,7 @@ bool storageSaveDrinkRecord(const DrinkRecord& record) {
         return false;
     }
 
-    size_t written = prefs.putBytes(key, &record, sizeof(DrinkRecord));
+    size_t written = prefs.putBytes(key, &record_with_id, sizeof(DrinkRecord));
     prefs.end();
 
     if (written != sizeof(DrinkRecord)) {
@@ -46,6 +51,7 @@ bool storageSaveDrinkRecord(const DrinkRecord& record) {
         meta.record_count++;
     }
     meta.total_writes++;
+    meta.next_record_id++;  // Increment for next record
 
     if (!storageSaveBufferMetadata(meta)) {
         Serial.println("WARNING: Drink record saved but metadata update failed");
@@ -54,6 +60,8 @@ bool storageSaveDrinkRecord(const DrinkRecord& record) {
 
     Serial.print("Drink record saved to ");
     Serial.print(key);
+    Serial.print(" id=");
+    Serial.print(record_with_id.record_id);
     Serial.print(" (total: ");
     Serial.print(meta.record_count);
     Serial.println(")");
@@ -361,8 +369,8 @@ bool storageGetUnsyncedRecords(DrinkRecord* buffer, uint16_t max_count, uint16_t
         DrinkRecord record;
         size_t read_size = prefs.getBytes(key, &record, sizeof(DrinkRecord));
         if (read_size == sizeof(DrinkRecord)) {
-            // Check if unsynced (bit 0 not set)
-            if ((record.flags & 0x01) == 0) {
+            // Check if unsynced (bit 0 not set) AND not deleted (bit 2 not set)
+            if ((record.flags & 0x01) == 0 && (record.flags & 0x04) == 0) {
                 buffer[out_count] = record;
                 out_count++;
             }
@@ -376,4 +384,68 @@ bool storageGetUnsyncedRecords(DrinkRecord* buffer, uint16_t max_count, uint16_t
     Serial.println(" unsynced records");
 
     return true;
+}
+
+bool storageMarkDeleted(uint32_t record_id) {
+    // Load metadata
+    CircularBufferMetadata meta;
+    if (!storageLoadBufferMetadata(meta) || meta.record_count == 0) {
+        Serial.println("No drink records in storage");
+        return false;
+    }
+
+    Preferences prefs;
+    if (!prefs.begin(NVS_NAMESPACE, false)) {
+        Serial.println("ERROR: Failed to open NVS for mark deleted");
+        return false;
+    }
+
+    bool found = false;
+
+    // Iterate through all records to find the one with matching ID
+    for (uint16_t i = 0; i < meta.record_count; i++) {
+        // Calculate physical index
+        uint16_t physical_index;
+        if (meta.record_count < DRINK_MAX_RECORDS) {
+            physical_index = i;
+        } else {
+            physical_index = (meta.write_index + i) % DRINK_MAX_RECORDS;
+        }
+
+        // Load record
+        char key[16];
+        getDrinkRecordKey(physical_index, key, sizeof(key));
+
+        DrinkRecord record;
+        size_t read_size = prefs.getBytes(key, &record, sizeof(DrinkRecord));
+        if (read_size == sizeof(DrinkRecord)) {
+            if (record.record_id == record_id) {
+                // Found the record - set deleted flag (bit 2)
+                record.flags |= 0x04;
+
+                // Write back
+                size_t written = prefs.putBytes(key, &record, sizeof(DrinkRecord));
+                if (written == sizeof(DrinkRecord)) {
+                    found = true;
+                    Serial.print("Marked record ");
+                    Serial.print(record_id);
+                    Serial.println(" as deleted");
+                } else {
+                    Serial.print("ERROR: Failed to write deleted flag for record ");
+                    Serial.println(record_id);
+                }
+                break;
+            }
+        }
+    }
+
+    prefs.end();
+
+    if (!found) {
+        Serial.print("Record ");
+        Serial.print(record_id);
+        Serial.println(" not found (may have rolled off)");
+    }
+
+    return found;
 }

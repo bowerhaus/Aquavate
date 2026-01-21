@@ -12,6 +12,8 @@ struct HistoryView: View {
     @EnvironmentObject var bleManager: BLEManager
     @Environment(\.managedObjectContext) private var viewContext
     @State private var selectedDate: Date = Date()
+    @State private var showConnectionRequiredAlert = false
+    @State private var isDeleting = false
 
     // Fetch all drink records from CoreData
     // Filter to last 7 days in computed property to ensure dynamic date comparison
@@ -67,22 +69,44 @@ struct HistoryView: View {
             .sorted { ($0.timestamp ?? .distantPast) > ($1.timestamp ?? .distantPast) }
     }
 
-    // Delete drinks at given offsets and sync to bottle if today's drinks
+    // Delete drinks at given offsets - requires bottle connection for bidirectional sync
     private func deleteDrinks(at offsets: IndexSet) {
-        let isDeletingTodaysDrinks = Calendar.current.isDateInToday(selectedDate)
-
-        // Delete the records
-        for index in offsets {
-            let cdRecord = drinksForSelectedDateCD[index]
-            if let id = cdRecord.id {
-                PersistenceController.shared.deleteDrinkRecord(id: id)
-            }
+        // Require bottle connection for deletion
+        guard bleManager.connectionState.isConnected else {
+            showConnectionRequiredAlert = true
+            return
         }
 
-        // Sync actual total from CoreData to bottle if deleting today's drinks and connected
-        if isDeletingTodaysDrinks && bleManager.connectionState.isConnected {
-            let newTotal = PersistenceController.shared.getTodaysTotalMl()
-            bleManager.sendSetDailyTotalCommand(ml: newTotal)
+        // Prevent multiple simultaneous deletes
+        guard !isDeleting else { return }
+        isDeleting = true
+
+        // Process deletes sequentially
+        Task { @MainActor in
+            for index in offsets {
+                let cdRecord = drinksForSelectedDateCD[index]
+                guard let id = cdRecord.id else { continue }
+
+                let firmwareId = cdRecord.firmwareRecordId
+
+                // If we have a firmware ID, use pessimistic delete
+                if firmwareId != 0 {
+                    await withCheckedContinuation { continuation in
+                        bleManager.deleteDrinkRecord(firmwareRecordId: UInt32(firmwareId)) { success in
+                            if success {
+                                // Bottle confirmed - now safe to delete locally
+                                PersistenceController.shared.deleteDrinkRecord(id: id)
+                            }
+                            // If failed, leave record in place - user can retry
+                            continuation.resume()
+                        }
+                    }
+                } else {
+                    // No firmware ID (old record) - delete locally only
+                    PersistenceController.shared.deleteDrinkRecord(id: id)
+                }
+            }
+            isDeleting = false
         }
     }
 
@@ -145,6 +169,11 @@ struct HistoryView: View {
                 }
             }
             .navigationTitle("History")
+            .alert("Connection Required", isPresented: $showConnectionRequiredAlert) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text("Please connect to your bottle before deleting drinks. This ensures both the app and bottle stay in sync.")
+            }
         }
     }
 

@@ -197,19 +197,20 @@ struct BLESyncControl {
     }
 }
 
-// MARK: - Drink Record (10 bytes)
+// MARK: - Drink Record (14 bytes)
 
 /// Individual drink record for sync transfer
 /// Matches firmware's BLE_DrinkRecord struct exactly
 struct BLEDrinkRecord {
+    let recordId: UInt32            // Unique ID for deletion
     let timestamp: UInt32           // Unix time
     let amountMl: Int16             // Consumed (+) or refilled (-)
     let bottleLevelMl: UInt16       // Level after event
     let type: UInt8                 // 0=gulp, 1=pour
-    let flags: UInt8                // 0x01=synced
+    let flags: UInt8                // 0x01=synced, 0x04=deleted
 
-    /// Size of a single record (must be 10 bytes)
-    static let size = 10
+    /// Size of a single record (must be 14 bytes)
+    static let size = 14
 
     /// Drink types
     enum DrinkType: UInt8 {
@@ -232,6 +233,11 @@ struct BLEDrinkRecord {
     /// Check if record has been synced
     var isSynced: Bool {
         (flags & 0x01) != 0
+    }
+
+    /// Check if record has been deleted (soft delete)
+    var isDeleted: Bool {
+        (flags & 0x04) != 0
     }
 
     /// Convert timestamp to Date
@@ -270,7 +276,7 @@ struct BLEDrinkDataChunk {
             let totalChunks = baseAddress.loadUnaligned(fromByteOffset: 2, as: UInt16.self)
             let recordCount = baseAddress.load(fromByteOffset: 4, as: UInt8.self)
 
-            // Validate expected size: header (6 bytes) + records (10 bytes each)
+            // Validate expected size: header (6 bytes) + records (14 bytes each)
             let expectedSize = headerSize + (Int(recordCount) * BLEDrinkRecord.size)
             guard data.count >= expectedSize else {
                 // Data too short for declared record count
@@ -283,11 +289,12 @@ struct BLEDrinkDataChunk {
                 let offset = headerSize + (i * BLEDrinkRecord.size)
 
                 let record = BLEDrinkRecord(
-                    timestamp: baseAddress.loadUnaligned(fromByteOffset: offset, as: UInt32.self),
-                    amountMl: baseAddress.loadUnaligned(fromByteOffset: offset + 4, as: Int16.self),
-                    bottleLevelMl: baseAddress.loadUnaligned(fromByteOffset: offset + 6, as: UInt16.self),
-                    type: baseAddress.load(fromByteOffset: offset + 8, as: UInt8.self),
-                    flags: baseAddress.load(fromByteOffset: offset + 9, as: UInt8.self)
+                    recordId: baseAddress.loadUnaligned(fromByteOffset: offset, as: UInt32.self),
+                    timestamp: baseAddress.loadUnaligned(fromByteOffset: offset + 4, as: UInt32.self),
+                    amountMl: baseAddress.loadUnaligned(fromByteOffset: offset + 8, as: Int16.self),
+                    bottleLevelMl: baseAddress.loadUnaligned(fromByteOffset: offset + 10, as: UInt16.self),
+                    type: baseAddress.load(fromByteOffset: offset + 12, as: UInt8.self),
+                    flags: baseAddress.load(fromByteOffset: offset + 13, as: UInt8.self)
                 )
                 records.append(record)
             }
@@ -372,14 +379,15 @@ struct BLECommand {
         return data
     }
 
-    /// Create SET_DAILY_TOTAL command (0x11) with daily total in ml
-    /// Sends 3 bytes: command + 2-byte little-endian value
-    static func setDailyTotal(ml: UInt16) -> Data {
-        var data = Data(count: 3)
+    /// Create DELETE_DRINK_RECORD command (0x12) with record ID
+    /// Sends 5 bytes: command + 4-byte little-endian record_id
+    /// The firmware will soft-delete the record and recalculate the daily total
+    static func deleteDrinkRecord(recordId: UInt32) -> Data {
+        var data = Data(count: 5)
         data.withUnsafeMutableBytes { ptr in
             guard let baseAddress = ptr.baseAddress else { return }
-            baseAddress.storeBytes(of: UInt8(0x11), as: UInt8.self)
-            baseAddress.storeBytes(of: ml, toByteOffset: 1, as: UInt16.self)
+            baseAddress.storeBytes(of: UInt8(0x12), as: UInt8.self)
+            baseAddress.storeBytes(of: recordId, toByteOffset: 1, as: UInt32.self)
         }
         return data
     }

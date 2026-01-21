@@ -158,12 +158,34 @@ class CommandCallbacks : public NimBLECharacteristicCallbacks {
         }
 
         // Check for SET_DAILY_TOTAL command (3 bytes: cmd + 2-byte little-endian value)
+        // DEPRECATED: Kept for backwards compatibility, but apps should use DELETE_DRINK_RECORD
         if (value.length() == 3 && value[0] == BLE_CMD_SET_DAILY_TOTAL) {
             uint16_t dailyTotal = (uint8_t)value[1] | ((uint8_t)value[2] << 8);
-            BLE_DEBUG_F("Command: SET_DAILY_TOTAL to %dml", dailyTotal);
+            BLE_DEBUG_F("Command: SET_DAILY_TOTAL to %dml (DEPRECATED)", dailyTotal);
             g_ble_set_daily_total_value = dailyTotal;
             g_ble_set_daily_total_requested = true;
             g_ble_force_display_refresh = true;  // Force display update
+            return;
+        }
+
+        // Check for DELETE_DRINK_RECORD command (5 bytes: cmd + 4-byte record_id)
+        if (value.length() == 5 && value[0] == BLE_CMD_DELETE_DRINK_RECORD) {
+            uint32_t recordId = (uint8_t)value[1] | ((uint8_t)value[2] << 8) |
+                               ((uint8_t)value[3] << 16) | ((uint8_t)value[4] << 24);
+
+            BLE_DEBUG_F("Command: DELETE_DRINK_RECORD id=%lu", recordId);
+
+            bool found = storageMarkDeleted(recordId);
+            if (found) {
+                drinksRecalculateTotal();
+                BLE_DEBUG_F("DELETE_DRINK_RECORD: %lu deleted, total recalculated", recordId);
+            } else {
+                BLE_DEBUG_F("DELETE_DRINK_RECORD: %lu not found (rolled off)", recordId);
+            }
+
+            // Always notify - either way, the delete is "successful" from the app's perspective
+            g_ble_force_display_refresh = true;
+            bleNotifyCurrentStateUpdate();
             return;
         }
 
@@ -456,6 +478,7 @@ void bleSyncSendNextChunk() {
         DrinkRecord& src = syncBuffer[chunk_start + i];
         BLE_DrinkRecord& dst = chunk.records[i];
 
+        dst.record_id = src.record_id;
         dst.timestamp = src.timestamp;
         dst.amount_ml = src.amount_ml;
         dst.bottle_level_ml = src.bottle_level_ml;
@@ -463,7 +486,7 @@ void bleSyncSendNextChunk() {
         dst.flags = src.flags;
     }
 
-    // Calculate chunk size: header (6 bytes) + records (10 bytes each)
+    // Calculate chunk size: header (6 bytes) + records (14 bytes each)
     size_t chunk_size = 6 + (records_in_chunk * sizeof(BLE_DrinkRecord));
 
     // Send notification

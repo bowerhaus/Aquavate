@@ -12,10 +12,12 @@ struct HomeView: View {
     @EnvironmentObject var bleManager: BLEManager
     @Environment(\.managedObjectContext) private var viewContext
 
-    // Alert state for pull-to-refresh
+    // Alert state for pull-to-refresh and delete
     @State private var showBottleAsleepAlert = false
     @State private var showErrorAlert = false
     @State private var errorAlertMessage = ""
+    @State private var showConnectionRequiredAlert = false
+    @State private var isDeleting = false
 
     // Fetch all drinks from CoreData, sorted by most recent first
     // Filter to today's drinks in computed property to ensure dynamic date comparison
@@ -64,20 +66,44 @@ struct HomeView: View {
         return min(1.0, Double(displayBottleLevel) / Double(displayCapacity))
     }
 
-    // Delete today's drinks at given offsets and sync to bottle
+    // Delete today's drinks at given offsets - requires bottle connection for bidirectional sync
     private func deleteTodaysDrinks(at offsets: IndexSet) {
-        // Delete the records
-        for index in offsets {
-            let cdRecord = todaysDrinksCD[index]
-            if let id = cdRecord.id {
-                PersistenceController.shared.deleteDrinkRecord(id: id)
-            }
+        // Require bottle connection for deletion
+        guard bleManager.connectionState.isConnected else {
+            showConnectionRequiredAlert = true
+            return
         }
 
-        // Sync actual total from CoreData to bottle if connected
-        if bleManager.connectionState.isConnected {
-            let newTotal = PersistenceController.shared.getTodaysTotalMl()
-            bleManager.sendSetDailyTotalCommand(ml: newTotal)
+        // Prevent multiple simultaneous deletes
+        guard !isDeleting else { return }
+        isDeleting = true
+
+        // Process deletes sequentially
+        Task { @MainActor in
+            for index in offsets {
+                let cdRecord = todaysDrinksCD[index]
+                guard let id = cdRecord.id else { continue }
+
+                let firmwareId = cdRecord.firmwareRecordId
+
+                // If we have a firmware ID, use pessimistic delete
+                if firmwareId != 0 {
+                    await withCheckedContinuation { continuation in
+                        bleManager.deleteDrinkRecord(firmwareRecordId: UInt32(firmwareId)) { success in
+                            if success {
+                                // Bottle confirmed - now safe to delete locally
+                                PersistenceController.shared.deleteDrinkRecord(id: id)
+                            }
+                            // If failed, leave record in place - user can retry
+                            continuation.resume()
+                        }
+                    }
+                } else {
+                    // No firmware ID (old record) - delete locally only
+                    PersistenceController.shared.deleteDrinkRecord(id: id)
+                }
+            }
+            isDeleting = false
         }
     }
 
@@ -255,6 +281,11 @@ struct HomeView: View {
             Button("OK", role: .cancel) { }
         } message: {
             Text(errorAlertMessage)
+        }
+        .alert("Connection Required", isPresented: $showConnectionRequiredAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("Please connect to your bottle before deleting drinks. This ensures both the app and bottle stay in sync.")
         }
     }
 

@@ -140,9 +140,6 @@ class BLEManager: NSObject, ObservableObject {
     /// Buffer for drink records during sync
     private var syncBuffer: [BLEDrinkRecord] = []
 
-    /// Flag to track if we've checked daily total sync this connection
-    private var hasCheckedDailyTotalSync: Bool = false
-
     /// Expected total chunks in current sync
     private var expectedTotalChunks: UInt16 = 0
 
@@ -166,6 +163,10 @@ class BLEManager: NSObject, ObservableObject {
 
     /// Logger for BLE events
     private let logger = Logger(subsystem: "com.aquavate", category: "BLE")
+
+    /// Pending delete completion handler (for bidirectional sync)
+    private var pendingDeleteCompletion: ((Bool) -> Void)?
+    private var pendingDeleteRecordId: UInt32?
 
     // MARK: - Initialization
 
@@ -305,10 +306,12 @@ class BLEManager: NSObject, ObservableObject {
 
         // Start new timer
         idleDisconnectTimer = Timer.scheduledTimer(withTimeInterval: idleDisconnectInterval, repeats: false) { [weak self] _ in
-            guard let self = self else { return }
-            if self.connectionState.isConnected {
-                self.logger.info("Idle timeout - disconnecting to save battery")
-                self.disconnect()
+            Task { @MainActor in
+                guard let self = self else { return }
+                if self.connectionState.isConnected {
+                    self.logger.info("Idle timeout - disconnecting to save battery")
+                    self.disconnect()
+                }
             }
         }
         logger.info("Idle disconnect timer started (\(Int(self.idleDisconnectInterval))s)")
@@ -464,7 +467,6 @@ extension BLEManager: CBCentralManagerDelegate {
             connectedPeripheral = nil
             connectedDeviceName = nil
             characteristics.removeAll()
-            hasCheckedDailyTotalSync = false  // Reset for next connection
         }
     }
 
@@ -663,8 +665,6 @@ extension BLEManager: CBPeripheralDelegate {
             return
         }
 
-        let previousUnsyncedCount = unsyncedCount
-
         // Update published properties
         currentWeightG = Int(state.currentWeightG)
         bottleLevelMl = Int(state.bottleLevelMl)
@@ -679,17 +679,21 @@ extension BLEManager: CBPeripheralDelegate {
         logger.info("Current State: weight=\(state.currentWeightG)g, level=\(state.bottleLevelMl)ml, daily=\(state.dailyTotalMl)ml, battery=\(state.batteryPercent)%, unsynced=\(state.unsyncedCount)")
         logger.debug("  Flags: timeValid=\(state.isTimeValid), calibrated=\(state.isCalibrated), stable=\(state.isStable)")
 
+        // Check if we have a pending delete confirmation
+        // The bottle sends a Current State notification after processing DELETE_DRINK_RECORD
+        if let completion = pendingDeleteCompletion {
+            logger.info("Delete confirmed for record \(self.pendingDeleteRecordId ?? 0)")
+            pendingDeleteCompletion = nil
+            pendingDeleteRecordId = nil
+            completion(true)
+        }
+
         // Auto-sync if we have unsynced records and sync is not already in progress
         // Trigger when: we have unsynced records, sync is idle, and we're connected
         // This handles both initial connection and new drinks poured while connected
         if unsyncedCount > 0 && syncState == .idle && connectionState.isConnected {
             logger.info("Detected \(self.unsyncedCount) unsynced records, starting auto-sync")
             startDrinkSync()
-        } else if unsyncedCount == 0 && syncState == .idle && connectionState.isConnected && !hasCheckedDailyTotalSync {
-            // No records to sync - check if daily totals match (handles deleted drinks case)
-            // Only do this once per connection to avoid spam
-            hasCheckedDailyTotalSync = true
-            syncDailyTotalIfNeeded()
         }
     }
 
@@ -902,11 +906,6 @@ extension BLEManager: CBPeripheralDelegate {
         lastSyncTime = Date()
 
         logger.info("Drink sync complete: \(recordCount) records synced")
-
-        // After sync, compare app total with bottle total and sync if different
-        // This handles case where drinks were deleted in app while disconnected
-        hasCheckedDailyTotalSync = true
-        syncDailyTotalIfNeeded()
     }
 
     /// Handle sync failure
@@ -958,33 +957,37 @@ extension BLEManager: CBPeripheralDelegate {
         logger.info("Sent CANCEL_CALIBRATION command")
     }
 
-    /// Compare app's CoreData daily total with bottle's reported total, sync if different
-    /// Called after sync completes and when connecting to ensure totals match
-    func syncDailyTotalIfNeeded() {
-        let appTotal = PersistenceController.shared.getTodaysTotalMl()
-        let bottleTotal = dailyTotalMl
+    // MARK: - Bidirectional Sync (Delete Drink Record)
 
-        if appTotal != bottleTotal {
-            logger.info("Daily total mismatch: app=\(appTotal)ml, bottle=\(bottleTotal)ml - syncing to bottle")
-            sendSetDailyTotalCommand(ml: appTotal)
-        } else {
-            logger.debug("Daily totals match: \(appTotal)ml")
-        }
-    }
-
-    /// Send SET_DAILY_TOTAL command to set the bottle's daily total to match the app
-    /// Called after deleting drinks in the app to keep totals in sync
-    func sendSetDailyTotalCommand(ml: Int) {
+    /// Delete a drink record on the bottle (bidirectional sync)
+    /// Uses pessimistic delete - waits for bottle confirmation before returning success
+    /// The completion handler is called with true if bottle confirmed the delete, false otherwise
+    func deleteDrinkRecord(firmwareRecordId: UInt32, completion: @escaping (Bool) -> Void) {
         guard let peripheral = connectedPeripheral,
               let characteristic = characteristics[BLEConstants.commandUUID] else {
-            logger.warning("Cannot set daily total: not connected")
+            logger.warning("Cannot delete drink record: not connected")
+            completion(false)
             return
         }
 
-        let clampedValue = UInt16(clamping: max(0, ml))
-        let data = BLECommand.setDailyTotal(ml: clampedValue)
+        // Store completion handler for when Current State notification arrives
+        pendingDeleteCompletion = completion
+        pendingDeleteRecordId = firmwareRecordId
+
+        let data = BLECommand.deleteDrinkRecord(recordId: firmwareRecordId)
         peripheral.writeValue(data, for: characteristic, type: .withResponse)
-        logger.info("Sent SET_DAILY_TOTAL command: \(clampedValue)ml")
+        logger.info("Sent DELETE_DRINK_RECORD command for id=\(firmwareRecordId)")
+
+        // Set a timeout in case we don't get a response
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 5_000_000_000) // 5 second timeout
+            if let completion = self.pendingDeleteCompletion, self.pendingDeleteRecordId == firmwareRecordId {
+                self.logger.warning("Delete confirmation timeout for record \(firmwareRecordId)")
+                self.pendingDeleteCompletion = nil
+                self.pendingDeleteRecordId = nil
+                completion(false)
+            }
+        }
     }
 
     /// Write command to Command characteristic

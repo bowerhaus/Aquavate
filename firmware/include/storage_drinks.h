@@ -7,11 +7,12 @@
 #include <Arduino.h>
 #include "drinks.h"
 
-// CircularBufferMetadata: Tracks circular buffer state in NVS (10 bytes)
+// CircularBufferMetadata: Tracks circular buffer state in NVS (14 bytes)
 struct CircularBufferMetadata {
     uint16_t write_index;      // Next write position (0-599)
     uint16_t record_count;     // Number of records stored (0-600)
     uint32_t total_writes;     // Total lifetime writes (for debugging)
+    uint32_t next_record_id;   // Next ID to assign (incrementing counter)
     uint16_t _reserved;        // Padding for future use
 };
 
@@ -95,6 +96,7 @@ uint16_t storageGetUnsyncedCount();
 /**
  * Get all unsynced records for sync protocol
  * Returns records in chronological order (oldest first)
+ * Skips deleted records (flags & 0x04)
  *
  * @param buffer Output buffer for records
  * @param max_count Maximum records to retrieve
@@ -102,5 +104,14 @@ uint16_t storageGetUnsyncedCount();
  * @return true if successful
  */
 bool storageGetUnsyncedRecords(DrinkRecord* buffer, uint16_t max_count, uint16_t& out_count);
+
+/**
+ * Mark a drink record as deleted by record_id (soft delete)
+ * Searches circular buffer for record with matching ID and sets deleted flag
+ *
+ * @param record_id The unique record ID to mark as deleted
+ * @return true if record found and marked, false if not found (may have rolled off)
+ */
+bool storageMarkDeleted(uint32_t record_id);
 
 #endif // STORAGE_DRINKS_H
