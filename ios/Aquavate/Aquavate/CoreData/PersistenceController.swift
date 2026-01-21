@@ -163,8 +163,8 @@ struct PersistenceController {
             let drinkDate = Date(timeIntervalSince1970: TimeInterval(bleRecord.timestamp))
             record.timestamp = drinkDate
             record.amountMl = bleRecord.amountMl
-            // Safe conversion: clamp UInt16 to Int16 range (values > 32767 are unrealistic for bottle level)
-            record.bottleLevelMl = Int16(clamping: bleRecord.bottleLevelMl)
+            // Interpret UInt16 as signed Int16 (firmware sends signed values over BLE)
+            record.bottleLevelMl = Int16(bitPattern: bleRecord.bottleLevelMl)
             record.drinkType = Int16(bleRecord.type)
             record.syncedToHealth = false
             record.bottleId = bottleId

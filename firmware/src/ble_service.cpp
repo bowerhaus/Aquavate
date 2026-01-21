@@ -57,6 +57,9 @@ static uint16_t syncCurrentChunk = 0;      // Current chunk being sent
 static volatile bool g_ble_tare_requested = false;
 static volatile bool g_ble_reset_daily_requested = false;
 static volatile bool g_ble_clear_history_requested = false;
+static volatile bool g_ble_set_daily_total_requested = false;
+static volatile uint16_t g_ble_set_daily_total_value = 0;
+static volatile bool g_ble_force_display_refresh = false;
 
 // Forward declaration for sync complete notification
 static void bleNotifyCurrentStateUpdate();
@@ -151,6 +154,16 @@ class CommandCallbacks : public NimBLECharacteristicCallbacks {
             } else {
                 BLE_DEBUG("ERROR: Failed to set time");
             }
+            return;
+        }
+
+        // Check for SET_DAILY_TOTAL command (3 bytes: cmd + 2-byte little-endian value)
+        if (value.length() == 3 && value[0] == BLE_CMD_SET_DAILY_TOTAL) {
+            uint16_t dailyTotal = (uint8_t)value[1] | ((uint8_t)value[2] << 8);
+            BLE_DEBUG_F("Command: SET_DAILY_TOTAL to %dml", dailyTotal);
+            g_ble_set_daily_total_value = dailyTotal;
+            g_ble_set_daily_total_requested = true;
+            g_ble_force_display_refresh = true;  // Force display update
             return;
         }
 
@@ -752,6 +765,23 @@ bool bleCheckResetDailyRequested() {
 bool bleCheckClearHistoryRequested() {
     if (g_ble_clear_history_requested) {
         g_ble_clear_history_requested = false;
+        return true;
+    }
+    return false;
+}
+
+bool bleCheckSetDailyTotalRequested(uint16_t& value) {
+    if (g_ble_set_daily_total_requested) {
+        g_ble_set_daily_total_requested = false;
+        value = g_ble_set_daily_total_value;
+        return true;
+    }
+    return false;
+}
+
+bool bleCheckForceDisplayRefresh() {
+    if (g_ble_force_display_refresh) {
+        g_ble_force_display_refresh = false;
         return true;
     }
     return false;

@@ -140,6 +140,9 @@ class BLEManager: NSObject, ObservableObject {
     /// Buffer for drink records during sync
     private var syncBuffer: [BLEDrinkRecord] = []
 
+    /// Flag to track if we've checked daily total sync this connection
+    private var hasCheckedDailyTotalSync: Bool = false
+
     /// Expected total chunks in current sync
     private var expectedTotalChunks: UInt16 = 0
 
@@ -461,6 +464,7 @@ extension BLEManager: CBCentralManagerDelegate {
             connectedPeripheral = nil
             connectedDeviceName = nil
             characteristics.removeAll()
+            hasCheckedDailyTotalSync = false  // Reset for next connection
         }
     }
 
@@ -681,6 +685,11 @@ extension BLEManager: CBPeripheralDelegate {
         if unsyncedCount > 0 && syncState == .idle && connectionState.isConnected {
             logger.info("Detected \(self.unsyncedCount) unsynced records, starting auto-sync")
             startDrinkSync()
+        } else if unsyncedCount == 0 && syncState == .idle && connectionState.isConnected && !hasCheckedDailyTotalSync {
+            // No records to sync - check if daily totals match (handles deleted drinks case)
+            // Only do this once per connection to avoid spam
+            hasCheckedDailyTotalSync = true
+            syncDailyTotalIfNeeded()
         }
     }
 
@@ -893,6 +902,11 @@ extension BLEManager: CBPeripheralDelegate {
         lastSyncTime = Date()
 
         logger.info("Drink sync complete: \(recordCount) records synced")
+
+        // After sync, compare app total with bottle total and sync if different
+        // This handles case where drinks were deleted in app while disconnected
+        hasCheckedDailyTotalSync = true
+        syncDailyTotalIfNeeded()
     }
 
     /// Handle sync failure
@@ -942,6 +956,35 @@ extension BLEManager: CBPeripheralDelegate {
     func sendCancelCalibrationCommand() {
         writeCommand(BLECommand.cancelCalibration())
         logger.info("Sent CANCEL_CALIBRATION command")
+    }
+
+    /// Compare app's CoreData daily total with bottle's reported total, sync if different
+    /// Called after sync completes and when connecting to ensure totals match
+    func syncDailyTotalIfNeeded() {
+        let appTotal = PersistenceController.shared.getTodaysTotalMl()
+        let bottleTotal = dailyTotalMl
+
+        if appTotal != bottleTotal {
+            logger.info("Daily total mismatch: app=\(appTotal)ml, bottle=\(bottleTotal)ml - syncing to bottle")
+            sendSetDailyTotalCommand(ml: appTotal)
+        } else {
+            logger.debug("Daily totals match: \(appTotal)ml")
+        }
+    }
+
+    /// Send SET_DAILY_TOTAL command to set the bottle's daily total to match the app
+    /// Called after deleting drinks in the app to keep totals in sync
+    func sendSetDailyTotalCommand(ml: Int) {
+        guard let peripheral = connectedPeripheral,
+              let characteristic = characteristics[BLEConstants.commandUUID] else {
+            logger.warning("Cannot set daily total: not connected")
+            return
+        }
+
+        let clampedValue = UInt16(clamping: max(0, ml))
+        let data = BLECommand.setDailyTotal(ml: clampedValue)
+        peripheral.writeValue(data, for: characteristic, type: .withResponse)
+        logger.info("Sent SET_DAILY_TOTAL command: \(clampedValue)ml")
     }
 
     /// Write command to Command characteristic

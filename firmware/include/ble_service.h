@@ -95,6 +95,7 @@ struct __attribute__((packed)) BLE_Command {
 #define BLE_CMD_RESET_DAILY         0x05
 #define BLE_CMD_CLEAR_HISTORY       0x06
 #define BLE_CMD_SET_TIME            0x10  // Set device time (5 bytes: cmd + 4-byte Unix timestamp)
+#define BLE_CMD_SET_DAILY_TOTAL     0x11  // Set daily total (3 bytes: cmd + 2-byte ml value)
 
 // Set Time Command (5 bytes) - different from standard 4-byte command
 struct __attribute__((packed)) BLE_SetTimeCommand {
@@ -169,6 +170,8 @@ String bleGetDeviceSuffix();
 bool bleCheckTareRequested();
 bool bleCheckResetDailyRequested();
 bool bleCheckClearHistoryRequested();
+bool bleCheckSetDailyTotalRequested(uint16_t& value);
+bool bleCheckForceDisplayRefresh();
 
 #endif // ENABLE_BLE
 

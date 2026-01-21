@@ -9,6 +9,7 @@ import SwiftUI
 import CoreData
 
 struct HistoryView: View {
+    @EnvironmentObject var bleManager: BLEManager
     @Environment(\.managedObjectContext) private var viewContext
     @State private var selectedDate: Date = Date()
 
@@ -66,13 +67,22 @@ struct HistoryView: View {
             .sorted { ($0.timestamp ?? .distantPast) > ($1.timestamp ?? .distantPast) }
     }
 
-    // Delete drinks at given offsets
+    // Delete drinks at given offsets and sync to bottle if today's drinks
     private func deleteDrinks(at offsets: IndexSet) {
+        let isDeletingTodaysDrinks = Calendar.current.isDateInToday(selectedDate)
+
+        // Delete the records
         for index in offsets {
             let cdRecord = drinksForSelectedDateCD[index]
             if let id = cdRecord.id {
                 PersistenceController.shared.deleteDrinkRecord(id: id)
             }
+        }
+
+        // Sync actual total from CoreData to bottle if deleting today's drinks and connected
+        if isDeletingTodaysDrinks && bleManager.connectionState.isConnected {
+            let newTotal = PersistenceController.shared.getTodaysTotalMl()
+            bleManager.sendSetDailyTotalCommand(ml: newTotal)
         }
     }
 
@@ -88,6 +98,7 @@ struct HistoryView: View {
                                 totalMl: totalForDate(date),
                                 isSelected: Calendar.current.isDate(date, inSameDayAs: selectedDate)
                             )
+                            .id(date)
                             .onTapGesture {
                                 selectedDate = date
                             }
@@ -96,6 +107,7 @@ struct HistoryView: View {
                     .padding(.horizontal)
                     .padding(.vertical, 16)
                 }
+                .defaultScrollAnchor(.trailing)
                 .background(Color(.systemGroupedBackground))
 
                 // Selected day detail
@@ -192,4 +204,5 @@ struct DayCard: View {
 
 #Preview {
     HistoryView()
+        .environmentObject(BLEManager())
 }

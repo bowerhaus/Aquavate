@@ -36,34 +36,22 @@ struct HomeView: View {
         todaysDrinksCD.map { $0.toDrinkRecord() }
     }
 
-    // Use BLE data when connected, otherwise calculate from CoreData drinks
+    // Always show the sum of drinks in CoreData so the total matches the displayed drink list
     private var displayDailyTotal: Int {
-        if bleManager.connectionState.isConnected {
-            return bleManager.dailyTotalMl
-        }
         return todaysDrinks.reduce(0) { $0 + $1.amountMl }
     }
 
-    // Use BLE data when connected, otherwise use sample bottle
+    // Always use last known BLE values - they persist after disconnect
     private var displayBottleLevel: Int {
-        if bleManager.connectionState.isConnected {
-            return bleManager.bottleLevelMl
-        }
-        return Bottle.sample.currentLevelMl
+        return bleManager.bottleLevelMl
     }
 
     private var displayCapacity: Int {
-        if bleManager.connectionState.isConnected {
-            return bleManager.bottleCapacityMl
-        }
-        return Bottle.sample.capacityMl
+        return bleManager.bottleCapacityMl
     }
 
     private var displayGoal: Int {
-        if bleManager.connectionState.isConnected {
-            return bleManager.dailyGoalMl
-        }
-        return Bottle.sample.dailyGoalMl
+        return bleManager.dailyGoalMl
     }
 
     private var dailyProgress: Double {
@@ -76,22 +64,20 @@ struct HomeView: View {
         return min(1.0, Double(displayBottleLevel) / Double(displayCapacity))
     }
 
-    private var recentDrinks: [DrinkRecord] {
-        Array(todaysDrinks.prefix(5))
-    }
-
-    // CDDrinkRecords for recent drinks (for deletion)
-    private var recentDrinksCD: [CDDrinkRecord] {
-        Array(todaysDrinksCD.prefix(5))
-    }
-
-    // Delete recent drinks at given offsets
-    private func deleteRecentDrinks(at offsets: IndexSet) {
+    // Delete today's drinks at given offsets and sync to bottle
+    private func deleteTodaysDrinks(at offsets: IndexSet) {
+        // Delete the records
         for index in offsets {
-            let cdRecord = recentDrinksCD[index]
+            let cdRecord = todaysDrinksCD[index]
             if let id = cdRecord.id {
                 PersistenceController.shared.deleteDrinkRecord(id: id)
             }
+        }
+
+        // Sync actual total from CoreData to bottle if connected
+        if bleManager.connectionState.isConnected {
+            let newTotal = PersistenceController.shared.getTodaysTotalMl()
+            bleManager.sendSetDailyTotalCommand(ml: newTotal)
         }
     }
 
@@ -161,103 +147,103 @@ struct HomeView: View {
 
             Divider()
 
-            // Scrollable content
-            ScrollView {
-                VStack(spacing: 24) {
-                    // Status warnings (when connected)
-                    if bleManager.connectionState.isConnected {
-                        HStack(spacing: 12) {
-                            // Only show calibration warning when NOT calibrated
-                            if !bleManager.isCalibrated {
-                                StatusBadge(
-                                    label: "Not Calibrated",
-                                    isActive: true,
-                                    activeColor: .orange,
-                                    inactiveColor: .gray
-                                )
-                            }
-                            if bleManager.unsyncedCount > 0 {
-                                StatusBadge(
-                                    label: "\(bleManager.unsyncedCount) unsynced",
-                                    isActive: true,
-                                    activeColor: .orange,
-                                    inactiveColor: .gray
-                                )
-                            }
+            // Fixed progress section
+            VStack(spacing: 16) {
+                // Status warnings (when connected)
+                if bleManager.connectionState.isConnected {
+                    HStack(spacing: 12) {
+                        // Only show calibration warning when NOT calibrated
+                        if !bleManager.isCalibrated {
+                            StatusBadge(
+                                label: "Not Calibrated",
+                                isActive: true,
+                                activeColor: .orange,
+                                inactiveColor: .gray
+                            )
                         }
-                        .padding(.horizontal)
-                        .padding(.top, 8)
-                    }
-
-                    // Human figure progress - daily goal (PRIMARY FOCUS)
-                    HumanFigureProgressView(
-                        current: displayDailyTotal,
-                        total: displayGoal,
-                        color: .blue,
-                        label: "of \(displayGoal)ml goal"
-                    )
-                    .padding(.vertical, 16)
-
-                    // Bottle level progress bar (SECONDARY)
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text("Bottle Level")
-                                .font(.headline)
-                            Spacer()
-                            Text("\(Int(bottleProgress * 100))%")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
-
-                        ProgressView(value: bottleProgress)
-                            .tint(.blue)
-
-                        HStack {
-                            Text("\(displayBottleLevel)ml")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                            Text("/ \(displayCapacity)ml")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
+                        if bleManager.unsyncedCount > 0 {
+                            StatusBadge(
+                                label: "\(bleManager.unsyncedCount) unsynced",
+                                isActive: true,
+                                activeColor: .orange,
+                                inactiveColor: .gray
+                            )
                         }
                     }
                     .padding(.horizontal)
+                }
 
-                    Divider()
-                        .padding(.horizontal)
+                // Human figure progress - daily goal (PRIMARY FOCUS)
+                HumanFigureProgressView(
+                    current: displayDailyTotal,
+                    total: displayGoal,
+                    color: .blue,
+                    label: "of \(displayGoal)ml goal"
+                )
 
-                    // Recent drinks list
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text("Recent Drinks")
+                // Bottle level progress bar (SECONDARY)
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("Bottle Level")
                             .font(.headline)
-                            .padding(.horizontal)
-                            .padding(.bottom, 8)
-
-                        if recentDrinksCD.isEmpty {
-                            Text("No drinks recorded today")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 32)
-                        } else {
-                            List {
-                                ForEach(recentDrinksCD) { cdRecord in
-                                    DrinkListItem(drink: cdRecord.toDrinkRecord())
-                                        .frame(minHeight: 44)
-                                }
-                                .onDelete(perform: deleteRecentDrinks)
-                            }
-                            .listStyle(.plain)
-                            .scrollDisabled(true)
-                            .frame(height: CGFloat(recentDrinksCD.count) * 56)
-                        }
+                        Spacer()
+                        Text("\(Int(bottleProgress * 100))%")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
                     }
 
-                    Spacer(minLength: 20)
+                    ProgressView(value: bottleProgress)
+                        .tint(.blue)
+
+                    HStack {
+                        Text("\(displayBottleLevel)ml")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                        Text("/ \(displayCapacity)ml")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
                 }
+                .padding(.horizontal)
             }
-            .refreshable {
-                await handleRefresh()
+            .padding(.vertical, 8)
+            .background(Color(.systemGroupedBackground))
+
+            // Today's drinks list
+            if todaysDrinksCD.isEmpty {
+                VStack(spacing: 16) {
+                    Spacer()
+                    Image(systemName: "drop.slash")
+                        .font(.system(size: 48))
+                        .foregroundStyle(.secondary)
+                    Text("No drinks recorded today")
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                }
+            } else {
+                List {
+                    Section {
+                        ForEach(todaysDrinksCD) { cdRecord in
+                            DrinkListItem(drink: cdRecord.toDrinkRecord())
+                                .frame(minHeight: 44)
+                        }
+                        .onDelete(perform: deleteTodaysDrinks)
+                    } header: {
+                        Text("Today's Drinks")
+                    } footer: {
+                        HStack {
+                            Text("Total consumed:")
+                            Spacer()
+                            Text("\(displayDailyTotal)ml")
+                                .fontWeight(.semibold)
+                        }
+                        .padding(.top, 8)
+                    }
+                }
+                .refreshable {
+                    await handleRefresh()
+                }
             }
         }
         .alert("Bottle is Asleep", isPresented: $showBottleAsleepAlert) {

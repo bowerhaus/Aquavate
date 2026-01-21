@@ -371,4 +371,16 @@ struct BLECommand {
         }
         return data
     }
+
+    /// Create SET_DAILY_TOTAL command (0x11) with daily total in ml
+    /// Sends 3 bytes: command + 2-byte little-endian value
+    static func setDailyTotal(ml: UInt16) -> Data {
+        var data = Data(count: 3)
+        data.withUnsafeMutableBytes { ptr in
+            guard let baseAddress = ptr.baseAddress else { return }
+            baseAddress.storeBytes(of: UInt8(0x11), as: UInt8.self)
+            baseAddress.storeBytes(of: ml, toByteOffset: 1, as: UInt16.self)
+        }
+        return data
+    }
 }
