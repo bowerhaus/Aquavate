@@ -236,19 +236,24 @@ struct HomeView: View {
             .background(Color(.systemGroupedBackground))
 
             // Today's drinks list
-            if todaysDrinksCD.isEmpty {
-                VStack(spacing: 16) {
-                    Spacer()
-                    Image(systemName: "drop.slash")
-                        .font(.system(size: 48))
-                        .foregroundStyle(.secondary)
-                    Text("No drinks recorded today")
-                        .font(.title3)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                }
-            } else {
-                List {
+            List {
+                if todaysDrinksCD.isEmpty {
+                    Section {
+                        VStack(spacing: 16) {
+                            Image(systemName: "drop.slash")
+                                .font(.system(size: 48))
+                                .foregroundStyle(.secondary)
+                            Text("No drinks recorded today")
+                                .font(.title3)
+                                .foregroundStyle(.secondary)
+                            Text("Pull down to sync with your bottle")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 40)
+                    }
+                } else {
                     Section {
                         ForEach(todaysDrinksCD) { cdRecord in
                             DrinkListItem(drink: cdRecord.toDrinkRecord())
@@ -267,9 +272,9 @@ struct HomeView: View {
                         .padding(.top, 8)
                     }
                 }
-                .refreshable {
-                    await handleRefresh()
-                }
+            }
+            .refreshable {
+                await handleRefresh()
             }
         }
         .alert("Bottle is Asleep", isPresented: $showBottleAsleepAlert) {
