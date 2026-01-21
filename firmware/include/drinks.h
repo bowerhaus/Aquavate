@@ -7,12 +7,14 @@
 #include <Arduino.h>
 #include "storage.h"
 
-// DrinkRecord structure: Stores individual drink/refill events (10 bytes)
+// DrinkRecord structure: Stores individual drink/refill events (14 bytes)
+// Flag bits: 0x01=synced to app, 0x02=day_boundary, 0x04=deleted (soft delete)
 struct DrinkRecord {
+    uint32_t record_id;         // Unique incrementing ID for bidirectional sync
     uint32_t timestamp;         // Unix timestamp (seconds since epoch)
     int16_t  amount_ml;         // Consumed (+) or refilled (-) amount in ml
     uint16_t bottle_level_ml;   // Bottle water level after event (0-830ml)
-    uint8_t  flags;             // Bit flags: 0x01=synced to app, 0x02=day_boundary
+    uint8_t  flags;             // Bit flags: 0x01=synced, 0x02=day_boundary, 0x04=deleted
     uint8_t  type;              // Drink type: 0=gulp (<100ml), 1=pour (≥100ml)
 };
 
@@ -87,6 +89,15 @@ bool drinksCancelLast();
  * WARNING: This erases all stored drink data
  */
 void drinksClearAll();
+
+/**
+ * Recalculate daily total from non-deleted drink records
+ * Called after a record is soft-deleted via BLE command
+ * Updates g_daily_state.daily_total_ml and saves to NVS
+ *
+ * @return The recalculated daily total in ml
+ */
+uint16_t drinksRecalculateTotal();
 
 /**
  * RTC memory persistence for deep sleep

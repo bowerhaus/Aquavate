@@ -9,8 +9,11 @@ import SwiftUI
 import CoreData
 
 struct HistoryView: View {
+    @EnvironmentObject var bleManager: BLEManager
     @Environment(\.managedObjectContext) private var viewContext
     @State private var selectedDate: Date = Date()
+    @State private var showConnectionRequiredAlert = false
+    @State private var isDeleting = false
 
     // Fetch all drink records from CoreData
     // Filter to last 7 days in computed property to ensure dynamic date comparison
@@ -56,6 +59,57 @@ struct HistoryView: View {
             .sorted { $0.timestamp > $1.timestamp }
     }
 
+    // Get CDDrinkRecords for selected date (for deletion)
+    private var drinksForSelectedDateCD: [CDDrinkRecord] {
+        let calendar = Calendar.current
+        let targetDay = calendar.startOfDay(for: selectedDate)
+
+        return recentDrinksCD
+            .filter { calendar.startOfDay(for: $0.timestamp ?? .distantPast) == targetDay }
+            .sorted { ($0.timestamp ?? .distantPast) > ($1.timestamp ?? .distantPast) }
+    }
+
+    // Delete drinks at given offsets - requires bottle connection for bidirectional sync
+    private func deleteDrinks(at offsets: IndexSet) {
+        // Require bottle connection for deletion
+        guard bleManager.connectionState.isConnected else {
+            showConnectionRequiredAlert = true
+            return
+        }
+
+        // Prevent multiple simultaneous deletes
+        guard !isDeleting else { return }
+        isDeleting = true
+
+        // Process deletes sequentially
+        Task { @MainActor in
+            for index in offsets {
+                let cdRecord = drinksForSelectedDateCD[index]
+                guard let id = cdRecord.id else { continue }
+
+                let firmwareId = cdRecord.firmwareRecordId
+
+                // If we have a firmware ID, use pessimistic delete
+                if firmwareId != 0 {
+                    await withCheckedContinuation { continuation in
+                        bleManager.deleteDrinkRecord(firmwareRecordId: UInt32(firmwareId)) { success in
+                            if success {
+                                // Bottle confirmed - now safe to delete locally
+                                PersistenceController.shared.deleteDrinkRecord(id: id)
+                            }
+                            // If failed, leave record in place - user can retry
+                            continuation.resume()
+                        }
+                    }
+                } else {
+                    // No firmware ID (old record) - delete locally only
+                    PersistenceController.shared.deleteDrinkRecord(id: id)
+                }
+            }
+            isDeleting = false
+        }
+    }
+
     var body: some View {
         NavigationView {
             VStack(spacing: 0) {
@@ -68,6 +122,7 @@ struct HistoryView: View {
                                 totalMl: totalForDate(date),
                                 isSelected: Calendar.current.isDate(date, inSameDayAs: selectedDate)
                             )
+                            .id(date)
                             .onTapGesture {
                                 selectedDate = date
                             }
@@ -76,6 +131,7 @@ struct HistoryView: View {
                     .padding(.horizontal)
                     .padding(.vertical, 16)
                 }
+                .defaultScrollAnchor(.trailing)
                 .background(Color(.systemGroupedBackground))
 
                 // Selected day detail
@@ -93,9 +149,11 @@ struct HistoryView: View {
                 } else {
                     List {
                         Section {
-                            ForEach(drinksForSelectedDate) { drink in
-                                DrinkListItem(drink: drink)
+                            ForEach(drinksForSelectedDateCD) { cdRecord in
+                                DrinkListItem(drink: cdRecord.toDrinkRecord())
+                                    .frame(minHeight: 44)
                             }
+                            .onDelete(perform: deleteDrinks)
                         } header: {
                             Text("Drinks for \(formattedDate(selectedDate))")
                         } footer: {
@@ -111,6 +169,11 @@ struct HistoryView: View {
                 }
             }
             .navigationTitle("History")
+            .alert("Connection Required", isPresented: $showConnectionRequiredAlert) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text("Please connect to your bottle before deleting drinks. This ensures both the app and bottle stay in sync.")
+            }
         }
     }
 
@@ -170,4 +233,5 @@ struct DayCard: View {
 
 #Preview {
     HistoryView()
+        .environmentObject(BLEManager())
 }

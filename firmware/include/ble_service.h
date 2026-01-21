@@ -64,13 +64,14 @@ struct __attribute__((packed)) BLE_SyncControl {
     uint16_t chunk_size;      // Records per chunk (default 20)
 };
 
-// Drink Record for BLE transfer (10 bytes)
+// Drink Record for BLE transfer (14 bytes)
 struct __attribute__((packed)) BLE_DrinkRecord {
+    uint32_t record_id;         // Unique ID for deletion
     uint32_t timestamp;         // Unix time
     int16_t  amount_ml;         // Consumed (+) or refilled (-)
     uint16_t bottle_level_ml;   // Level after event
     uint8_t  type;              // 0=gulp, 1=pour
-    uint8_t  flags;             // 0x01=synced
+    uint8_t  flags;             // 0x01=synced, 0x04=deleted
 };
 
 // Drink Data Characteristic (variable, max 206 bytes)
@@ -95,6 +96,8 @@ struct __attribute__((packed)) BLE_Command {
 #define BLE_CMD_RESET_DAILY         0x05
 #define BLE_CMD_CLEAR_HISTORY       0x06
 #define BLE_CMD_SET_TIME            0x10  // Set device time (5 bytes: cmd + 4-byte Unix timestamp)
+#define BLE_CMD_SET_DAILY_TOTAL     0x11  // DEPRECATED: Set daily total (use DELETE_DRINK_RECORD instead)
+#define BLE_CMD_DELETE_DRINK_RECORD 0x12  // Delete drink record (5 bytes: cmd + 4-byte record_id)
 
 // Set Time Command (5 bytes) - different from standard 4-byte command
 struct __attribute__((packed)) BLE_SetTimeCommand {
@@ -169,6 +172,8 @@ String bleGetDeviceSuffix();
 bool bleCheckTareRequested();
 bool bleCheckResetDailyRequested();
 bool bleCheckClearHistoryRequested();
+bool bleCheckSetDailyTotalRequested(uint16_t& value);
+bool bleCheckForceDisplayRefresh();
 
 #endif // ENABLE_BLE
 

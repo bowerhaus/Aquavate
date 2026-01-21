@@ -12,10 +12,12 @@ struct HomeView: View {
     @EnvironmentObject var bleManager: BLEManager
     @Environment(\.managedObjectContext) private var viewContext
 
-    // Alert state for pull-to-refresh
+    // Alert state for pull-to-refresh and delete
     @State private var showBottleAsleepAlert = false
     @State private var showErrorAlert = false
     @State private var errorAlertMessage = ""
+    @State private var showConnectionRequiredAlert = false
+    @State private var isDeleting = false
 
     // Fetch all drinks from CoreData, sorted by most recent first
     // Filter to today's drinks in computed property to ensure dynamic date comparison
@@ -36,34 +38,22 @@ struct HomeView: View {
         todaysDrinksCD.map { $0.toDrinkRecord() }
     }
 
-    // Use BLE data when connected, otherwise calculate from CoreData drinks
+    // Always show the sum of drinks in CoreData so the total matches the displayed drink list
     private var displayDailyTotal: Int {
-        if bleManager.connectionState.isConnected {
-            return bleManager.dailyTotalMl
-        }
         return todaysDrinks.reduce(0) { $0 + $1.amountMl }
     }
 
-    // Use BLE data when connected, otherwise use sample bottle
+    // Always use last known BLE values - they persist after disconnect
     private var displayBottleLevel: Int {
-        if bleManager.connectionState.isConnected {
-            return bleManager.bottleLevelMl
-        }
-        return Bottle.sample.currentLevelMl
+        return bleManager.bottleLevelMl
     }
 
     private var displayCapacity: Int {
-        if bleManager.connectionState.isConnected {
-            return bleManager.bottleCapacityMl
-        }
-        return Bottle.sample.capacityMl
+        return bleManager.bottleCapacityMl
     }
 
     private var displayGoal: Int {
-        if bleManager.connectionState.isConnected {
-            return bleManager.dailyGoalMl
-        }
-        return Bottle.sample.dailyGoalMl
+        return bleManager.dailyGoalMl
     }
 
     private var dailyProgress: Double {
@@ -76,8 +66,45 @@ struct HomeView: View {
         return min(1.0, Double(displayBottleLevel) / Double(displayCapacity))
     }
 
-    private var recentDrinks: [DrinkRecord] {
-        Array(todaysDrinks.prefix(5))
+    // Delete today's drinks at given offsets - requires bottle connection for bidirectional sync
+    private func deleteTodaysDrinks(at offsets: IndexSet) {
+        // Require bottle connection for deletion
+        guard bleManager.connectionState.isConnected else {
+            showConnectionRequiredAlert = true
+            return
+        }
+
+        // Prevent multiple simultaneous deletes
+        guard !isDeleting else { return }
+        isDeleting = true
+
+        // Process deletes sequentially
+        Task { @MainActor in
+            for index in offsets {
+                let cdRecord = todaysDrinksCD[index]
+                guard let id = cdRecord.id else { continue }
+
+                let firmwareId = cdRecord.firmwareRecordId
+
+                // If we have a firmware ID, use pessimistic delete
+                if firmwareId != 0 {
+                    await withCheckedContinuation { continuation in
+                        bleManager.deleteDrinkRecord(firmwareRecordId: UInt32(firmwareId)) { success in
+                            if success {
+                                // Bottle confirmed - now safe to delete locally
+                                PersistenceController.shared.deleteDrinkRecord(id: id)
+                            }
+                            // If failed, leave record in place - user can retry
+                            continuation.resume()
+                        }
+                    }
+                } else {
+                    // No firmware ID (old record) - delete locally only
+                    PersistenceController.shared.deleteDrinkRecord(id: id)
+                }
+            }
+            isDeleting = false
+        }
     }
 
     // Connection status text
@@ -146,101 +173,103 @@ struct HomeView: View {
 
             Divider()
 
-            // Scrollable content
-            ScrollView {
-                VStack(spacing: 24) {
-                    // Status warnings (when connected)
-                    if bleManager.connectionState.isConnected {
-                        HStack(spacing: 12) {
-                            // Only show calibration warning when NOT calibrated
-                            if !bleManager.isCalibrated {
-                                StatusBadge(
-                                    label: "Not Calibrated",
-                                    isActive: true,
-                                    activeColor: .orange,
-                                    inactiveColor: .gray
-                                )
-                            }
-                            if bleManager.unsyncedCount > 0 {
-                                StatusBadge(
-                                    label: "\(bleManager.unsyncedCount) unsynced",
-                                    isActive: true,
-                                    activeColor: .orange,
-                                    inactiveColor: .gray
-                                )
-                            }
+            // Fixed progress section
+            VStack(spacing: 16) {
+                // Status warnings (when connected)
+                if bleManager.connectionState.isConnected {
+                    HStack(spacing: 12) {
+                        // Only show calibration warning when NOT calibrated
+                        if !bleManager.isCalibrated {
+                            StatusBadge(
+                                label: "Not Calibrated",
+                                isActive: true,
+                                activeColor: .orange,
+                                inactiveColor: .gray
+                            )
                         }
-                        .padding(.horizontal)
-                        .padding(.top, 8)
-                    }
-
-                    // Human figure progress - daily goal (PRIMARY FOCUS)
-                    HumanFigureProgressView(
-                        current: displayDailyTotal,
-                        total: displayGoal,
-                        color: .blue,
-                        label: "of \(displayGoal)ml goal"
-                    )
-                    .padding(.vertical, 16)
-
-                    // Bottle level progress bar (SECONDARY)
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text("Bottle Level")
-                                .font(.headline)
-                            Spacer()
-                            Text("\(Int(bottleProgress * 100))%")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
-
-                        ProgressView(value: bottleProgress)
-                            .tint(.blue)
-
-                        HStack {
-                            Text("\(displayBottleLevel)ml")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                            Text("/ \(displayCapacity)ml")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
+                        if bleManager.unsyncedCount > 0 {
+                            StatusBadge(
+                                label: "\(bleManager.unsyncedCount) unsynced",
+                                isActive: true,
+                                activeColor: .orange,
+                                inactiveColor: .gray
+                            )
                         }
                     }
                     .padding(.horizontal)
+                }
 
-                    Divider()
-                        .padding(.horizontal)
+                // Human figure progress - daily goal (PRIMARY FOCUS)
+                HumanFigureProgressView(
+                    current: displayDailyTotal,
+                    total: displayGoal,
+                    color: .blue,
+                    label: "of \(displayGoal)ml goal"
+                )
 
-                    // Recent drinks list
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Recent Drinks")
+                // Bottle level progress bar (SECONDARY)
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("Bottle Level")
                             .font(.headline)
-                            .padding(.horizontal)
-
-                        if recentDrinks.isEmpty {
-                            Text("No drinks recorded today")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 32)
-                        } else {
-                            ForEach(recentDrinks) { drink in
-                                DrinkListItem(drink: drink)
-                                    .padding(.horizontal)
-
-                                if drink.id != recentDrinks.last?.id {
-                                    Divider()
-                                        .padding(.leading, 60)
-                                }
-                            }
-                        }
+                        Spacer()
+                        Text("\(Int(bottleProgress * 100))%")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
                     }
 
-                    Spacer(minLength: 20)
+                    ProgressView(value: bottleProgress)
+                        .tint(.blue)
+
+                    HStack {
+                        Text("\(displayBottleLevel)ml")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                        Text("/ \(displayCapacity)ml")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
                 }
+                .padding(.horizontal)
             }
-            .refreshable {
-                await handleRefresh()
+            .padding(.vertical, 8)
+            .background(Color(.systemGroupedBackground))
+
+            // Today's drinks list
+            if todaysDrinksCD.isEmpty {
+                VStack(spacing: 16) {
+                    Spacer()
+                    Image(systemName: "drop.slash")
+                        .font(.system(size: 48))
+                        .foregroundStyle(.secondary)
+                    Text("No drinks recorded today")
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                }
+            } else {
+                List {
+                    Section {
+                        ForEach(todaysDrinksCD) { cdRecord in
+                            DrinkListItem(drink: cdRecord.toDrinkRecord())
+                                .frame(minHeight: 44)
+                        }
+                        .onDelete(perform: deleteTodaysDrinks)
+                    } header: {
+                        Text("Today's Drinks")
+                    } footer: {
+                        HStack {
+                            Text("Total consumed:")
+                            Spacer()
+                            Text("\(displayDailyTotal)ml")
+                                .fontWeight(.semibold)
+                        }
+                        .padding(.top, 8)
+                    }
+                }
+                .refreshable {
+                    await handleRefresh()
+                }
             }
         }
         .alert("Bottle is Asleep", isPresented: $showBottleAsleepAlert) {
@@ -252,6 +281,11 @@ struct HomeView: View {
             Button("OK", role: .cancel) { }
         } message: {
             Text(errorAlertMessage)
+        }
+        .alert("Connection Required", isPresented: $showConnectionRequiredAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("Please connect to your bottle before deleting drinks. This ensures both the app and bottle stay in sync.")
         }
     }
 

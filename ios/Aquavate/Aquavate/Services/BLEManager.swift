@@ -164,6 +164,10 @@ class BLEManager: NSObject, ObservableObject {
     /// Logger for BLE events
     private let logger = Logger(subsystem: "com.aquavate", category: "BLE")
 
+    /// Pending delete completion handler (for bidirectional sync)
+    private var pendingDeleteCompletion: ((Bool) -> Void)?
+    private var pendingDeleteRecordId: UInt32?
+
     // MARK: - Initialization
 
     override init() {
@@ -302,10 +306,12 @@ class BLEManager: NSObject, ObservableObject {
 
         // Start new timer
         idleDisconnectTimer = Timer.scheduledTimer(withTimeInterval: idleDisconnectInterval, repeats: false) { [weak self] _ in
-            guard let self = self else { return }
-            if self.connectionState.isConnected {
-                self.logger.info("Idle timeout - disconnecting to save battery")
-                self.disconnect()
+            Task { @MainActor in
+                guard let self = self else { return }
+                if self.connectionState.isConnected {
+                    self.logger.info("Idle timeout - disconnecting to save battery")
+                    self.disconnect()
+                }
             }
         }
         logger.info("Idle disconnect timer started (\(Int(self.idleDisconnectInterval))s)")
@@ -659,8 +665,6 @@ extension BLEManager: CBPeripheralDelegate {
             return
         }
 
-        let previousUnsyncedCount = unsyncedCount
-
         // Update published properties
         currentWeightG = Int(state.currentWeightG)
         bottleLevelMl = Int(state.bottleLevelMl)
@@ -674,6 +678,15 @@ extension BLEManager: CBPeripheralDelegate {
 
         logger.info("Current State: weight=\(state.currentWeightG)g, level=\(state.bottleLevelMl)ml, daily=\(state.dailyTotalMl)ml, battery=\(state.batteryPercent)%, unsynced=\(state.unsyncedCount)")
         logger.debug("  Flags: timeValid=\(state.isTimeValid), calibrated=\(state.isCalibrated), stable=\(state.isStable)")
+
+        // Check if we have a pending delete confirmation
+        // The bottle sends a Current State notification after processing DELETE_DRINK_RECORD
+        if let completion = pendingDeleteCompletion {
+            logger.info("Delete confirmed for record \(self.pendingDeleteRecordId ?? 0)")
+            pendingDeleteCompletion = nil
+            pendingDeleteRecordId = nil
+            completion(true)
+        }
 
         // Auto-sync if we have unsynced records and sync is not already in progress
         // Trigger when: we have unsynced records, sync is idle, and we're connected
@@ -942,6 +955,39 @@ extension BLEManager: CBPeripheralDelegate {
     func sendCancelCalibrationCommand() {
         writeCommand(BLECommand.cancelCalibration())
         logger.info("Sent CANCEL_CALIBRATION command")
+    }
+
+    // MARK: - Bidirectional Sync (Delete Drink Record)
+
+    /// Delete a drink record on the bottle (bidirectional sync)
+    /// Uses pessimistic delete - waits for bottle confirmation before returning success
+    /// The completion handler is called with true if bottle confirmed the delete, false otherwise
+    func deleteDrinkRecord(firmwareRecordId: UInt32, completion: @escaping (Bool) -> Void) {
+        guard let peripheral = connectedPeripheral,
+              let characteristic = characteristics[BLEConstants.commandUUID] else {
+            logger.warning("Cannot delete drink record: not connected")
+            completion(false)
+            return
+        }
+
+        // Store completion handler for when Current State notification arrives
+        pendingDeleteCompletion = completion
+        pendingDeleteRecordId = firmwareRecordId
+
+        let data = BLECommand.deleteDrinkRecord(recordId: firmwareRecordId)
+        peripheral.writeValue(data, for: characteristic, type: .withResponse)
+        logger.info("Sent DELETE_DRINK_RECORD command for id=\(firmwareRecordId)")
+
+        // Set a timeout in case we don't get a response
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 5_000_000_000) // 5 second timeout
+            if let completion = self.pendingDeleteCompletion, self.pendingDeleteRecordId == firmwareRecordId {
+                self.logger.warning("Delete confirmation timeout for record \(firmwareRecordId)")
+                self.pendingDeleteCompletion = nil
+                self.pendingDeleteRecordId = nil
+                completion(false)
+            }
+        }
     }
 
     /// Write command to Command characteristic

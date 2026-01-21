@@ -36,9 +36,9 @@ struct DrinkListItem: View {
 
             Spacer()
 
-            // Remaining level - de-emphasized
+            // Remaining level - de-emphasized (clamped to 0 minimum)
             VStack(alignment: .trailing, spacing: 4) {
-                Text("\(drink.bottleLevelMl)ml")
+                Text("\(max(0, drink.bottleLevelMl))ml")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
 

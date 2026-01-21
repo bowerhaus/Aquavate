@@ -1,10 +1,12 @@
 # Aquavate iOS App - UX Product Requirements Document
 
-**Version:** 1.2
-**Date:** 2026-01-18
-**Status:** Approved (Updated for Pull-to-Refresh)
+**Version:** 1.4
+**Date:** 2026-01-21
+**Status:** Approved and Tested (Bidirectional Sync)
 
 **Changelog:**
+- **v1.4 (2026-01-21):** Bidirectional drink record sync. Swipe-to-delete now requires bottle connection and uses pessimistic delete with firmware confirmation. HomeView shows ALL today's drinks (not just recent 5).
+- **v1.3 (2026-01-20):** Added swipe-to-delete for drink records (Section 4 Gestures). Updated Reset Daily to also clear today's CoreData records.
 - **v1.2 (2026-01-18):** Added Pull-to-Refresh sync for Home screen (Section 2.4). Connection stays open 60s for real-time updates. Settings connection controls wrapped in `#if DEBUG` (Section 2.6).
 - **v1.1 (2026-01-17):** Updated Calibration Wizard (Section 2.3) - iOS now performs two-point calibration instead of firmware. Added live ADC readings, stability indicators, and BLE integration details.
 - **v1.0 (2026-01-16):** Initial approved version
@@ -311,9 +313,9 @@ Sarah's Bluetooth is accidentally turned off. When she opens the app, she sees a
 **Data Displayed:**
 | Element | Source | Format |
 |---------|--------|--------|
-| Daily total (PRIMARY) | BLE Current State or CoreData sum | "{X} ml of {goal}ml goal" |
+| Daily total (PRIMARY) | CoreData sum (always) | "{X} ml of {goal}ml goal" |
 | Bottle level (SECONDARY) | BLE Current State (real-time) | "{X}ml / {capacity}ml" |
-| Recent drinks | CoreData (last 5 today) | Amount (bold), time, level after |
+| Today's drinks | CoreData (ALL today's drinks) | Amount (bold), time, level after |
 | Sync status | Last BLE sync timestamp | "Last synced {X} ago" |
 | Connection dot | BLE connection state | Green/Orange/Gray |
 
@@ -485,13 +487,13 @@ Sarah's Bluetooth is accidentally turned off. When she opens the app, she sees a
 └─────────────────────────────────┘
 ```
 
-**Command Actions (Updated 2026-01-17):**
+**Command Actions (Updated 2026-01-20):**
 
 | Command | Tap Behavior | Confirmation |
 |---------|--------------|--------------|
 | Calibrate Bottle | Opens Calibration Wizard modal (NEW) | None (wizard has own confirm flow) |
 | Tare Bottle | Sends TARE_NOW (0x01) - Quick tare keeping scale factor | None (instant) |
-| Reset Daily Total | Sends RESET_DAILY (0x05) | Alert: "Reset today's total?" |
+| Reset Daily Total | Sends RESET_DAILY (0x05) + deletes today's CoreData records | None (instant) |
 | Clear History | Sends CLEAR_HISTORY (0x06) | Alert: "This cannot be undone." |
 
 **Command Feedback:**
@@ -830,7 +832,57 @@ Command sent to puck (TARE_NOW 0x01)
 | Tap | Buttons, list items, tabs | Primary interaction |
 | Pull-to-refresh | Home, History | Trigger manual sync |
 | Swipe horizontal | History calendar | Navigate weeks |
+| Swipe left | Drink list items | Delete drink record (requires connection) |
 | Long-press | Not used (MVP) | Reserved for future |
+
+### Swipe-to-Delete (Drink Records) - Updated 2026-01-21
+
+**Purpose:** Allow users to remove individual drink records with bidirectional sync to firmware
+
+**Availability:**
+- HomeView: Today's Drinks list
+- HistoryView: Selected day's drink list
+
+**Behavior (Bidirectional Sync):**
+- Standard iOS swipe-left gesture reveals red "Delete" button
+- **Requires bottle connection** - if disconnected, shows "Connection Required" alert
+- Uses **pessimistic delete** - waits for firmware confirmation before removing from CoreData
+- Firmware soft-deletes record (sets 0x04 flag) and recalculates daily total
+- 5-second timeout - if no confirmation, record stays in place (user can retry)
+- Both iOS and firmware now have consistent view of deleted records
+
+**Visual:**
+```
+┌───────────────────────────────┐
+│  💧  200ml        420ml       │ ← Swipe left
+│      2:30 PM      remaining   │
+└───────────────────────────────┘
+                      ┌─────────┐
+                      │ Delete  │ ← Red background
+                      └─────────┘
+```
+
+**Connection Required Alert:**
+```
+┌─────────────────────────────────┐
+│       Connection Required       │
+│                                 │
+│  Please connect to your bottle  │
+│  before deleting drinks. This   │
+│  ensures both the app and       │
+│  bottle stay in sync.           │
+│                                 │
+│           [OK]                  │
+└─────────────────────────────────┘
+```
+
+**Edge Cases:**
+| Scenario | Behavior |
+|----------|----------|
+| Bottle disconnected | Shows "Connection Required" alert |
+| Delete timeout (5s) | Record stays in place, user can retry |
+| Record rolled off circular buffer | Firmware returns success (effectively deleted) |
+| Old record (no firmwareRecordId) | Deletes locally only (backwards compatibility) |
 
 ### Transitions
 
@@ -1446,7 +1498,13 @@ struct CircularProgressView {
 
 This UX PRD defines the complete user experience for the Aquavate iOS app. Upon approval, Phase 4 implementation will begin following both this document and the technical plan in [Plans/014-ios-ble-coredata-integration.md](../Plans/014-ios-ble-coredata-integration.md).
 
-**Document Status:** Approved (v1.2)
+**Document Status:** Approved (v1.4)
+
+**Update Note (2026-01-21):**
+- Bidirectional drink record sync implemented
+- Swipe-to-delete now requires bottle connection (pessimistic delete)
+- HomeView shows ALL today's drinks (removed 5-drink limit)
+- Daily total always calculated from CoreData sum
 
 **Update Note (2026-01-18):**
 - Pull-to-Refresh sync implemented for Home screen
@@ -1463,5 +1521,6 @@ This UX PRD defines the complete user experience for the Aquavate iOS app. Upon 
 **Next Steps:**
 1. ✅ Phase 4.1-4.6 implementation (Complete)
 2. ✅ Pull-to-Refresh sync (Complete - 2026-01-18)
-3. Phase 4.7 implementation (Calibration Wizard) - Optional/Future
-4. Begin Phase 5 (Advanced features)
+3. ✅ Bidirectional drink sync (Complete - 2026-01-21)
+4. Phase 4.7 implementation (Calibration Wizard) - Optional/Future
+5. Begin Phase 5 (Advanced features)

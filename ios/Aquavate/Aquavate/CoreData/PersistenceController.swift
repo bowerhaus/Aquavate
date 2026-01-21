@@ -163,13 +163,15 @@ struct PersistenceController {
             let drinkDate = Date(timeIntervalSince1970: TimeInterval(bleRecord.timestamp))
             record.timestamp = drinkDate
             record.amountMl = bleRecord.amountMl
-            // Safe conversion: clamp UInt16 to Int16 range (values > 32767 are unrealistic for bottle level)
-            record.bottleLevelMl = Int16(clamping: bleRecord.bottleLevelMl)
+            // Interpret UInt16 as signed Int16 (firmware sends signed values over BLE)
+            record.bottleLevelMl = Int16(bitPattern: bleRecord.bottleLevelMl)
             record.drinkType = Int16(bleRecord.type)
             record.syncedToHealth = false
             record.bottleId = bottleId
+            // Store firmware record ID for bidirectional sync
+            record.firmwareRecordId = Int32(bleRecord.recordId)
 
-            print("[CoreData] Creating record: timestamp=\(bleRecord.timestamp) (\(drinkDate)), amount=\(bleRecord.amountMl)ml")
+            print("[CoreData] Creating record: id=\(bleRecord.recordId), timestamp=\(bleRecord.timestamp) (\(drinkDate)), amount=\(bleRecord.amountMl)ml")
         }
 
         do {
@@ -225,6 +227,59 @@ struct PersistenceController {
             print("[CoreData] Deleted all drink records")
         } catch {
             print("[CoreData] Error deleting drink records: \(error)")
+        }
+    }
+
+    /// Delete a single drink record by ID
+    func deleteDrinkRecord(id: UUID) {
+        let request: NSFetchRequest<CDDrinkRecord> = CDDrinkRecord.fetchRequest()
+        request.predicate = NSPredicate(format: "id == %@", id as CVarArg)
+        request.fetchLimit = 1
+
+        do {
+            let results = try viewContext.fetch(request)
+            if let record = results.first {
+                viewContext.delete(record)
+                try viewContext.save()
+                viewContext.processPendingChanges()
+                print("[CoreData] Deleted drink record: \(id)")
+            }
+        } catch {
+            print("[CoreData] Error deleting drink record: \(error)")
+        }
+    }
+
+    /// Get a drink record by its firmware record ID
+    func getDrinkRecord(byFirmwareId firmwareRecordId: Int32) -> CDDrinkRecord? {
+        let request: NSFetchRequest<CDDrinkRecord> = CDDrinkRecord.fetchRequest()
+        request.predicate = NSPredicate(format: "firmwareRecordId == %d", firmwareRecordId)
+        request.fetchLimit = 1
+
+        do {
+            return try viewContext.fetch(request).first
+        } catch {
+            print("[CoreData] Error fetching drink record by firmware ID: \(error)")
+            return nil
+        }
+    }
+
+    /// Delete all drink records from today
+    func deleteTodaysDrinkRecords() {
+        let startOfDay = Calendar.current.startOfDay(for: Date())
+        let request: NSFetchRequest<CDDrinkRecord> = CDDrinkRecord.fetchRequest()
+        request.predicate = NSPredicate(format: "timestamp >= %@", startOfDay as CVarArg)
+
+        do {
+            let records = try viewContext.fetch(request)
+            let count = records.count
+            for record in records {
+                viewContext.delete(record)
+            }
+            try viewContext.save()
+            viewContext.processPendingChanges()
+            print("[CoreData] Deleted \(count) today's drink records")
+        } catch {
+            print("[CoreData] Error deleting today's drink records: \(error)")
         }
     }
 }

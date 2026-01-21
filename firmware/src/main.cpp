@@ -965,6 +965,13 @@ void loop() {
         wakeTime = millis(); // Reset sleep timer
     }
 
+    uint16_t setDailyValue;
+    if (bleCheckSetDailyTotalRequested(setDailyValue)) {
+        Serial.printf("BLE Command: SET_DAILY_TOTAL to %dml\n", setDailyValue);
+        drinksSetDailyIntake(setDailyValue);
+        wakeTime = millis(); // Reset sleep timer
+    }
+
     // Note: TARE_NOW command will be handled below in the weight reading section
 #endif
 
@@ -1358,15 +1365,26 @@ void loop() {
                 float voltage = getBatteryVoltage();
                 battery_pct = getBatteryPercent(voltage);
 
+                // Check for BLE force display refresh (e.g., after SET_DAILY_TOTAL command)
+#if ENABLE_BLE
+                bool ble_force_refresh = bleCheckForceDisplayRefresh();
+#else
+                bool ble_force_refresh = false;
+#endif
+
                 // Check if display needs update (water, daily intake, time, or battery changed)
                 // OR if we need to clear Zzzz indicator after extended sleep
-                if (g_force_display_clear_sleep ||
+                // OR if BLE command requested a forced refresh
+                if (g_force_display_clear_sleep || ble_force_refresh ||
                     displayNeedsUpdate(display_water_ml, daily_state.daily_total_ml,
                                       time_interval_elapsed, battery_interval_elapsed)) {
 
                     if (g_force_display_clear_sleep) {
                         Serial.println("Extended sleep: Clearing Zzzz indicator");
                         g_force_display_clear_sleep = false;
+                    }
+                    if (ble_force_refresh) {
+                        Serial.println("BLE: Forced display refresh");
                     }
 
                     displayUpdate(display_water_ml, daily_state.daily_total_ml,
