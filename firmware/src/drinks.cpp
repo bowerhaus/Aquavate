@@ -53,15 +53,9 @@ static bool shouldResetDailyCounter(uint32_t current_time) {
         return true;
     }
 
-    // Convert timestamps to struct tm for date comparison
+    // Convert timestamps to time_t for comparison
     time_t last_reset_t = g_daily_state.last_reset_timestamp;
     time_t current_t = current_time;
-
-    struct tm last_reset_tm;
-    struct tm current_tm;
-
-    gmtime_r(&last_reset_t, &last_reset_tm);
-    gmtime_r(&current_t, &current_tm);
 
     // Check if 20+ hours have passed (handles night-only drinking)
     uint32_t hours_elapsed = (current_time - g_daily_state.last_reset_timestamp) / 3600;
@@ -71,14 +65,23 @@ static bool shouldResetDailyCounter(uint32_t current_time) {
     }
 
     // Check if we've crossed the 4am boundary
-    // Day changed AND current time >= 4am
-    if (last_reset_tm.tm_yday != current_tm.tm_yday ||
-        last_reset_tm.tm_year != current_tm.tm_year) {
-        // Different day - check if current time is past 4am
-        if (current_tm.tm_hour >= DRINK_DAILY_RESET_HOUR) {
-            Serial.println("Crossed 4am boundary - triggering daily reset");
-            return true;
-        }
+    // A "hydration day" runs from 4am to 4am, not midnight to midnight.
+    // To compare days correctly, we subtract DRINK_DAILY_RESET_HOUR hours
+    // from both timestamps before extracting the day. This shifts the day
+    // boundary from midnight to 4am.
+    time_t last_reset_adjusted = last_reset_t - (DRINK_DAILY_RESET_HOUR * 3600);
+    time_t current_adjusted = current_t - (DRINK_DAILY_RESET_HOUR * 3600);
+
+    struct tm last_reset_adj_tm;
+    struct tm current_adj_tm;
+    gmtime_r(&last_reset_adjusted, &last_reset_adj_tm);
+    gmtime_r(&current_adjusted, &current_adj_tm);
+
+    // Now compare the adjusted days - this correctly detects 4am boundary crossing
+    if (last_reset_adj_tm.tm_yday != current_adj_tm.tm_yday ||
+        last_reset_adj_tm.tm_year != current_adj_tm.tm_year) {
+        Serial.println("Crossed 4am boundary - triggering daily reset");
+        return true;
     }
 
     return false;
