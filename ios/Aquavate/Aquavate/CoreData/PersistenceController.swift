@@ -284,6 +284,56 @@ struct PersistenceController {
             print("[CoreData] Error deleting today's drink records: \(error)")
         }
     }
+
+    // MARK: - HealthKit Sync Operations
+
+    /// Mark a drink record as synced to HealthKit and store the HealthKit sample UUID
+    func markDrinkSyncedToHealth(id: UUID, healthKitUUID: UUID) {
+        let request: NSFetchRequest<CDDrinkRecord> = CDDrinkRecord.fetchRequest()
+        request.predicate = NSPredicate(format: "id == %@", id as CVarArg)
+        request.fetchLimit = 1
+
+        do {
+            let results = try viewContext.fetch(request)
+            if let record = results.first {
+                record.syncedToHealth = true
+                record.healthKitSampleUUID = healthKitUUID
+                try viewContext.save()
+                print("[CoreData] Marked drink \(id) as synced to HealthKit with UUID \(healthKitUUID)")
+            }
+        } catch {
+            print("[CoreData] Error marking drink as synced to health: \(error)")
+        }
+    }
+
+    /// Get the HealthKit sample UUID for a drink record before deletion
+    func getHealthKitUUID(forDrinkId id: UUID) -> UUID? {
+        let request: NSFetchRequest<CDDrinkRecord> = CDDrinkRecord.fetchRequest()
+        request.predicate = NSPredicate(format: "id == %@", id as CVarArg)
+        request.fetchLimit = 1
+
+        do {
+            let results = try viewContext.fetch(request)
+            return results.first?.healthKitSampleUUID
+        } catch {
+            print("[CoreData] Error fetching HealthKit UUID: \(error)")
+            return nil
+        }
+    }
+
+    /// Get all drink records that haven't been synced to HealthKit
+    func getUnsyncedDrinkRecords() -> [CDDrinkRecord] {
+        let request: NSFetchRequest<CDDrinkRecord> = CDDrinkRecord.fetchRequest()
+        request.predicate = NSPredicate(format: "syncedToHealth == NO")
+        request.sortDescriptors = [NSSortDescriptor(keyPath: \CDDrinkRecord.timestamp, ascending: true)]
+
+        do {
+            return try viewContext.fetch(request)
+        } catch {
+            print("[CoreData] Error fetching unsynced drinks: \(error)")
+            return []
+        }
+    }
 }
 
 // MARK: - CDDrinkRecord Extension for DrinkRecord Conversion

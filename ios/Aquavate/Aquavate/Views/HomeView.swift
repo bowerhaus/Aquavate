@@ -10,6 +10,7 @@ import CoreData
 
 struct HomeView: View {
     @EnvironmentObject var bleManager: BLEManager
+    @EnvironmentObject var healthKitManager: HealthKitManager
     @Environment(\.managedObjectContext) private var viewContext
 
     // Alert state for pull-to-refresh and delete
@@ -86,14 +87,27 @@ struct HomeView: View {
                 guard let id = cdRecord.id else { continue }
 
                 let firmwareId = cdRecord.firmwareRecordId
+                let healthKitUUID = cdRecord.healthKitSampleUUID
 
                 // If we have a firmware ID, use pessimistic delete
                 if firmwareId != 0 {
                     await withCheckedContinuation { continuation in
                         bleManager.deleteDrinkRecord(firmwareRecordId: UInt32(firmwareId)) { success in
                             if success {
-                                // Bottle confirmed - now safe to delete locally
-                                PersistenceController.shared.deleteDrinkRecord(id: id)
+                                // Delete from HealthKit first (if synced)
+                                Task {
+                                    if let hkUUID = healthKitUUID,
+                                       self.healthKitManager.isEnabled && self.healthKitManager.isAuthorized {
+                                        do {
+                                            try await self.healthKitManager.deleteWaterSample(uuid: hkUUID)
+                                        } catch {
+                                            // Log error but continue with CoreData delete
+                                            print("[HealthKit] Delete error: \(error)")
+                                        }
+                                    }
+                                    // Bottle confirmed - now safe to delete locally
+                                    PersistenceController.shared.deleteDrinkRecord(id: id)
+                                }
                             }
                             // If failed, leave record in place - user can retry
                             continuation.resume()
@@ -101,6 +115,15 @@ struct HomeView: View {
                     }
                 } else {
                     // No firmware ID (old record) - delete locally only
+                    // Still delete from HealthKit if synced
+                    if let hkUUID = healthKitUUID,
+                       healthKitManager.isEnabled && healthKitManager.isAuthorized {
+                        do {
+                            try await healthKitManager.deleteWaterSample(uuid: hkUUID)
+                        } catch {
+                            print("[HealthKit] Delete error: \(error)")
+                        }
+                    }
                     PersistenceController.shared.deleteDrinkRecord(id: id)
                 }
             }
@@ -379,4 +402,5 @@ struct StatusBadge: View {
 #Preview {
     HomeView()
         .environmentObject(BLEManager())
+        .environmentObject(HealthKitManager())
 }

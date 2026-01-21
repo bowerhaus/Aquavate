@@ -7,7 +7,30 @@
 
 ## Current Status
 
-**IDLE** - No active development task
+**IN PROGRESS** - HealthKit Water Intake Integration (Issue #10)
+
+Implementing Apple HealthKit integration to sync water intake data. Each drink synced from the bottle creates a corresponding water intake sample in HealthKit.
+
+### Completed Steps:
+1. ✅ Created `HealthKitManager` service with authorization, write, and delete methods
+2. ✅ Added `healthKitSampleUUID` field to CoreData `CDDrinkRecord` schema
+3. ✅ Updated `PersistenceController` with HealthKit UUID tracking methods
+4. ✅ Wired HealthKit sync into drink save flow (BLEManager)
+5. ✅ Wired HealthKit delete into drink delete flow (HomeView)
+6. ✅ Added HealthKit toggle in Settings with authorization status
+
+### Remaining Steps:
+- [ ] Add HealthKit capability and usage descriptions in Xcode (manual step)
+- [ ] Test on physical device (HealthKit not available in simulator)
+- [ ] Verify drinks appear in Apple Health app
+- [ ] Verify deletions remove corresponding HealthKit samples
+
+### Manual Xcode Configuration Required:
+1. Open Aquavate.xcodeproj in Xcode
+2. Go to Signing & Capabilities → Add "HealthKit"
+3. Add to Info.plist:
+   - `NSHealthShareUsageDescription`: "Aquavate reads your water intake history to avoid duplicates."
+   - `NSHealthUpdateUsageDescription`: "Aquavate logs your water intake from your smart bottle to Apple Health."
 
 ---
 
