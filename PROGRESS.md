@@ -1,18 +1,23 @@
 # Aquavate - Active Development Progress
 
 **Last Updated:** 2026-01-21
-**Current Branch:** `swipe-to-delete-drinks`
+**Current Branch:** `healthkit-integration`
 
 ---
 
 ## Current Status
 
-**READY TO MERGE:** All planned features on this branch are complete.
+**IDLE** - No active development task
 
 ---
 
 ## Recently Completed
 
+- ✅ Shake-to-Empty Improvements - [Plan 030](Plans/030-shake-to-empty-improvements.md)
+  - Fixed extended sleep lockout when shaking to empty
+  - Extended sleep timer now resets on user interactions (shake, drink, stable)
+  - Water level debug output now visible in IOS_MODE=1
+  - Added drink tracking delta debug output
 - ✅ Bidirectional Drink Record Sync - [Plan 027](Plans/027-bidirectional-drink-sync.md)
 - ✅ Swipe-to-Delete Drinks & Enhanced Reset Daily - [Plan 026](Plans/026-swipe-to-delete-drinks.md)
 - ✅ Shake-to-Empty Gesture - [Plan 025](Plans/025-shake-to-empty-gesture.md)
@@ -32,7 +37,8 @@
 
 ## Branch Status
 
-- `swipe-to-delete-drinks` - **READY TO MERGE**: Bidirectional sync complete
+- `healthkit-integration` - **ACTIVE**: Ready for next task
+- `swipe-to-delete-drinks` - Ready to merge
 - `master` - Stable baseline
 
 ---

@@ -12,6 +12,7 @@
 extern int8_t g_timezone_offset;  // Timezone offset in hours
 extern bool g_time_valid;         // True if time has been set
 extern bool g_rtc_ds3231_present; // DS3231 RTC detected
+extern bool g_debug_drink_tracking; // Debug flag for drink tracking
 
 // Static state for drink detection
 static DailyState g_daily_state;
@@ -133,9 +134,10 @@ void drinksInit() {
 }
 
 // Main drink detection and tracking update
-void drinksUpdate(int32_t current_adc, const CalibrationData& cal) {
+// Returns true if a drink was recorded, false otherwise
+bool drinksUpdate(int32_t current_adc, const CalibrationData& cal) {
     if (!g_drinks_initialized || !g_time_valid) {
-        return;
+        return false;
     }
 
     uint32_t current_time = getCurrentUnixTime();
@@ -144,7 +146,7 @@ void drinksUpdate(int32_t current_adc, const CalibrationData& cal) {
     if (shouldResetDailyCounter(current_time)) {
         performAtomicDailyReset(current_time);
         // Early return to establish fresh baseline on next call
-        return;
+        return false;
     }
 
     // Convert current ADC to ml using calibration
@@ -170,12 +172,18 @@ void drinksUpdate(int32_t current_adc, const CalibrationData& cal) {
                       current_adc, current_ml);
         g_daily_state.last_recorded_adc = current_adc;
         storageSaveDailyState(g_daily_state);
-        return;  // Wait for next reading before detecting drinks
+        return false;  // Wait for next reading before detecting drinks
     }
 
     // Calculate delta from last recorded baseline
     float baseline_ml = calibrationGetWaterWeight(g_daily_state.last_recorded_adc, cal);
     float delta_ml = baseline_ml - current_ml;  // Positive = water removed (drink)
+
+    // Debug output for drink tracking
+    if (g_debug_drink_tracking) {
+        Serial.printf("Drinks: baseline=%.1fml, current=%.1fml, delta=%.1fml\n",
+                      baseline_ml, current_ml, delta_ml);
+    }
 
     // Detect drink event (≥30ml decrease)
     if (delta_ml >= DRINK_MIN_THRESHOLD_ML) {
@@ -221,6 +229,7 @@ void drinksUpdate(int32_t current_adc, const CalibrationData& cal) {
             storageSaveDailyState(g_daily_state);
             // TODO: Trigger display refresh
         }
+        return true;  // Drink was recorded
     }
     // Detect refill event (≥100ml increase)
     else if (delta_ml <= -DRINK_REFILL_THRESHOLD_ML) {
@@ -240,6 +249,7 @@ void drinksUpdate(int32_t current_adc, const CalibrationData& cal) {
     else {
         g_daily_state.last_recorded_adc = current_adc;
     }
+    return false;  // No drink recorded
 }
 
 // Debug function: Get current daily state
@@ -433,4 +443,16 @@ bool drinksRestoreFromRTC() {
                   rtc_last_stable_adc, rtc_last_stable_water_ml);
 
     return true;
+}
+
+// Get current baseline water level (for shake-to-empty detection)
+float drinksGetBaselineWaterLevel(const CalibrationData& cal) {
+    return calibrationGetWaterWeight(g_daily_state.last_recorded_adc, cal);
+}
+
+// Reset baseline ADC to current value (prevents re-detection after cancel)
+void drinksResetBaseline(int32_t adc) {
+    g_daily_state.last_recorded_adc = adc;
+    storageSaveDailyState(g_daily_state);
+    Serial.printf("Drinks: Baseline reset to ADC=%d\n", adc);
 }
