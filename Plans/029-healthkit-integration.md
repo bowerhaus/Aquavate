@@ -1,5 +1,7 @@
 # HealthKit Water Intake Integration Plan
 
+**Status:** ✅ COMPLETE (2026-01-21)
+
 ## Overview
 Integrate Apple HealthKit to sync individual drink records as water intake samples. Each drink logged from the bottle creates a separate HealthKit sample with its timestamp. Deletions remove the corresponding HealthKit sample.
 
@@ -10,6 +12,23 @@ Integrate Apple HealthKit to sync individual drink records as water intake sampl
 
 ## Developer Account
 ✅ **Free Apple Developer account works** for development and personal device testing. Paid account ($99/year) only needed for App Store distribution.
+
+## Implementation Summary
+
+**Files Created:**
+- `ios/Aquavate/Aquavate/Services/HealthKitManager.swift` - HealthKit authorization, write, delete
+
+**Files Modified:**
+- `Aquavate.xcdatamodel/contents` - Added `healthKitSampleUUID` to CDDrinkRecord
+- `CoreData/PersistenceController.swift` - Added HealthKit UUID tracking methods
+- `AquavateApp.swift` - Initialize and inject HealthKitManager
+- `Services/BLEManager.swift` - Auto-sync drinks to HealthKit after bottle sync
+- `Views/SettingsView.swift` - Apple Health toggle with status
+- `Views/HomeView.swift` - Delete from HealthKit when deleting drinks
+- `Info.plist` - Added HealthKit usage descriptions
+
+**Manual Step Required:**
+- Add HealthKit capability in Xcode (Signing & Capabilities)
 
 ---
 
@@ -193,6 +212,25 @@ Add option in settings to sync existing drinks that have `syncedToHealth=false`.
 - **Opt-in from Settings**: User must manually enable HealthKit sync. No permission prompts on first launch.
 - **Individual drinks**: Each drink creates a separate HealthKit sample with timestamp (not daily totals).
 - **UUID tracking**: Store HealthKit sample UUID to enable precise deletion.
+
+### Day Boundary Difference (4am vs Midnight)
+
+**Important:** Aquavate uses a **4am daily reset boundary** while Apple HealthKit uses **midnight-to-midnight** days.
+
+| System | Day Boundary | Example: 2am drink |
+|--------|--------------|-------------------|
+| Aquavate (bottle + app) | 4:00 AM | Counts as "yesterday" |
+| Apple Health | 12:00 AM (midnight) | Counts as "today" |
+
+**Why we keep the 4am boundary:**
+1. **User experience priority** - Late-night drinks (1am, 2am) intuitively feel like "yesterday" since the user hasn't slept yet
+2. **Timestamps are preserved** - HealthKit receives the actual drink timestamp, so users can see exactly when each drink occurred in the Health app
+3. **Edge case is rare** - Only drinks between midnight and 4am are affected, which is a small percentage of total intake
+4. **Migration cost** - Changing would require firmware updates and database migrations
+
+**User-visible impact:**
+- Daily totals in Aquavate may differ from Apple Health's daily totals by drinks taken between midnight and 4am
+- Individual drink records in Health app show correct timestamps regardless
 
 ---
 
