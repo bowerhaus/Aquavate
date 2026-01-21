@@ -43,8 +43,9 @@ void drinksInit();
  *
  * @param current_adc Current ADC reading from load cell
  * @param cal Calibration data (for ADC to ml conversion)
+ * @return true if a drink was recorded, false otherwise
  */
-void drinksUpdate(int32_t current_adc, const CalibrationData& cal);
+bool drinksUpdate(int32_t current_adc, const CalibrationData& cal);
 
 /**
  * Get current Unix timestamp (RTC + timezone offset)
@@ -105,5 +106,22 @@ uint16_t drinksRecalculateTotal();
  */
 void drinksSaveToRTC();
 bool drinksRestoreFromRTC();
+
+/**
+ * Get current baseline water level in ml
+ * Used by shake-to-empty to check if bottle was empty when shake triggered
+ *
+ * @param cal Calibration data (for ADC to ml conversion)
+ * @return Current baseline water level in ml
+ */
+float drinksGetBaselineWaterLevel(const CalibrationData& cal);
+
+/**
+ * Reset baseline ADC to current value
+ * Called after drink cancellation to prevent re-detection
+ *
+ * @param adc Current ADC reading to use as new baseline
+ */
+void drinksResetBaseline(int32_t adc);
 
 #endif // DRINKS_H
