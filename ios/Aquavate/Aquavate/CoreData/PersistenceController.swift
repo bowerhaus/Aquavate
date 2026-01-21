@@ -188,7 +188,8 @@ struct PersistenceController {
 
     func getTodaysDrinkRecords() -> [CDDrinkRecord] {
         let request: NSFetchRequest<CDDrinkRecord> = CDDrinkRecord.fetchRequest()
-        let startOfDay = Calendar.current.startOfDay(for: Date())
+        // Use 4am boundary to match firmware DRINK_DAILY_RESET_HOUR
+        let startOfDay = Calendar.current.startOfAquavateDay(for: Date())
         request.predicate = NSPredicate(format: "timestamp >= %@", startOfDay as CVarArg)
         request.sortDescriptors = [NSSortDescriptor(keyPath: \CDDrinkRecord.timestamp, ascending: false)]
 
@@ -265,7 +266,8 @@ struct PersistenceController {
 
     /// Delete all drink records from today
     func deleteTodaysDrinkRecords() {
-        let startOfDay = Calendar.current.startOfDay(for: Date())
+        // Use 4am boundary to match firmware DRINK_DAILY_RESET_HOUR
+        let startOfDay = Calendar.current.startOfAquavateDay(for: Date())
         let request: NSFetchRequest<CDDrinkRecord> = CDDrinkRecord.fetchRequest()
         request.predicate = NSPredicate(format: "timestamp >= %@", startOfDay as CVarArg)
 

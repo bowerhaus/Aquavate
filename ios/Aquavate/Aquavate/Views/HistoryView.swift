@@ -24,8 +24,9 @@ struct HistoryView: View {
     private var allDrinksCD: FetchedResults<CDDrinkRecord>
 
     // Filter to last 7 days dynamically
+    // Uses 4am boundary to match firmware DRINK_DAILY_RESET_HOUR
     private var recentDrinksCD: [CDDrinkRecord] {
-        let sevenDaysAgo = Calendar.current.date(byAdding: .day, value: -7, to: Calendar.current.startOfDay(for: Date()))!
+        let sevenDaysAgo = Calendar.current.date(byAdding: .day, value: -7, to: Calendar.current.startOfAquavateDay(for: Date()))!
         return allDrinksCD.filter { ($0.timestamp ?? .distantPast) >= sevenDaysAgo }
     }
 
@@ -43,29 +44,29 @@ struct HistoryView: View {
 
     private func totalForDate(_ date: Date) -> Int {
         let calendar = Calendar.current
-        let targetDay = calendar.startOfDay(for: date)
+        let targetDay = calendar.startOfAquavateDay(for: date)
 
         return drinks
-            .filter { calendar.startOfDay(for: $0.timestamp) == targetDay }
+            .filter { calendar.startOfAquavateDay(for: $0.timestamp) == targetDay }
             .reduce(0) { $0 + $1.amountMl }
     }
 
     private var drinksForSelectedDate: [DrinkRecord] {
         let calendar = Calendar.current
-        let targetDay = calendar.startOfDay(for: selectedDate)
+        let targetDay = calendar.startOfAquavateDay(for: selectedDate)
 
         return drinks
-            .filter { calendar.startOfDay(for: $0.timestamp) == targetDay }
+            .filter { calendar.startOfAquavateDay(for: $0.timestamp) == targetDay }
             .sorted { $0.timestamp > $1.timestamp }
     }
 
     // Get CDDrinkRecords for selected date (for deletion)
     private var drinksForSelectedDateCD: [CDDrinkRecord] {
         let calendar = Calendar.current
-        let targetDay = calendar.startOfDay(for: selectedDate)
+        let targetDay = calendar.startOfAquavateDay(for: selectedDate)
 
         return recentDrinksCD
-            .filter { calendar.startOfDay(for: $0.timestamp ?? .distantPast) == targetDay }
+            .filter { calendar.startOfAquavateDay(for: $0.timestamp ?? .distantPast) == targetDay }
             .sorted { ($0.timestamp ?? .distantPast) > ($1.timestamp ?? .distantPast) }
     }
 
@@ -120,7 +121,7 @@ struct HistoryView: View {
                             DayCard(
                                 date: date,
                                 totalMl: totalForDate(date),
-                                isSelected: Calendar.current.isDate(date, inSameDayAs: selectedDate)
+                                isSelected: Calendar.current.isDate(date, inSameAquavateDayAs: selectedDate)
                             )
                             .id(date)
                             .onTapGesture {
@@ -202,7 +203,7 @@ struct DayCard: View {
     }
 
     private var isToday: Bool {
-        Calendar.current.isDateInToday(date)
+        Calendar.current.isDateInAquavateToday(date)
     }
 
     var body: some View {
