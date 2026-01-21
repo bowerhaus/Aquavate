@@ -660,11 +660,16 @@ bool bleIsConnected() {
 
 // Update BLE service (call from main loop)
 void bleUpdate() {
-    // Check advertising timeout (30 seconds)
+    // Check advertising timeout
+    // Use extended timeout (2 min) if there are unsynced records to give iOS background BLE time to connect
+    // Otherwise use normal timeout (30 sec)
     if (isAdvertising && !isConnected) {
         unsigned long elapsed = millis() - advertisingStartTime;
-        if (elapsed > (BLE_ADV_TIMEOUT_SEC * 1000)) {
-            BLE_DEBUG_F("Advertising timeout (%d seconds)", BLE_ADV_TIMEOUT_SEC);
+        uint16_t unsyncedCount = storageGetUnsyncedCount();
+        uint32_t timeout = (unsyncedCount > 0) ? BLE_ADV_TIMEOUT_EXTENDED_SEC : BLE_ADV_TIMEOUT_SEC;
+
+        if (elapsed > (timeout * 1000)) {
+            BLE_DEBUG_F("Advertising timeout (%d seconds, unsynced=%d)", timeout, unsyncedCount);
             bleStopAdvertising();
         }
     }

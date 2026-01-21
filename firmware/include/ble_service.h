@@ -24,7 +24,8 @@
 
 // BLE advertising parameters
 #define BLE_ADV_INTERVAL_MS             1000    // 1 second (power-optimized)
-#define BLE_ADV_TIMEOUT_SEC             30      // Auto-stop after 30s
+#define BLE_ADV_TIMEOUT_SEC             30      // Auto-stop after 30s (normal)
+#define BLE_ADV_TIMEOUT_EXTENDED_SEC    120     // Extended timeout when unsynced records (2 min)
 #define BLE_TX_POWER_DBM                0       // 0dBm (reduce from +4dBm)
 
 // BLE connection parameters
