@@ -148,7 +148,7 @@ void bleStopAdvertising();
  * @param time_valid Time set status
  * @param stable Weight stability status
  */
-void bleUpdateCurrentState(const DailyState& state, int32_t current_adc,
+void bleUpdateCurrentState(uint16_t daily_total_ml, int32_t current_adc,
                            const CalibrationData& cal, uint8_t battery_percent,
                            bool calibrated, bool time_valid, bool stable);
 
