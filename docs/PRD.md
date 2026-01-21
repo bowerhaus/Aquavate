@@ -165,8 +165,10 @@ After cutting, verify LED no longer illuminates when board is powered.
 
 #### Empty Gesture (Inverted + Shake)
 1. Detect inverted orientation: Z-axis strongly negative (<-0.8g)
-2. While inverted, detect shake: acceleration variance > threshold for 1 second
-3. On detection: Record "empty" event, reset reference weight to tare
+2. While inverted, detect shake: acceleration variance > threshold for 1.5 seconds
+3. On returning upright: Show "Bottle Emptied" confirmation, reset drink detection baseline to current level
+
+**Note:** The baseline is reset to the current water level (not tare/empty) to prevent false positives if the user shakes mid-pour. This means refill detection won't trigger after shake-to-empty, but avoids incorrectly marking a half-full bottle as empty.
 
 ### 3. Data Storage (Offline Mode)
 
