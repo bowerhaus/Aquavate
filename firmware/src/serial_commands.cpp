@@ -492,15 +492,15 @@ static void handleSetTimezone(char* args) {
 static void handleGetDailyState() {
     DailyState state;
     drinksGetState(state);
+    uint16_t daily_total = drinksGetDailyTotal();
+    uint16_t drink_count = drinksGetDrinkCount();
 
     Serial.println("\n=== DAILY STATE ===");
     Serial.printf("Daily total: %dml / %dml (%d%%)\n",
-                 state.daily_total_ml,
+                 daily_total,
                  DRINK_DAILY_GOAL_ML,
-                 (state.daily_total_ml * 100) / DRINK_DAILY_GOAL_ML);
-    Serial.printf("Drink count: %d drinks today\n", state.drink_count_today);
-    Serial.printf("Last reset: %u\n", state.last_reset_timestamp);
-    Serial.printf("Last drink: %u\n", state.last_drink_timestamp);
+                 (daily_total * 100) / DRINK_DAILY_GOAL_ML);
+    Serial.printf("Drink count: %d drinks today\n", drink_count);
     Serial.printf("Last baseline ADC: %d\n", state.last_recorded_adc);
     Serial.printf("Last displayed: %dml\n", state.last_displayed_total_ml);
     Serial.println("==================\n");
@@ -603,36 +603,7 @@ static void handleResetDailyIntake() {
     Serial.println("OK: Daily intake reset");
 }
 
-// Handle SET DAILY INTAKE command - set current daily intake to a specific value
-// Format: SET DAILY INTAKE ml
-static void handleSetDailyIntake(char* args) {
-    int ml;
-    if (!parseInt(args, ml)) {
-        Serial.println("ERROR: Invalid daily intake value");
-        Serial.println("Usage: SET DAILY INTAKE ml");
-        Serial.println("Example: SET DAILY INTAKE 500");
-        return;
-    }
-
-    if (ml < 0 || ml > 10000) {
-        Serial.println("ERROR: Daily intake must be 0-10000ml");
-        return;
-    }
-
-    // Set daily intake using drinks module function
-    if (!drinksSetDailyIntake((uint16_t)ml)) {
-        Serial.println("ERROR: Failed to set daily intake");
-        return;
-    }
-
-    // Show updated state
-    DailyState state;
-    drinksGetState(state);
-    Serial.printf("Daily total: %dml / %dml (%d%%)\n",
-                 state.daily_total_ml,
-                 DRINK_DAILY_GOAL_ML,
-                 (state.daily_total_ml * 100) / DRINK_DAILY_GOAL_ML);
-}
+// Note: SET DAILY INTAKE command removed - daily totals are now computed from records
 
 // Handle CLEAR DRINKS command - clear all drink records
 static void handleClearDrinks() {
@@ -1217,11 +1188,7 @@ static void processCommand(char* cmd) {
             handleSetSleepTimeout(reconstructArgs(words, word_count, 3, args));
             return;
         }
-        const char* pattern7[] = {"SET", "DAILY", "INTAKE"};
-        if (matchWordsPrefix(words, word_count, pattern7, 3)) {
-            handleSetDailyIntake(reconstructArgs(words, word_count, 3, args));
-            return;
-        }
+        // Note: SET DAILY INTAKE removed - daily totals computed from records
         const char* pattern8[] = {"RESET", "DAILY", "INTAKE"};
         if (matchWordsPrefix(words, word_count, pattern8, 3)) {
             handleResetDailyIntake();
@@ -1273,8 +1240,7 @@ static void processCommand(char* cmd) {
     Serial.println("  GET DAILY STATE       - Show current daily state");
     Serial.println("  GET LAST DRINK        - Show most recent drink record");
     Serial.println("  DUMP DRINKS           - Display all drink records");
-    Serial.println("  SET DAILY INTAKE ml    - Set current daily intake to specific value (0-10000ml)");
-    Serial.println("  RESET DAILY INTAKE    - Reset daily intake counter to 0");
+    Serial.println("  RESET DAILY INTAKE    - Reset daily intake (marks today's records as deleted)");
     Serial.println("  CLEAR DRINKS          - Clear all drink records (WARNING: erases data)");
     Serial.println("\nDisplay Settings:");
     Serial.println("  SET DISPLAY MODE mode - Switch intake visualization (0=human, 1=tumblers)");
