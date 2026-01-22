@@ -6,11 +6,75 @@ Add smart hydration reminder notifications and an Apple Watch companion app with
 
 **Key Design Decisions:**
 - Max 8 reminders per day
-- Fixed quiet hours (10pm-7am) in static constants
-- 60-minute base reminder interval
+- Fixed quiet hours (10pm-7am) - also defines active hydration hours (7am-10pm)
+- **Pace-based urgency model** - tracks whether you're on schedule to meet daily goal
 - Stop reminders once daily goal achieved
 - Color-coded urgency: Blue (on-track) → Amber (attention) → Red (overdue)
-- Watch: Complication + minimal app with large colored water drop
+- Watch: Complication + minimal app with large colored water drop + "Xml to catch up"
+
+---
+
+## Pace-Based Hydration Model
+
+### Overview
+
+Instead of tracking "time since last drink" (which just requires any drink to reset), we track whether you're **on pace to meet your daily goal**. This provides more meaningful feedback about hydration status.
+
+### Active Hours
+- **Start:** 7am (matches quiet hours end)
+- **End:** 10pm (matches quiet hours start)
+- **Duration:** 15 hours of active hydration time
+
+### Calculations
+
+```
+Expected intake = (elapsed active hours / 15) × dailyGoalMl
+Deficit = expected - dailyTotalMl
+```
+
+**Example (2500ml daily goal):**
+- At 2pm (7 hours into active period): Expected = (7/15) × 2500 = 1167ml
+- If you've drunk 800ml: Deficit = 1167 - 800 = 367ml behind
+
+### Urgency Mapping
+
+| Urgency | Condition | Example (2500ml goal) |
+|---------|-----------|----------------------|
+| Blue (onTrack) | deficit ≤ 0 | On pace or ahead |
+| Amber (attention) | 0 < deficit < 20% of goal | 1-499ml behind |
+| Red (overdue) | deficit ≥ 20% of goal | 500ml+ behind |
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Before 7am | Always on track (deficit = 0) |
+| After 10pm | Compare against full daily goal |
+| Goal achieved | Always on track, deficit = 0 |
+| Over goal | Negative deficit (surplus) |
+
+### Watch Display
+
+When deficit > 0:
+```
+     💧 (colored drop)
+   1.2L / 2.5L
+   367ml to catch up
+```
+
+When on track or ahead:
+```
+     💧 (blue drop)
+   1.2L / 2.5L
+   On track ✓
+```
+
+When goal reached:
+```
+     💧 (blue drop)
+   2.5L / 2.5L
+   Goal reached! 🎉
+```
 
 ---
 
@@ -22,9 +86,9 @@ Add smart hydration reminder notifications and an Apple Watch companion app with
 
 ```swift
 enum HydrationUrgency: Int, Codable {
-    case onTrack = 0    // Blue: 45-60 min
-    case attention = 1  // Amber: 60-90 min
-    case overdue = 2    // Red: 90+ min
+    case onTrack = 0    // Blue: on pace or ahead
+    case attention = 1  // Amber: 1-19% behind pace
+    case overdue = 2    // Red: 20%+ behind pace
 }
 
 struct HydrationState: Codable {
@@ -32,7 +96,11 @@ struct HydrationState: Codable {
     let dailyGoalMl: Int
     let lastDrinkTime: Date?
     let urgency: HydrationUrgency
+    let deficitMl: Int          // How much behind pace (0 if on track, negative if ahead)
     let timestamp: Date
+
+    var progress: Double { ... }
+    var isGoalAchieved: Bool { ... }
 }
 ```
 
@@ -55,43 +123,83 @@ Key methods:
 
 **New file:** `ios/Aquavate/Aquavate/Services/HydrationReminderService.swift`
 
-The "brain" that decides when to send reminders:
+The "brain" that decides when to send reminders using pace-based urgency:
 
 ```swift
 @MainActor
 class HydrationReminderService: ObservableObject {
-    // Configuration constants
-    static let baseIntervalMinutes = 60
-    static let graceMinutes = 45        // No reminder within 45 min of drink
-    static let attentionMinutes = 90    // Amber threshold
+    // Pace-based configuration constants
+    static let activeHoursStart = 7      // 7am
+    static let activeHoursEnd = 22       // 10pm
+    static let activeHoursDuration = 15  // hours
+    static let attentionThreshold = 0.20 // 20% behind = amber/red boundary
     static let maxRemindersPerDay = 8
 
     @Published private(set) var currentUrgency: HydrationUrgency = .onTrack
-    @Published private(set) var remindersSentToday: Int = 0
-    @Published private(set) var lastNotifiedUrgency: HydrationUrgency? = nil  // For escalation tracking
+    @Published private(set) var deficitMl: Int = 0
+    @Published private(set) var lastNotifiedUrgency: HydrationUrgency? = nil
 
+    func calculateExpectedIntake() -> Int    // Based on time of day
+    func calculateDeficit() -> Int           // expected - actual
+    func updateUrgency()                     // Maps deficit to urgency level
     func evaluateAndScheduleReminder()
-    func drinkRecorded()   // Called after BLE sync, resets lastNotifiedUrgency
-    func goalAchieved()    // Cancels all pending, resets lastNotifiedUrgency
+    func drinkRecorded()   // Recalculates deficit, may still be behind
+    func goalAchieved()    // Cancels all pending
+    func syncCurrentStateFromCoreData(dailyGoalMl:)  // Initial sync on app launch
+}
+```
+
+**Pace Calculation:**
+```swift
+func calculateExpectedIntake() -> Int {
+    let now = Date()
+    let hour = Calendar.current.component(.hour, from: now)
+
+    // Before active hours: expect 0
+    if hour < activeHoursStart { return 0 }
+
+    // After active hours: expect full goal
+    if hour >= activeHoursEnd { return dailyGoalMl }
+
+    // During active hours: proportional
+    let elapsedHours = hour - activeHoursStart
+    return (elapsedHours * dailyGoalMl) / activeHoursDuration
+}
+```
+
+**Urgency Mapping:**
+```swift
+func updateUrgency() {
+    let deficit = calculateDeficit()
+    self.deficitMl = max(0, deficit)  // Don't show negative
+
+    if dailyTotalMl >= dailyGoalMl {
+        currentUrgency = .onTrack  // Goal achieved
+    } else if deficit <= 0 {
+        currentUrgency = .onTrack  // On pace or ahead
+    } else if deficit < Int(Double(dailyGoalMl) * attentionThreshold) {
+        currentUrgency = .attention  // Behind but < 20%
+    } else {
+        currentUrgency = .overdue    // 20%+ behind
+    }
 }
 ```
 
 **Reminder Logic:**
 1. Check notifications enabled & authorized
-2. Check not in quiet hours
+2. Check not in quiet hours (also means we're in active hours)
 3. Check < 8 reminders sent today
-4. Check >= 45 min since last drink
-5. Check daily goal not achieved
-6. Calculate urgency
-7. **Only notify if urgency > lastNotifiedUrgency** (escalation only)
-8. Schedule notification and update lastNotifiedUrgency
+4. Check daily goal not achieved
+5. Calculate deficit and urgency
+6. **Only notify if urgency > lastNotifiedUrgency** (escalation only)
+7. Schedule notification and update lastNotifiedUrgency
 
 **Escalation Model:**
-- Once amber notification sent, no more amber until resolved
-- Once red notification sent, no more red until resolved
+- Once amber notification sent, no more amber until urgency improves
+- Once red notification sent, no more red until urgency improves
 - Amber → Red escalation still triggers notification
 - `lastNotifiedUrgency` resets when:
-  - Drink recorded (user hydrated)
+  - Urgency improves (user catches up)
   - New day starts (4am boundary)
   - Goal achieved
 
@@ -240,14 +348,34 @@ struct WatchHomeView: View {
 
             // Daily progress
             Text("\(liters, specifier: "%.1f")L / \(goalLiters, specifier: "%.1f")L")
-                .font(.title2)
+                .font(.title3)
+
+            // Deficit or status message
+            statusText
+                .font(.caption)
+                .foregroundColor(.secondary)
 
             // Time since last drink
             if let lastDrink = session.hydrationState?.lastDrinkTime {
                 Text(lastDrink, style: .relative)
-                    .font(.caption)
+                    .font(.caption2)
                     .foregroundColor(.secondary)
             }
+        }
+    }
+
+    @ViewBuilder
+    private var statusText: some View {
+        if let state = session.hydrationState {
+            if state.isGoalAchieved {
+                Text("Goal reached! 🎉")
+            } else if state.deficitMl > 0 {
+                Text("\(state.deficitMl)ml to catch up")
+            } else {
+                Text("On track ✓")
+            }
+        } else {
+            Text("--")
         }
     }
 }
@@ -312,6 +440,101 @@ WatchConnectivityManager.shared.sendHydrationState(state)
 
 ---
 
+## Phase 6: Pace-Based Urgency Model
+
+Migrate from time-based urgency (minutes since last drink) to pace-based urgency (deficit from expected intake).
+
+### 6.1 Update HydrationState Model
+
+**Modify:** `ios/Aquavate/Aquavate/Models/HydrationState.swift`
+
+Add deficit field:
+```swift
+struct HydrationState: Codable {
+    let dailyTotalMl: Int
+    let dailyGoalMl: Int
+    let lastDrinkTime: Date?
+    let urgency: HydrationUrgency
+    let deficitMl: Int          // NEW: How much behind pace (0 if on track)
+    let timestamp: Date
+}
+```
+
+### 6.2 Update HydrationReminderService
+
+**Modify:** `ios/Aquavate/Aquavate/Services/HydrationReminderService.swift`
+
+Replace time-based constants with pace-based:
+```swift
+// Remove these:
+// static let graceMinutes = 45
+// static let attentionMinutes = 90
+
+// Add these:
+static let activeHoursStart = 7
+static let activeHoursEnd = 22
+static let activeHoursDuration = 15
+static let attentionThreshold = 0.20  // 20% of goal
+```
+
+Add pace calculation methods:
+```swift
+func calculateExpectedIntake() -> Int
+func calculateDeficit() -> Int
+```
+
+Update `updateUrgency()` to use deficit-based logic instead of time-based.
+
+Update `buildHydrationState()` to include `deficitMl`.
+
+### 6.3 Update Watch ContentView
+
+**Modify:** `ios/Aquavate/AquavateWatch/ContentView.swift`
+
+Replace percentage display with status text:
+- "Xml to catch up" when deficit > 0
+- "On track ✓" when on pace or ahead
+- "Goal reached! 🎉" when goal achieved
+
+### 6.4 Initial Sync on App Launch
+
+**Modify:** `ios/Aquavate/Aquavate/AquavateApp.swift`
+
+Add call to sync current CoreData state to Watch on app launch and when app becomes active:
+```swift
+hydrationReminderService.syncCurrentStateFromCoreData(dailyGoalMl: bleManager.dailyGoalMl)
+```
+
+### 6.5 Periodic Watch Sync
+
+**Modify:** `ios/Aquavate/Aquavate/Services/HydrationReminderService.swift`
+
+The existing 60-second periodic evaluation timer should also sync to Watch, so the deficit updates in near-real-time as time passes:
+
+```swift
+private func startPeriodicEvaluation() {
+    evaluationTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+        Task { @MainActor in
+            self?.evaluateAndScheduleReminder()
+            self?.updateUrgency()       // Recalculate deficit based on current time
+            self?.syncStateToWatch()    // Push updated state to Watch
+        }
+    }
+}
+```
+
+**Why this matters:** With pace-based urgency, the deficit increases as time passes even without any drinks. Without periodic sync, the Watch would show stale deficit values until the next app activation or BLE sync.
+
+**Watch Update Triggers (Complete List):**
+| Trigger | Frequency | Method |
+|---------|-----------|--------|
+| App launch | Once | `syncCurrentStateFromCoreData()` |
+| App becomes active | Each time | `syncCurrentStateFromCoreData()` |
+| BLE drink sync | After sync | `updateState()` → `syncStateToWatch()` |
+| Periodic timer | Every 60s | `updateUrgency()` → `syncStateToWatch()` |
+
+---
+
 ## Files Summary
 
 ### New Files (8)
@@ -337,21 +560,20 @@ WatchConnectivityManager.shared.sendHydrationState(state)
 ## Configuration Constants
 
 ```swift
-// HydrationReminderService
-static let baseIntervalMinutes = 60
-static let graceMinutes = 45
-static let attentionMinutes = 90
+// HydrationReminderService - Pace-based model
+static let activeHoursStart = 7           // 7am
+static let activeHoursEnd = 22            // 10pm
+static let activeHoursDuration = 15       // hours
+static let attentionThreshold = 0.20      // 20% behind = red threshold
 static let maxRemindersPerDay = 8
 
 // NotificationManager
-static let quietHoursStart = 22  // 10pm
-static let quietHoursEnd = 7     // 7am
+static let quietHoursStart = 22  // 10pm (matches active hours end)
+static let quietHoursEnd = 7     // 7am (matches active hours start)
 
-// Test mode (DEBUG only) - shorter intervals for testing
+// Test mode (DEBUG only) - lower thresholds for testing
 #if DEBUG
-static let testModeIntervalMinutes = 1      // 1 min instead of 60
-static let testModeGraceMinutes = 0         // No grace period
-static let testModeAttentionMinutes = 2     // 2 min for amber
+static let testModeAttentionThreshold = 0.05  // 5% behind triggers amber/red
 #endif
 ```
 
@@ -359,20 +581,21 @@ static let testModeAttentionMinutes = 2     // 2 min for amber
 
 ## Test Mode
 
-For development/testing, a `testModeEnabled` flag shortens all intervals:
+For development/testing, a `testModeEnabled` flag lowers the threshold so you can see urgency changes more easily:
 
 | Setting | Normal | Test Mode |
 |---------|--------|-----------|
-| Base interval | 60 min | 1 min |
-| Grace period | 45 min | 0 min |
-| Attention threshold | 90 min | 2 min |
-| Overdue threshold | 90+ min | 2+ min |
+| Attention/Red threshold | 20% behind | 5% behind |
+
+**Example (2500ml goal):**
+- Normal: Need to be 500ml behind to trigger red
+- Test mode: Only 125ml behind triggers red
 
 **Toggle in Settings (DEBUG only):**
 ```swift
 #if DEBUG
 Section("Developer") {
-    Toggle("Test Mode (Fast Reminders)", isOn: $hydrationReminderService.testModeEnabled)
+    Toggle("Test Mode (Sensitive Urgency)", isOn: $hydrationReminderService.testModeEnabled)
 }
 #endif
 ```
@@ -397,10 +620,14 @@ Section("Developer") {
 
 ## Verification
 
-1. **Notifications**: Enable toggle in Settings, wait 60+ min, verify haptic reminder
-2. **Quiet hours**: Set time to 11pm, verify no reminders scheduled
-3. **Max reminders**: Manually trigger 8, verify 9th is blocked
-4. **Goal achievement**: Reach 2L, verify pending reminders cancelled
-5. **Watch complication**: Add to watch face, verify color changes with urgency
-6. **Watch app**: Open on watch, verify large drop and progress display
-7. **Watch sync**: Take drink on bottle, verify watch updates within seconds
+1. **Pace tracking**: At 2pm with 0ml drunk, verify amber/red urgency (you're behind pace)
+2. **Catch up display**: Watch shows "Xml to catch up" when behind
+3. **On track display**: After catching up, Watch shows "On track ✓"
+4. **Quiet hours**: Set time to 11pm, verify no reminders scheduled
+5. **Max reminders**: Manually trigger 8, verify 9th is blocked
+6. **Goal achievement**: Reach daily goal, verify "Goal reached! 🎉" and reminders cancelled
+7. **Watch complication**: Add to watch face, verify color changes with urgency
+8. **Watch app**: Open on watch, verify large drop, progress, and status display
+9. **Watch sync**: Take drink on bottle, verify watch updates within seconds
+10. **Initial sync**: Launch iPhone app, verify Watch receives current state immediately
+11. **Periodic sync**: Leave Watch app open for 2+ minutes, verify deficit increases as time passes (without any iPhone interaction)

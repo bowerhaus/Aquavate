@@ -13,77 +13,81 @@ Smart hydration reminder notifications and Apple Watch companion app with compli
 
 ### Key Design Decisions
 - Max 8 reminders per day
-- Fixed quiet hours (10pm-7am)
-- 60-minute base reminder interval
+- Fixed quiet hours (10pm-7am) - also defines active hydration hours (7am-10pm)
+- **Pace-based urgency model** - tracks whether you're on schedule to meet daily goal
 - Stop reminders once daily goal achieved
 - Color-coded urgency: Blue (on-track) → Amber (attention) → Red (overdue)
 - Escalation model: Only notify when urgency increases (no repeated same-level notifications)
-- Watch: Complication + minimal app with large colored water drop
+- Watch: Complication + minimal app with large colored water drop + "Xml to catch up"
 - Haptic-only notifications (Watch only - iPhone bundled with sound)
 
 ### Progress
 
-#### Phase 1: Hydration Reminder Service (iOS) ✅
-- [x] 1.1 Create `HydrationState.swift` model (HydrationUrgency enum + HydrationState struct)
-- [x] 1.2 Create `NotificationManager.swift` service (UNUserNotificationCenter wrapper)
-- [x] 1.3 Create `HydrationReminderService.swift` (reminder scheduling logic)
-- [x] 1.4 Wire up services in `AquavateApp.swift`
-- [x] 1.5 Update `SettingsView.swift` to use NotificationManager
-- [x] 1.6 Add reference in `BLEManager.swift` to trigger after drink sync
+#### Phase 1-5: Complete ✅
+- All phases implemented and working
+- Watch app builds and runs on real device
+- Initial sync bug fixed (Watch was showing 0L)
 
-#### Phase 2: App Groups for Shared Data ✅
-- [x] 2.1 Add App Groups entitlement to `Aquavate.entitlements`
-- [x] 2.2 Create `SharedDataManager.swift`
+#### Phase 6: Pace-Based Urgency Model - IMPLEMENTED ✅
+Migrated from time-based urgency to pace-based urgency model:
 
-#### Phase 3: WatchConnectivity ✅
-- [x] 3.1 Create `WatchConnectivityManager.swift` (iPhone side)
+- [x] 6.1 Update `HydrationState.swift` - added `deficitMl: Int` field
+- [x] 6.2 Update `HydrationReminderService.swift`:
+  - Replaced time-based constants with pace-based (`activeHoursStart`, `activeHoursEnd`, `attentionThreshold`)
+  - Added `calculateExpectedIntake()` and `calculateDeficit()` methods
+  - Updated `updateUrgency()` for deficit-based logic
+  - Updated `buildHydrationState()` to include deficit
+- [x] 6.3 Update Watch `ContentView.swift` - shows "Xml to catch up" / "On track ✓" / "Goal reached!"
+- [x] 6.4 Initial sync on app launch (previously implemented)
+- [x] 6.5 Periodic Watch sync (every 60s) - timer now calls `updateUrgency()` + `syncStateToWatch()`
 
-#### Phase 4: Apple Watch App ✅
-- [x] 4.1 Create Watch target in Xcode (AquavateWatch)
-- [x] 4.2 Create Watch home view with large colored water drop
-- [x] 4.3 Create complication provider (graphicCircular, graphicCorner, graphicRectangular)
-- [x] 4.4 Create `WatchSessionManager.swift` (Watch side)
-- [x] 4.5 Add App Groups entitlement to Watch target
-
-#### Phase 5: Integration ✅
-- [x] 5.1 Update iPhone Info.plist with WKCompanionAppBundleIdentifier
-- [x] 5.2 Wire up state updates to SharedDataManager and WatchConnectivity
-
-#### Testing
-- [ ] Test notifications with test mode (1 min intervals)
+#### Testing Status
+- [x] Test pace tracking - amber urgency showing correctly
+- [x] Test "Xml to catch up" display on Watch - working
+- [ ] Test "On track ✓" when caught up
+- [ ] Test "Goal reached!" when goal achieved
+- [ ] Test periodic sync (deficit increases over time without iPhone interaction)
+- [ ] Test notifications with test mode
 - [ ] Test quiet hours
 - [ ] Test max 8 reminders
-- [ ] Test escalation model (amber → red)
-- [ ] Test goal achievement stops reminders
 - [ ] Test Watch complication color changes
-- [ ] Test Watch app display
-- [ ] Test Watch ↔ iPhone sync
 
-### Current Status: Watch App Running on Simulator ✅
+### Current Status: Phase 6 Implemented and Partially Tested
 
-**Build successful!** Both iPhone and Watch apps now compile and run.
+**Pace-Based Model Working:**
+- Urgency based on deficit from expected pace (not time since last drink)
+- Active hydration hours: 7am-10pm (15 hours)
+- Expected intake calculated proportionally through the day
+- Thresholds: On track (deficit ≤ 0) → Amber (1-19% behind) → Red (20%+ behind)
 
-**Completed Xcode Setup:**
-1. ✅ Add new iPhone files to Aquavate target (Models/HydrationState.swift, Services/*.swift)
-2. ✅ Add Info.plist WKCompanionAppBundleIdentifier
-3. ✅ Add App Groups entitlement to Aquavate.entitlements
-4. ✅ Create Watch target in Xcode (AquavateWatch)
-5. ✅ Add Watch source files to Watch target
-6. ✅ Share HydrationState.swift and SharedDataManager.swift with Watch target
-7. ✅ Configure App Groups capability for Watch target
-8. ✅ Fix build errors (added Combine import, fixed @StateObject singleton usage)
-9. ✅ Set watchOS deployment target to 11.0
+**Watch Display (Verified Working):**
+- Shows "Xml to catch up" when behind schedule (deficit > 0) ✅
+- Shows "On track ✓" when on pace or ahead
+- Shows "Goal reached! 🎉" when daily goal achieved
+- Removed "time since last drink" (no longer relevant with pace model)
 
-**Build Fixes Applied:**
-- Added `import Combine` to WatchSessionManager.swift (required for @Published)
-- Removed `@MainActor` from WatchSessionManager class (conflicted with WCSessionDelegate)
-- Changed AquavateWatchApp to use `.environmentObject(WatchSessionManager.shared)` directly instead of @StateObject
+**Bug Fixes Applied:**
+- Added backwards-compatible decoder for `deficitMl` field (old saved data was missing it)
+- Watch now checks `receivedApplicationContext` on session activation
+- Fixed duplicate Watch files issue - actual code is in `AquavateWatch Watch App/AquavateWatch/`
 
-**Real Device Status:**
-- Real Watch deployment has tunnel connection issues (common watchOS dev problem)
-- Workaround: Using Watch simulator paired with iPhone simulator for testing
+### Files Modified This Session
+- `ios/Aquavate/Aquavate/Models/HydrationState.swift`:
+  - Added `deficitMl: Int` field
+  - Added custom decoder for backwards compatibility
+  - Added memberwise initializer
+- `ios/Aquavate/Aquavate/Services/HydrationReminderService.swift` - complete pace-based model:
+  - Replaced time-based constants with pace-based (`activeHoursStart/End`, `attentionThreshold`)
+  - Added `calculateExpectedIntake()` and `calculateDeficit()` methods
+  - Updated `updateUrgency()` for deficit-based logic
+  - Updated `buildHydrationState()` to include deficit
+  - Updated periodic timer to also sync to Watch
+- `ios/Aquavate/Aquavate/Services/NotificationManager.swift` - updated `scheduleHydrationReminder()` to use deficit instead of minutes
+- `ios/Aquavate/AquavateWatch Watch App/AquavateWatch/ContentView.swift` - status text display, removed time since last drink
+- `ios/Aquavate/AquavateWatch Watch App/AquavateWatch/WatchSessionManager.swift` - check existing context on activation
 
-**Next:** Test notifications and Watch functionality on simulators.
+**Note:** There are duplicate Watch files in two locations. The **actual running code** is in:
+- `ios/Aquavate/AquavateWatch Watch App/AquavateWatch/` (this is what runs on device)
 
 ### Files Created (All on disk)
 **iPhone:**
@@ -100,15 +104,6 @@ Smart hydration reminder notifications and Apple Watch companion app with compli
 - `WatchSessionManager.swift` ✅
 - `AquavateWatch.entitlements` ✅
 
-### Files Modified
-- `ios/Aquavate/Aquavate/AquavateApp.swift` ✅
-- `ios/Aquavate/Aquavate/Services/BLEManager.swift` ✅
-- `ios/Aquavate/Aquavate/Views/SettingsView.swift` ✅
-- `ios/Aquavate/Aquavate/Aquavate.entitlements` ✅
-- `ios/Aquavate/Info.plist` ✅
-- `ios/Aquavate/AquavateWatch Watch App/AquavateWatch/WatchSessionManager.swift` ✅ (build fixes)
-- `ios/Aquavate/AquavateWatch Watch App/AquavateWatch/AquavateWatchApp.swift` ✅ (build fixes)
-
 ---
 
 ## Context Recovery
@@ -116,7 +111,9 @@ Smart hydration reminder notifications and Apple Watch companion app with compli
 To resume from this progress file:
 ```
 Continue from PROGRESS.md - Issue #27 (Hydration Reminders + Apple Watch App).
-Watch app now builds and runs on simulator. Next: test notifications and Watch ↔ iPhone sync.
+Phase 6 (pace-based urgency model) implemented and partially tested.
+Watch shows deficit correctly. Still need to test: on-track, goal reached, periodic sync, notifications.
+IMPORTANT: Watch files are in TWO locations - actual code is in "AquavateWatch Watch App/AquavateWatch/"
 Plan: Plans/036-watch-hydration-reminders.md
 Branch: watch-hydration-reminders
 ```

@@ -136,8 +136,8 @@ class NotificationManager: ObservableObject {
     /// Schedule a hydration reminder notification
     /// - Parameters:
     ///   - urgency: The urgency level for the notification
-    ///   - minutesSinceDrink: Minutes since last drink (for message customization)
-    func scheduleHydrationReminder(urgency: HydrationUrgency, minutesSinceDrink: Int) {
+    ///   - deficitMl: How many ml behind pace (for message customization)
+    func scheduleHydrationReminder(urgency: HydrationUrgency, deficitMl: Int) {
         guard isEnabled && isAuthorized else {
             print("[Notifications] Cannot schedule - enabled: \(isEnabled), authorized: \(isAuthorized)")
             return
@@ -157,13 +157,18 @@ class NotificationManager: ObservableObject {
         content.title = "Hydration Reminder"
         content.sound = .default
 
+        // Format deficit for display
+        let deficitDisplay = deficitMl >= 1000
+            ? String(format: "%.1fL", Double(deficitMl) / 1000.0)
+            : "\(deficitMl)ml"
+
         switch urgency {
         case .onTrack:
-            content.body = "Stay hydrated! It's been a while since your last drink."
+            content.body = "Stay hydrated! Keep up the good pace."
         case .attention:
-            content.body = "Time to hydrate! You haven't had water in over an hour."
+            content.body = "Time to hydrate! You're \(deficitDisplay) behind pace."
         case .overdue:
-            content.body = "You're overdue for water! Take a drink now."
+            content.body = "You're falling behind! Drink \(deficitDisplay) to catch up."
         }
 
         // Schedule immediately

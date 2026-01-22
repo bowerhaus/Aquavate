@@ -75,6 +75,15 @@ extension WatchSessionManager: WCSessionDelegate {
             }
             print("[WatchSession] Activation complete: \(activationState.rawValue)")
             isReachable = session.isReachable
+
+            // Check for any existing application context from iPhone
+            let context = session.receivedApplicationContext
+            if !context.isEmpty {
+                print("[WatchSession] Loading existing application context")
+                handleReceivedData(context)
+            } else {
+                print("[WatchSession] No existing application context")
+            }
         }
     }
 

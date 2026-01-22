@@ -26,6 +26,26 @@ struct ContentView: View {
         Double(state?.dailyGoalMl ?? 2000) / 1000.0
     }
 
+    @ViewBuilder
+    private var statusText: some View {
+        if let state = state {
+            if state.isGoalAchieved {
+                Text("Goal reached! 🎉")
+            } else if state.deficitMl > 0 {
+                // Format deficit for display
+                if state.deficitMl >= 1000 {
+                    Text("\(String(format: "%.1f", Double(state.deficitMl) / 1000.0))L to catch up")
+                } else {
+                    Text("\(state.deficitMl)ml to catch up")
+                }
+            } else {
+                Text("On track ✓")
+            }
+        } else {
+            Text("--")
+        }
+    }
+
     var body: some View {
         VStack(spacing: 12) {
             // Large colored water drop
@@ -38,19 +58,10 @@ struct ContentView: View {
                 .font(.title3)
                 .fontWeight(.medium)
 
-            // Progress percentage
-            if let state = state {
-                Text("\(Int(state.progress * 100))%")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-
-            // Time since last drink
-            if let lastDrink = state?.lastDrinkTime {
-                Text(lastDrink, style: .relative)
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-            }
+            // Status text
+            statusText
+                .font(.caption)
+                .foregroundColor(.secondary)
         }
         .containerBackground(urgencyColor.gradient.opacity(0.2), for: .navigation)
     }

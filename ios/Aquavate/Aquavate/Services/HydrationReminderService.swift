@@ -9,17 +9,16 @@ import Foundation
 
 @MainActor
 class HydrationReminderService: ObservableObject {
-    // MARK: - Configuration Constants
+    // MARK: - Configuration Constants (Pace-Based Model)
 
-    static let baseIntervalMinutes = 60       // Base reminder interval
-    static let graceMinutes = 45              // No reminder within 45 min of drink
-    static let attentionMinutes = 90          // Amber threshold (90 min)
+    static let activeHoursStart = 7           // 7am - start of active hydration hours
+    static let activeHoursEnd = 22            // 10pm - end of active hydration hours
+    static let activeHoursDuration = 15       // hours of active hydration time
+    static let attentionThreshold = 0.20      // 20% behind pace = red threshold
     static let maxRemindersPerDay = 8
 
     #if DEBUG
-    static let testModeIntervalMinutes = 1    // 1 min instead of 60
-    static let testModeGraceMinutes = 0       // No grace period
-    static let testModeAttentionMinutes = 2   // 2 min for amber
+    static let testModeAttentionThreshold = 0.05  // 5% behind triggers amber/red in test mode
     #endif
 
     // MARK: - Published Properties
@@ -29,6 +28,7 @@ class HydrationReminderService: ObservableObject {
     @Published private(set) var lastDrinkTime: Date? = nil
     @Published private(set) var dailyTotalMl: Int = 0
     @Published private(set) var dailyGoalMl: Int = 2500
+    @Published private(set) var deficitMl: Int = 0
 
     #if DEBUG
     @Published var testModeEnabled: Bool = false {
@@ -60,22 +60,43 @@ class HydrationReminderService: ObservableObject {
         evaluationTimer?.invalidate()
     }
 
-    // MARK: - Configuration
+    // MARK: - Pace-Based Configuration
 
-    private var graceMinutes: Int {
+    private var attentionThreshold: Double {
         #if DEBUG
-        return testModeEnabled ? Self.testModeGraceMinutes : Self.graceMinutes
+        return testModeEnabled ? Self.testModeAttentionThreshold : Self.attentionThreshold
         #else
-        return Self.graceMinutes
+        return Self.attentionThreshold
         #endif
     }
 
-    private var attentionMinutes: Int {
-        #if DEBUG
-        return testModeEnabled ? Self.testModeAttentionMinutes : Self.attentionMinutes
-        #else
-        return Self.attentionMinutes
-        #endif
+    // MARK: - Pace Calculations
+
+    /// Calculate expected intake based on current time of day
+    /// - Returns: Expected ml consumed by now to be on pace
+    func calculateExpectedIntake() -> Int {
+        let now = Date()
+        let calendar = Calendar.current
+        let hour = calendar.component(.hour, from: now)
+        let minute = calendar.component(.minute, from: now)
+
+        // Before active hours: expect 0
+        if hour < Self.activeHoursStart { return 0 }
+
+        // After active hours: expect full goal
+        if hour >= Self.activeHoursEnd { return dailyGoalMl }
+
+        // During active hours: proportional based on elapsed time
+        let elapsedMinutes = (hour - Self.activeHoursStart) * 60 + minute
+        let totalActiveMinutes = Self.activeHoursDuration * 60
+        return (elapsedMinutes * dailyGoalMl) / totalActiveMinutes
+    }
+
+    /// Calculate deficit from expected pace
+    /// - Returns: How many ml behind pace (positive = behind, negative = ahead, 0 = on pace)
+    func calculateDeficit() -> Int {
+        let expected = calculateExpectedIntake()
+        return expected - dailyTotalMl
     }
 
     // MARK: - State Updates
@@ -96,9 +117,17 @@ class HydrationReminderService: ObservableObject {
     /// Called after a drink is recorded (via BLE sync)
     func drinkRecorded() {
         lastDrinkTime = Date()
-        lastNotifiedUrgency = nil  // Reset escalation tracking
-        currentUrgency = .onTrack
-        print("[HydrationReminder] Drink recorded - urgency reset to onTrack")
+
+        // Recalculate urgency - may still be behind pace even after drinking
+        let previousUrgency = currentUrgency
+        updateUrgency()
+
+        // Reset escalation tracking if urgency improved
+        if currentUrgency < previousUrgency {
+            lastNotifiedUrgency = nil
+        }
+
+        print("[HydrationReminder] Drink recorded - deficit=\(deficitMl)ml, urgency=\(currentUrgency)")
     }
 
     /// Called when daily goal is achieved
@@ -120,29 +149,40 @@ class HydrationReminderService: ObservableObject {
     // MARK: - Urgency Calculation
 
     private func updateUrgency() {
-        guard let lastDrink = lastDrinkTime else {
+        let deficit = calculateDeficit()
+        self.deficitMl = max(0, deficit)  // Don't show negative (surplus)
+
+        // Goal achieved - always on track
+        if dailyTotalMl >= dailyGoalMl {
             currentUrgency = .onTrack
             return
         }
 
-        let minutesSinceDrink = Int(-lastDrink.timeIntervalSinceNow / 60)
-
-        if minutesSinceDrink >= attentionMinutes {
-            currentUrgency = .overdue
-        } else if minutesSinceDrink >= graceMinutes {
-            currentUrgency = .attention
-        } else {
+        // On pace or ahead - on track
+        if deficit <= 0 {
             currentUrgency = .onTrack
+            return
+        }
+
+        // Behind pace - check threshold
+        let redThresholdMl = Int(Double(dailyGoalMl) * attentionThreshold)
+        if deficit >= redThresholdMl {
+            currentUrgency = .overdue    // 20%+ behind = red
+        } else {
+            currentUrgency = .attention  // Behind but < 20% = amber
         }
     }
 
     // MARK: - Reminder Evaluation
 
     /// Start periodic evaluation (every minute)
+    /// This keeps deficit current as time passes and syncs to Watch
     private func startPeriodicEvaluation() {
         evaluationTimer?.invalidate()
         evaluationTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
             Task { @MainActor in
+                self?.updateUrgency()           // Recalculate deficit based on current time
+                self?.syncStateToWatch()        // Push updated state to Watch
                 self?.evaluateAndScheduleReminder()
             }
         }
@@ -161,7 +201,7 @@ class HydrationReminderService: ObservableObject {
             return
         }
 
-        // 2. Check not in quiet hours
+        // 2. Check not in quiet hours (also means we're in active hydration hours)
         guard !notificationManager.isInQuietHours() else {
             print("[HydrationReminder] In quiet hours")
             return
@@ -179,25 +219,16 @@ class HydrationReminderService: ObservableObject {
             return
         }
 
-        // 5. Calculate time since last drink
-        let minutesSinceDrink: Int
-        if let lastDrink = lastDrinkTime {
-            minutesSinceDrink = Int(-lastDrink.timeIntervalSinceNow / 60)
-        } else {
-            // No drink recorded today - treat as attention
-            minutesSinceDrink = graceMinutes + 1
-        }
+        // 5. Calculate deficit and urgency
+        updateUrgency()
 
-        // 6. Check >= grace period since last drink
-        guard minutesSinceDrink >= graceMinutes else {
-            print("[HydrationReminder] Still in grace period (\(minutesSinceDrink)/\(graceMinutes) min)")
+        // 6. Only notify if behind pace (deficit > 0) and not already notified at this level
+        guard deficitMl > 0 else {
+            print("[HydrationReminder] On pace - no reminder needed")
             return
         }
 
-        // 7. Calculate urgency
-        updateUrgency()
-
-        // 8. Only notify if urgency > lastNotifiedUrgency (escalation only)
+        // 7. Only notify if urgency > lastNotifiedUrgency (escalation only)
         if let lastNotified = lastNotifiedUrgency {
             guard currentUrgency > lastNotified else {
                 print("[HydrationReminder] Not escalating - current: \(currentUrgency), last: \(lastNotified)")
@@ -205,10 +236,10 @@ class HydrationReminderService: ObservableObject {
             }
         }
 
-        // 9. Schedule notification and update lastNotifiedUrgency
-        notificationManager.scheduleHydrationReminder(urgency: currentUrgency, minutesSinceDrink: minutesSinceDrink)
+        // 8. Schedule notification and update lastNotifiedUrgency
+        notificationManager.scheduleHydrationReminder(urgency: currentUrgency, deficitMl: deficitMl)
         lastNotifiedUrgency = currentUrgency
-        print("[HydrationReminder] Scheduled \(currentUrgency.description) reminder")
+        print("[HydrationReminder] Scheduled \(currentUrgency.description) reminder - deficit=\(deficitMl)ml")
     }
 
     // MARK: - Current State
@@ -220,6 +251,7 @@ class HydrationReminderService: ObservableObject {
             dailyGoalMl: dailyGoalMl,
             lastDrinkTime: lastDrinkTime,
             urgency: currentUrgency,
+            deficitMl: deficitMl,
             timestamp: Date()
         )
     }
