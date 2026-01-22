@@ -818,9 +818,9 @@ static void handleGetStatus() {
     extern uint8_t g_daily_intake_display_mode;
     extern uint32_t g_sleep_timeout_ms;
     extern uint32_t g_extended_sleep_timer_sec;
-    extern uint32_t g_extended_sleep_threshold_sec;
+    extern uint32_t g_time_since_stable_threshold_sec;
     extern bool g_in_extended_sleep_mode;
-    extern unsigned long g_continuous_awake_start;
+    extern unsigned long g_time_since_stable_start;
 
     Serial.println("\n=== SYSTEM STATUS ===");
 
@@ -866,17 +866,17 @@ static void handleGetStatus() {
     Serial.print(g_extended_sleep_timer_sec);
     Serial.println(" seconds");
 
-    Serial.print("Extended sleep threshold: ");
-    Serial.print(g_extended_sleep_threshold_sec);
+    Serial.print("Time-since-stable threshold: ");
+    Serial.print(g_time_since_stable_threshold_sec);
     Serial.println(" seconds");
 
     Serial.print("Extended sleep mode: ");
     Serial.println(g_in_extended_sleep_mode ? "ACTIVE" : "INACTIVE");
 
-    if (g_continuous_awake_start > 0) {
-        unsigned long awake_time = (millis() - g_continuous_awake_start) / 1000;
-        Serial.print("Continuous awake time: ");
-        Serial.print(awake_time);
+    if (g_time_since_stable_start > 0) {
+        unsigned long time_since_stable = (millis() - g_time_since_stable_start) / 1000;
+        Serial.print("Time since stable: ");
+        Serial.print(time_since_stable);
         Serial.println(" seconds");
     }
 

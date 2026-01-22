@@ -101,15 +101,36 @@ extern uint8_t g_daily_intake_display_mode;
 #endif
 
 // ==================== Power Management ====================
+//
+// Plan 034: Two-Timer Sleep Model
+// ================================
+// The firmware uses two simple timers to manage sleep behavior:
+//
+// Timer 1: Activity Timeout (ACTIVITY_TIMEOUT_MS)
+//   Purpose: Enter sleep when device is idle
+//   Resets on: gesture change, BLE data activity (sync, commands)
+//   Does NOT reset on: BLE connect/disconnect alone
+//   When expires: Stop advertising, enter normal deep sleep (motion wake)
+//
+// Timer 2: Time Since Stable (TIME_SINCE_STABLE_THRESHOLD_SEC)
+//   Purpose: Detect "backpack mode" - constant motion prevents normal operation
+//   Resets when: bottle becomes UPRIGHT_STABLE (placed on flat surface)
+//   Counts when: bottle is in motion / not stable
+//   When expires: Enter extended deep sleep (timer wake every 60s)
+//
+// Normal use: Timer 2 keeps resetting when bottle is placed down
+// Backpack: Constant motion, timer 2 never resets, extended sleep after 3 min
+//
+// BLE advertising: Tied to awake state - advertising stops when device sleeps
 
-// How long to stay awake after waking from deep sleep (milliseconds)
-#define AWAKE_DURATION_MS           30000   // 30 seconds (normal sleep timeout)
-#define AWAKE_DURATION_EXTENDED_MS  120000  // 2 minutes (when unsynced records, waiting for iOS)
+// Timer 1: Activity timeout - how long to stay awake after last activity
+// Resets on: gesture change, BLE data activity (sync, commands)
+#define ACTIVITY_TIMEOUT_MS         30000   // 30 seconds idle → enter sleep
 
-// Extended deep sleep configuration (backpack mode)
-// When device is continuously awake for threshold duration (e.g., in backpack),
+// Timer 2: Extended deep sleep configuration (backpack mode)
+// When bottle hasn't been stable (UPRIGHT_STABLE) for threshold duration,
 // switch to timer-based wake instead of motion wake to conserve battery
-#define EXTENDED_SLEEP_THRESHOLD_SEC    300     // 5 minutes continuous awake triggers extended sleep
+#define TIME_SINCE_STABLE_THRESHOLD_SEC 180     // 3 minutes without stability triggers extended sleep
 #define EXTENDED_SLEEP_TIMER_SEC        60      // 1 minute timer wake in extended mode
 
 // Display "Zzzz" indicator before entering deep sleep

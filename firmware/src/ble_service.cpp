@@ -66,6 +66,10 @@ static volatile bool g_ble_set_daily_total_requested = false;
 static volatile uint16_t g_ble_set_daily_total_value = 0;
 static volatile bool g_ble_force_display_refresh = false;
 
+// BLE activity flag for activity timeout reset (Plan 034 - Timer Rationalization)
+// Set whenever BLE data activity occurs (sync, commands)
+static volatile bool g_ble_data_activity = false;
+
 // Forward declaration for sync complete notification
 static void bleNotifyCurrentStateUpdate();
 
@@ -121,6 +125,7 @@ void drinksInit();  // Re-initialize drink tracking when time becomes valid
 class CommandCallbacks : public NimBLECharacteristicCallbacks {
     void onWrite(NimBLECharacteristic* pCharacteristic) {
         BLE_DEBUG("Command received");
+        g_ble_data_activity = true;  // Signal activity for timeout reset
 
         // Get written data
         std::string value = pCharacteristic->getValue();
@@ -204,6 +209,11 @@ class CommandCallbacks : public NimBLECharacteristicCallbacks {
 
             // Set flags for main loop to handle
             switch (cmd.command) {
+                case BLE_CMD_PING:
+                    BLE_DEBUG("Command: PING (activity timeout reset)");
+                    // No action needed - g_ble_data_activity already set above
+                    break;
+
                 case BLE_CMD_TARE_NOW:
                     BLE_DEBUG("Command: TARE_NOW");
                     g_ble_tare_requested = true;
@@ -234,6 +244,7 @@ class CommandCallbacks : public NimBLECharacteristicCallbacks {
 class SyncControlCallbacks : public NimBLECharacteristicCallbacks {
     void onRead(NimBLECharacteristic* pCharacteristic) {
         BLE_DEBUG("Sync Control read");
+        g_ble_data_activity = true;  // Signal activity for timeout reset
         // Update status with current unsynced count
         syncControl.count = storageGetUnsyncedCount();
         pCharacteristic->setValue((uint8_t*)&syncControl, sizeof(syncControl));
@@ -241,6 +252,7 @@ class SyncControlCallbacks : public NimBLECharacteristicCallbacks {
 
     void onWrite(NimBLECharacteristic* pCharacteristic) {
         BLE_DEBUG("Sync Control write");
+        g_ble_data_activity = true;  // Signal activity for timeout reset
 
         // Get written data
         std::string value = pCharacteristic->getValue();
@@ -665,19 +677,9 @@ bool bleIsConnected() {
 
 // Update BLE service (call from main loop)
 void bleUpdate() {
-    // Check advertising timeout
-    // Use extended timeout (2 min) if there are unsynced records to give iOS background BLE time to connect
-    // Otherwise use normal timeout (30 sec)
-    if (isAdvertising && !isConnected) {
-        unsigned long elapsed = millis() - advertisingStartTime;
-        uint16_t unsyncedCount = storageGetUnsyncedCount();
-        uint32_t timeout = (unsyncedCount > 0) ? BLE_ADV_TIMEOUT_EXTENDED_SEC : BLE_ADV_TIMEOUT_SEC;
-
-        if (elapsed > (timeout * 1000)) {
-            BLE_DEBUG_F("Advertising timeout (%d seconds, unsynced=%d)", timeout, unsyncedCount);
-            bleStopAdvertising();
-        }
-    }
+    // Note: Advertising timeout removed (Plan 034 - Timer Rationalization)
+    // Advertising now runs until bleStopAdvertising() is called at sleep time
+    // This simplifies behavior: awake = advertising, asleep = not advertising
 }
 
 // Update battery level
@@ -822,6 +824,16 @@ bool bleCheckForceDisplayRefresh() {
 
 uint16_t bleGetDailyGoalMl() {
     return bottleConfig.daily_goal_ml;
+}
+
+// Check for BLE data activity (sync or commands) for activity timeout reset
+// Returns true once and clears the flag
+bool bleCheckDataActivity() {
+    if (g_ble_data_activity) {
+        g_ble_data_activity = false;
+        return true;
+    }
+    return false;
 }
 
 #endif // ENABLE_BLE

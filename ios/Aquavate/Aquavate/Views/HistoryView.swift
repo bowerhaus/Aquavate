@@ -14,6 +14,9 @@ struct HistoryView: View {
     @State private var selectedDate: Date = Date()
     @State private var showConnectionRequiredAlert = false
     @State private var isDeleting = false
+    @State private var showBottleAsleepAlert = false
+    @State private var showErrorAlert = false
+    @State private var errorAlertMessage = ""
 
     // Fetch all drink records from CoreData
     // Filter to last 7 days in computed property to ensure dynamic date comparison
@@ -170,11 +173,46 @@ struct HistoryView: View {
                 }
             }
             .navigationTitle("History")
+            .refreshable {
+                await handleRefresh()
+            }
             .alert("Connection Required", isPresented: $showConnectionRequiredAlert) {
                 Button("OK", role: .cancel) { }
             } message: {
                 Text("Please connect to your bottle before deleting drinks. This ensures both the app and bottle stay in sync.")
             }
+            .alert("Bottle is Asleep", isPresented: $showBottleAsleepAlert) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text("Tilt your bottle to wake it up, then pull down to try again.")
+            }
+            .alert("Sync Error", isPresented: $showErrorAlert) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(errorAlertMessage)
+            }
+        }
+    }
+
+    private func handleRefresh() async {
+        let result = await bleManager.performRefresh()
+
+        switch result {
+        case .synced(let count):
+            print("History: Synced \(count) records")
+        case .alreadySynced:
+            print("History: Already synced")
+        case .bottleAsleep:
+            showBottleAsleepAlert = true
+        case .bluetoothOff:
+            errorAlertMessage = "Bluetooth is turned off. Please enable Bluetooth in Settings."
+            showErrorAlert = true
+        case .connectionFailed(let message):
+            errorAlertMessage = "Connection failed: \(message)"
+            showErrorAlert = true
+        case .syncFailed(let message):
+            errorAlertMessage = "Sync failed: \(message)"
+            showErrorAlert = true
         }
     }
 
