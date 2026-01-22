@@ -204,3 +204,14 @@ Enable automatic BLE reconnection when the bottle wakes up and the phone is near
 - iOS background BLE is passive - relies on system scheduling, not active scanning
 - Build firmware: `platformio run` (builds successfully)
 - Upload firmware: `platformio run -t upload`
+
+---
+
+## Follow-up: Timer Rationalization
+
+While debugging this plan, we discovered the firmware timer architecture was too complex with 6 overlapping timers. See [Plan 034 - Timer Rationalization](034-timer-rationalization.md) for the simplification effort that:
+
+- Reduces 5 firmware timers to 2 clear concepts
+- Removes the "extended awake if unsynced" conditional added in Phase 3
+- Ties advertising directly to awake state (no separate timeout)
+- Renames confusing "continuous awake" to "time since stable"

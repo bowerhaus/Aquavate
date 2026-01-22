@@ -7,45 +7,68 @@
 
 ## Current Task
 
-**BLE Auto-Reconnection** - [Plan 028](Plans/028-ble-auto-reconnection.md)
+**Timer & Sleep Rationalization** - [Plan 034](Plans/034-timer-rationalization.md)
 
-Implementing hybrid auto-reconnection so the bottle automatically connects to the phone when it wakes up.
+Simplifying the firmware timer architecture from 6 confusing timers to 2 clear concepts. This arose from debugging [Plan 028 (BLE Auto-Reconnection)](Plans/028-ble-auto-reconnection.md).
 
-### Status: Implementation Complete - Testing
+### Status: Implementation Complete - Ready for Testing
 
-All code changes are complete. Background sync is not yet confirmed working - iOS background BLE is unreliable and may take minutes to connect or may not connect at all depending on system state.
+### Problem (Solved)
 
-### What's Implemented
+The firmware had too many overlapping timers with different reset conditions. This has been simplified to a two-timer model.
 
-**iOS App:**
-- [x] Foreground auto-reconnect: 5-second scan burst when app comes to foreground
-- [x] Background disconnect: App disconnects after 5 seconds when backgrounded
-- [x] Background reconnection request: `centralManager.connect()` queued for iOS to auto-connect
-- [x] Idle disconnect timer: 60-second timer after connection complete
-- [x] `pendingBackgroundReconnectPeripheral` tracking
-- [x] `didDisconnectPeripheral` calls `requestBackgroundReconnection()` when appropriate
-- [x] `didConnect` handles background reconnection and clears pending state
+### Solution: Two-Timer Model (Implemented)
 
-**Firmware:**
-- [x] Extended advertising timeout (2 min) when unsynced records exist
-- [x] Extended awake duration (2 min) when unsynced records exist
-- [x] Only applies in iOS mode (`ENABLE_BLE=1`)
+**Timer 1: Activity Timeout (`wakeTime` - 30s)**
+- Resets on: gesture change, BLE data activity (sync, commands)
+- Does NOT reset on: BLE connect/disconnect alone
+- When expires: stop advertising, enter normal sleep (motion wake)
 
-### Testing Status
-- [ ] Background sync not yet confirmed working
-- Firmware logs show sync activity when it happens - look for `[BLE] Sync: START`, `[BLE] Sync: COMPLETE`
-- iOS logs visible in Console.app - filter for "Aquavate" or "BLE"
+**Timer 2: Time Since Stable (`g_time_since_stable_start` - 3 min)**
+- Resets when: bottle becomes UPRIGHT_STABLE (also on shake/drink as user interaction)
+- Does NOT reset on: BLE connect/disconnect alone
+- When expires: extended sleep (timer wake 60s) - "backpack mode"
 
-### Key Files Modified
-- `ios/Aquavate/Aquavate/Services/BLEManager.swift` - Background reconnection logic
-- `ios/Aquavate/Aquavate/AquavateApp.swift` - App lifecycle calls
-- `firmware/include/ble_service.h` - `BLE_ADV_TIMEOUT_EXTENDED_SEC` (120s)
-- `firmware/src/ble_service.cpp` - Extended advertising when unsynced
-- `firmware/src/config.h` - `AWAKE_DURATION_EXTENDED_MS` (120s)
-- `firmware/src/main.cpp` - Extended sleep timeout when unsynced
+### Implementation Complete
+
+- [x] **Step 1**: Remove BLE advertising timeout - advertising stops at sleep
+- [x] **Step 2**: Implement activity timeout with BLE activity reset
+- [x] **Step 3**: Rename `g_continuous_awake_start` → `g_time_since_stable_start`, change threshold 5min → 3min
+- [x] **Step 4**: Remove `AWAKE_DURATION_EXTENDED_MS` and unsynced-record conditional
+- [x] **Step 5**: Update config.h with clear comments
+- [x] **Step 6**: Remove "Sleep blocked - BLE connected" logic for activity timeout
+- [x] **Step 7**: Audit all timer reset points
+- [x] **Step 8**: Remove "Extended sleep blocked - BLE connected" logic (same issue as Step 6)
+
+### Timer Reset Audit (2026-01-22)
+
+**`wakeTime` resets - all appropriate:**
+- Gesture change (main.cpp:1304) ✅
+- BLE data activity via `bleCheckDataActivity()` (main.cpp:964) ✅
+- BLE commands: RESET_DAILY, CLEAR_HISTORY, SET_DAILY_TOTAL, TARE_NOW ✅
+- Calibration activity (lines 1153, 1245, 1532) ✅
+- Setup initialization (main.cpp:541) ✅
+
+**`g_time_since_stable_start` resets - fixed:**
+- UPRIGHT_STABLE gesture (main.cpp:1490) ✅
+- Shake gesture - user interaction (main.cpp:1042) ✅
+- Drink recorded - user interaction (main.cpp:1351) ✅
+- Wake/power-on initialization (lines 579, 582, 841) ✅
+- ~~BLE connected (main.cpp:1504)~~ ❌ **REMOVED** - same bug as activity timeout
+
+**Fix applied:** Removed `bleIsConnected()` check that was blocking extended sleep and resetting `g_time_since_stable_start`. Extended sleep now triggers regardless of BLE connection status, consistent with activity timeout behavior.
+
+### Files Modified
+- `firmware/src/config.h` - Two-timer model documentation, renamed constants
+- `firmware/src/main.cpp` - Simplified sleep logic, removed BLE-connected sleep block
+- `firmware/src/ble_service.cpp` - Removed advertising timeout, added `bleCheckDataActivity()`
+- `firmware/include/ble_service.h` - Removed timeout constants, added activity check function
+- `firmware/src/serial_commands.cpp` - Updated variable references for STATUS command
 
 ### Build Status
-Firmware: **SUCCEEDED** - ready to upload (`platformio run -t upload`)
+Firmware: **SUCCESS** (2026-01-22)
+- RAM: 11.6% (37920/327680 bytes)
+- Flash: 54.3% (712361/1310720 bytes)
 
 ---
 

@@ -54,17 +54,17 @@ bool adxlReady = false;
 
 unsigned long wakeTime = 0;
 
-// Extended deep sleep tracking
-unsigned long g_continuous_awake_start = 0;     // When current awake period started
+// Extended deep sleep tracking (Plan 034: renamed for clarity)
+unsigned long g_time_since_stable_start = 0;    // When bottle last became NOT stable (for backpack detection)
 bool g_in_extended_sleep_mode = false;          // Currently using extended sleep
 uint32_t g_extended_sleep_timer_sec = EXTENDED_SLEEP_TIMER_SEC;       // Timer wake duration (default 60s)
-uint32_t g_extended_sleep_threshold_sec = EXTENDED_SLEEP_THRESHOLD_SEC; // Awake threshold (default 120s)
+uint32_t g_time_since_stable_threshold_sec = TIME_SINCE_STABLE_THRESHOLD_SEC; // Time without stability before extended sleep (3 min)
 bool g_force_display_clear_sleep = false;       // Flag to clear Zzzz indicator on wake from extended sleep
 
 // RTC memory persistence (survives deep sleep)
 RTC_DATA_ATTR uint32_t rtc_extended_sleep_magic = 0;
 RTC_DATA_ATTR bool rtc_in_extended_sleep_mode = false;
-RTC_DATA_ATTR unsigned long rtc_continuous_awake_start = 0;
+RTC_DATA_ATTR unsigned long rtc_time_since_stable_start = 0;
 
 // Magic number for validating RTC memory after deep sleep
 #define RTC_EXTENDED_SLEEP_MAGIC 0x45585400  // "EXT\0" in ASCII
@@ -101,8 +101,8 @@ bool g_debug_ble = DEBUG_BLE;
 // Runtime display mode (persistent via NVS)
 uint8_t g_daily_intake_display_mode = DAILY_INTAKE_DISPLAY_MODE;
 
-// Runtime sleep timeout control (0 = disabled, non-persistent)
-uint32_t g_sleep_timeout_ms = AWAKE_DURATION_MS;  // Default 30 seconds
+// Runtime activity timeout control (0 = disabled, non-persistent)
+uint32_t g_sleep_timeout_ms = ACTIVITY_TIMEOUT_MS;  // Default 30 seconds
 
 #if defined(BOARD_ADAFRUIT_FEATHER)
 #include "Adafruit_ThinkInk.h"
@@ -270,7 +270,7 @@ void configureADXL343Interrupt() {
 void extendedSleepSaveToRTC() {
     rtc_extended_sleep_magic = RTC_EXTENDED_SLEEP_MAGIC;
     rtc_in_extended_sleep_mode = g_in_extended_sleep_mode;
-    rtc_continuous_awake_start = g_continuous_awake_start;
+    rtc_time_since_stable_start = g_time_since_stable_start;
 }
 
 // Restore extended sleep state from RTC memory
@@ -280,18 +280,18 @@ bool extendedSleepRestoreFromRTC() {
         Serial.println("Extended sleep: RTC memory invalid (power cycle)");
         // Reset to defaults
         g_in_extended_sleep_mode = false;
-        g_continuous_awake_start = millis();
+        g_time_since_stable_start = millis();
         return false;
     }
 
     Serial.println("Extended sleep: Restoring state from RTC memory");
     g_in_extended_sleep_mode = rtc_in_extended_sleep_mode;
-    g_continuous_awake_start = rtc_continuous_awake_start;
+    g_time_since_stable_start = rtc_time_since_stable_start;
 
     Serial.print("  in_extended_sleep_mode: ");
     Serial.println(g_in_extended_sleep_mode ? "true" : "false");
-    Serial.print("  continuous_awake_start: ");
-    Serial.println(g_continuous_awake_start);
+    Serial.print("  time_since_stable_start: ");
+    Serial.println(g_time_since_stable_start);
 
     return true;
 }
@@ -359,6 +359,11 @@ void enterExtendedDeepSleep() {
                  last_state.battery_percent, true);
 
     delay(1000); // Brief pause to ensure display updates
+#endif
+
+    // Stop BLE advertising before sleep (Plan 034: awake = advertising, asleep = not)
+#if ENABLE_BLE
+    bleStopAdvertising();
 #endif
 
     // Save state to RTC memory before sleeping
@@ -571,10 +576,10 @@ void setup() {
         // Woke from motion - was in normal sleep, return to normal mode
         Serial.println("Extended sleep: Motion wake detected, returning to normal mode");
         g_in_extended_sleep_mode = false;
-        g_continuous_awake_start = millis();
+        g_time_since_stable_start = millis();
     } else {
         // Power on/reset - initialize continuous awake tracking
-        g_continuous_awake_start = millis();
+        g_time_since_stable_start = millis();
         g_in_extended_sleep_mode = false;
     }
 
@@ -749,12 +754,12 @@ void setup() {
 
         // Load extended sleep settings from NVS
         g_extended_sleep_timer_sec = storageLoadExtendedSleepTimer();
-        g_extended_sleep_threshold_sec = storageLoadExtendedSleepThreshold();
+        g_time_since_stable_threshold_sec = storageLoadExtendedSleepThreshold();
         Serial.print("Extended sleep timer: ");
         Serial.print(g_extended_sleep_timer_sec);
         Serial.println(" seconds");
         Serial.print("Extended sleep threshold: ");
-        Serial.print(g_extended_sleep_threshold_sec);
+        Serial.print(g_time_since_stable_threshold_sec);
         Serial.println(" seconds");
 
         if (g_time_valid) {
@@ -833,7 +838,7 @@ void setup() {
             // Return to normal mode
             Serial.println("Extended sleep: Motion stopped - returning to normal mode");
             g_in_extended_sleep_mode = false;
-            g_continuous_awake_start = millis();  // Reset tracking
+            g_time_since_stable_start = millis();  // Reset tracking
 
             // Set flag to force display update to clear Zzzz indicator
             g_force_display_clear_sleep = true;
@@ -938,8 +943,8 @@ void setup() {
 #endif
 
     Serial.println("Setup complete!");
-    Serial.print("Will sleep in ");
-    Serial.print(AWAKE_DURATION_MS / 1000);
+    Serial.print("Activity timeout: ");
+    Serial.print(ACTIVITY_TIMEOUT_MS / 1000);
     Serial.println(" seconds...");
 }
 
@@ -952,6 +957,12 @@ void loop() {
     // Update BLE service (conditional)
 #if ENABLE_BLE
     bleUpdate();
+
+    // Check for BLE data activity (sync, commands) and reset activity timeout
+    // This ensures device stays awake during active BLE communication
+    if (bleCheckDataActivity()) {
+        wakeTime = millis();
+    }
 #endif
 
     // Handle BLE commands (Phase 3C - conditional)
@@ -1028,7 +1039,7 @@ void loop() {
             g_cancel_drink_pending = true;
             Serial.println("Main: Shake gesture detected - bottle emptied pending");
             // Reset extended sleep timer - shake is unambiguous user interaction
-            g_continuous_awake_start = millis();
+            g_time_since_stable_start = millis();
         }
     }
 
@@ -1337,7 +1348,7 @@ void loop() {
                     bool drink_recorded = drinksUpdate(current_adc, g_calibration);
                     if (drink_recorded) {
                         // Reset extended sleep timer - drink is unambiguous user interaction
-                        g_continuous_awake_start = millis();
+                        g_time_since_stable_start = millis();
                     }
                 }
 
@@ -1476,7 +1487,7 @@ void loop() {
     // UPRIGHT_STABLE is an unambiguous user interaction - bottle placed on surface
     // Reset extended sleep timer whenever this occurs (not just after threshold)
     if (gesture == GESTURE_UPRIGHT_STABLE) {
-        g_continuous_awake_start = millis();
+        g_time_since_stable_start = millis();
     }
 
     if (!g_in_extended_sleep_mode
@@ -1484,40 +1495,26 @@ void loop() {
         && !calibrationIsActive()
 #endif
     ) {
-        unsigned long total_awake_time = millis() - g_continuous_awake_start;
-        if (total_awake_time >= (g_extended_sleep_threshold_sec * 1000)) {
-            // Block extended sleep when BLE is connected (same as normal sleep - conditional)
-#if ENABLE_BLE
-            if (bleIsConnected()) {
-                Serial.println("Extended sleep blocked - BLE connected");
-                g_continuous_awake_start = millis(); // Reset timer while connected
-            }
-            else
-#endif
-            {
-                Serial.print("Extended sleep: Continuous awake threshold exceeded (");
-                Serial.print(total_awake_time / 1000);
-                Serial.print("s >= ");
-                Serial.print(g_extended_sleep_threshold_sec);
-                Serial.println("s)");
-                Serial.println("Extended sleep: Switching to extended sleep mode");
-                g_in_extended_sleep_mode = true;
-                enterExtendedDeepSleep();
-                // Will not return from deep sleep
-            }
+        unsigned long total_awake_time = millis() - g_time_since_stable_start;
+        if (total_awake_time >= (g_time_since_stable_threshold_sec * 1000)) {
+            // Plan 034: Enter extended sleep regardless of BLE connection status
+            // BLE connection alone is not user activity - same as activity timeout logic
+            Serial.print("Extended sleep: Time since stable threshold exceeded (");
+            Serial.print(total_awake_time / 1000);
+            Serial.print("s >= ");
+            Serial.print(g_time_since_stable_threshold_sec);
+            Serial.println("s)");
+            Serial.println("Extended sleep: Switching to extended sleep mode");
+            g_in_extended_sleep_mode = true;
+            enterExtendedDeepSleep();
+            // Will not return from deep sleep
         }
     }
 
-    // Determine sleep timeout: extend when unsynced records exist (waiting for iOS background connect)
-#if ENABLE_BLE
-    uint16_t unsynced = storageGetUnsyncedCount();
-    uint32_t effective_sleep_timeout = (unsynced > 0) ? AWAKE_DURATION_EXTENDED_MS : g_sleep_timeout_ms;
-#else
-    uint32_t effective_sleep_timeout = g_sleep_timeout_ms;
-#endif
-
-    // Check if it's time to sleep (only if sleep enabled)
-    if (effective_sleep_timeout > 0 && millis() - wakeTime >= effective_sleep_timeout) {
+    // Check if activity timeout expired (only if sleep enabled)
+    // Plan 034: Simplified - single activity timeout, no extended timeout for unsynced records
+    // BLE data activity resets the timeout via bleCheckDataActivity() above
+    if (g_sleep_timeout_ms > 0 && millis() - wakeTime >= g_sleep_timeout_ms) {
         bool sleep_blocked = false;
 
         // Prevent sleep during active calibration
@@ -1528,14 +1525,9 @@ void loop() {
             sleep_blocked = true;
         }
 #endif
-        // Prevent sleep when BLE is connected (conditional)
-#if ENABLE_BLE
-        if (!sleep_blocked && bleIsConnected()) {
-            Serial.println("Sleep blocked - BLE connected");
-            wakeTime = millis(); // Reset timer while connected
-            sleep_blocked = true;
-        }
-#endif
+        // Note: BLE connection alone no longer blocks sleep (Plan 034)
+        // Only BLE data activity (sync, commands) resets the activity timeout
+        // This prevents the device staying awake forever when connected but idle
 
         if (!sleep_blocked) {
 #if DISPLAY_SLEEP_INDICATOR
@@ -1554,6 +1546,11 @@ void loop() {
             delay(1000); // Brief pause to ensure display updates
 #else
             Serial.println("Entering sleep without display update (DISPLAY_SLEEP_INDICATOR=0)");
+#endif
+
+            // Stop BLE advertising before sleep (Plan 034: awake = advertising, asleep = not)
+#if ENABLE_BLE
+            bleStopAdvertising();
 #endif
 
             if (adxlReady) {

@@ -24,9 +24,9 @@
 
 // BLE advertising parameters
 #define BLE_ADV_INTERVAL_MS             1000    // 1 second (power-optimized)
-#define BLE_ADV_TIMEOUT_SEC             30      // Auto-stop after 30s (normal)
-#define BLE_ADV_TIMEOUT_EXTENDED_SEC    120     // Extended timeout when unsynced records (2 min)
 #define BLE_TX_POWER_DBM                0       // 0dBm (reduce from +4dBm)
+// Note: Advertising timeout removed (Plan 034 - Timer Rationalization)
+// Advertising now stops when device enters sleep, not on a separate timer
 
 // BLE connection parameters
 #define BLE_CONN_INTERVAL_MIN_MS        15      // Min 15ms (fast sync)
@@ -129,7 +129,7 @@ bool bleIsConnected();
 
 /**
  * Start BLE advertising
- * Advertises for BLE_ADV_TIMEOUT_SEC seconds or until connected
+ * Advertising continues until bleStopAdvertising() is called (at sleep)
  */
 void bleStartAdvertising();
 
@@ -181,6 +181,13 @@ bool bleCheckForceDisplayRefresh();
  * @return Daily goal in ml (default 2500)
  */
 uint16_t bleGetDailyGoalMl();
+
+/**
+ * Check for BLE data activity (sync or commands received)
+ * Used to reset activity timeout - device should stay awake during BLE activity
+ * @return true if activity occurred since last check (one-shot)
+ */
+bool bleCheckDataActivity();
 
 #endif // ENABLE_BLE
 
