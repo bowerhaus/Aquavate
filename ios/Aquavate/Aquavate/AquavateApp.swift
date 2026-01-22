@@ -43,6 +43,8 @@ struct AquavateApp: App {
                         // Wire up HydrationReminderService
                         hydrationReminderService.notificationManager = notificationManager
                         bleManager.hydrationReminderService = hydrationReminderService
+                        // Initial sync to Watch with current CoreData state
+                        hydrationReminderService.syncCurrentStateFromCoreData(dailyGoalMl: bleManager.dailyGoalMl)
                     }
             }
         }
@@ -61,6 +63,8 @@ struct AquavateApp: App {
         case .active:
             // Attempt auto-reconnection when app becomes active
             bleManager.appDidBecomeActive()
+            // Sync current state to Watch (in case drinks were synced while backgrounded)
+            hydrationReminderService.syncCurrentStateFromCoreData(dailyGoalMl: bleManager.dailyGoalMl)
 
         case .inactive:
             // Transitional state, no action needed

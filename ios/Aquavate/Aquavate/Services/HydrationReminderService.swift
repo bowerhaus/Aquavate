@@ -241,4 +241,24 @@ class HydrationReminderService: ObservableObject {
 
         print("[HydrationReminder] Synced state to Watch: \(state.dailyTotalMl)ml, urgency=\(state.urgency)")
     }
+
+    /// Sync current state from CoreData to Watch (called on app launch/active)
+    /// This ensures the Watch has the latest data even without a BLE connection
+    func syncCurrentStateFromCoreData(dailyGoalMl: Int) {
+        // Get today's total from CoreData
+        let todaysTotalMl = PersistenceController.shared.getTodaysTotalMl()
+
+        // Get last drink time from today's records
+        let todaysDrinks = PersistenceController.shared.getTodaysDrinkRecords()
+        let lastDrink = todaysDrinks.first?.timestamp
+
+        // Update state and sync to Watch
+        self.dailyTotalMl = todaysTotalMl
+        self.dailyGoalMl = dailyGoalMl
+        self.lastDrinkTime = lastDrink
+        updateUrgency()
+        syncStateToWatch()
+
+        print("[HydrationReminder] Initial sync from CoreData: \(todaysTotalMl)ml, goal=\(dailyGoalMl)ml")
+    }
 }
