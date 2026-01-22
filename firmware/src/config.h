@@ -103,7 +103,8 @@ extern uint8_t g_daily_intake_display_mode;
 // ==================== Power Management ====================
 
 // How long to stay awake after waking from deep sleep (milliseconds)
-#define AWAKE_DURATION_MS   30000   // 30 seconds (normal sleep timeout)
+#define AWAKE_DURATION_MS           30000   // 30 seconds (normal sleep timeout)
+#define AWAKE_DURATION_EXTENDED_MS  120000  // 2 minutes (when unsynced records, waiting for iOS)
 
 // Extended deep sleep configuration (backpack mode)
 // When device is continuously awake for threshold duration (e.g., in backpack),

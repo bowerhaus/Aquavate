@@ -27,6 +27,7 @@
 
 // Daily intake tracking
 #include "drinks.h"
+#include "storage_drinks.h"
 
 // Display state tracking
 #include "display.h"
@@ -682,7 +683,7 @@ void setup() {
         // Sync ESP32 RTC from DS3231 on every boot/wake
         DateTime now = rtc.now();
         struct timeval tv = {
-            .tv_sec = now.unixtime(),
+            .tv_sec = static_cast<time_t>(now.unixtime()),
             .tv_usec = 0
         };
         settimeofday(&tv, NULL);
@@ -1507,8 +1508,16 @@ void loop() {
         }
     }
 
+    // Determine sleep timeout: extend when unsynced records exist (waiting for iOS background connect)
+#if ENABLE_BLE
+    uint16_t unsynced = storageGetUnsyncedCount();
+    uint32_t effective_sleep_timeout = (unsynced > 0) ? AWAKE_DURATION_EXTENDED_MS : g_sleep_timeout_ms;
+#else
+    uint32_t effective_sleep_timeout = g_sleep_timeout_ms;
+#endif
+
     // Check if it's time to sleep (only if sleep enabled)
-    if (g_sleep_timeout_ms > 0 && millis() - wakeTime >= g_sleep_timeout_ms) {
+    if (effective_sleep_timeout > 0 && millis() - wakeTime >= effective_sleep_timeout) {
         bool sleep_blocked = false;
 
         // Prevent sleep during active calibration

@@ -1,18 +1,57 @@
 # Aquavate - Active Development Progress
 
 **Last Updated:** 2026-01-22
-**Current Branch:** `master`
+**Current Branch:** `ble-auto-reconnection`
 
 ---
 
-## Current Status
+## Current Task
 
-**IDLE** - No active tasks
+**BLE Auto-Reconnection** - [Plan 028](Plans/028-ble-auto-reconnection.md)
+
+Implementing hybrid auto-reconnection so the bottle automatically connects to the phone when it wakes up.
+
+### Status: Implementation Complete - Testing
+
+All code changes are complete. Background sync is not yet confirmed working - iOS background BLE is unreliable and may take minutes to connect or may not connect at all depending on system state.
+
+### What's Implemented
+
+**iOS App:**
+- [x] Foreground auto-reconnect: 5-second scan burst when app comes to foreground
+- [x] Background disconnect: App disconnects after 5 seconds when backgrounded
+- [x] Background reconnection request: `centralManager.connect()` queued for iOS to auto-connect
+- [x] Idle disconnect timer: 60-second timer after connection complete
+- [x] `pendingBackgroundReconnectPeripheral` tracking
+- [x] `didDisconnectPeripheral` calls `requestBackgroundReconnection()` when appropriate
+- [x] `didConnect` handles background reconnection and clears pending state
+
+**Firmware:**
+- [x] Extended advertising timeout (2 min) when unsynced records exist
+- [x] Extended awake duration (2 min) when unsynced records exist
+- [x] Only applies in iOS mode (`ENABLE_BLE=1`)
+
+### Testing Status
+- [ ] Background sync not yet confirmed working
+- Firmware logs show sync activity when it happens - look for `[BLE] Sync: START`, `[BLE] Sync: COMPLETE`
+- iOS logs visible in Console.app - filter for "Aquavate" or "BLE"
+
+### Key Files Modified
+- `ios/Aquavate/Aquavate/Services/BLEManager.swift` - Background reconnection logic
+- `ios/Aquavate/Aquavate/AquavateApp.swift` - App lifecycle calls
+- `firmware/include/ble_service.h` - `BLE_ADV_TIMEOUT_EXTENDED_SEC` (120s)
+- `firmware/src/ble_service.cpp` - Extended advertising when unsynced
+- `firmware/src/config.h` - `AWAKE_DURATION_EXTENDED_MS` (120s)
+- `firmware/src/main.cpp` - Extended sleep timeout when unsynced
+
+### Build Status
+Firmware: **SUCCEEDED** - ready to upload (`platformio run -t upload`)
 
 ---
 
 ## Recently Completed
 
+- ✅ HealthKit Water Intake Integration - [Plan 029](Plans/029-healthkit-integration.md)
 - ✅ Settings Page Cleanup (Issue #22) - [Plan 033](Plans/033-settings-page-cleanup.md)
   - Replaced hardcoded `Bottle.sample` with live BLEManager properties
   - Removed unused `useOunces` preference
