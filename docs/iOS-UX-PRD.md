@@ -327,7 +327,8 @@ Sarah's Bluetooth is accidentally turned off. When she opens the app, she sees a
 - Shows refresh spinner until sync complete
 - Connection stays open for 60 seconds for real-time updates
 - Auto-disconnects after 60s idle (battery conservation)
-- Immediate disconnect when app goes to background
+- Disconnect after 5s delay when app goes to background (allows in-progress sync to complete)
+- Request iOS background reconnection on disconnect (iOS auto-connects when bottle advertises)
 
 **Pull-to-Refresh Alerts:**
 - "Bottle is Asleep" alert if scan times out (~10s) with no devices found

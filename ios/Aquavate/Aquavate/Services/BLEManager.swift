@@ -413,6 +413,17 @@ class BLEManager: NSObject, ObservableObject {
                     }
                 }
             }
+        } else if autoReconnectEnabled {
+            // Plan 035: Already disconnected but have a known device - still request background reconnect
+            // This handles the case where bottle timed out while app was in foreground
+            if let identifierString = UserDefaults.standard.string(forKey: BLEConstants.lastConnectedPeripheralKey),
+               let identifier = UUID(uuidString: identifierString) {
+                let peripherals = centralManager.retrievePeripherals(withIdentifiers: [identifier])
+                if let peripheral = peripherals.first {
+                    logger.info("Already disconnected - requesting background reconnect for known device")
+                    requestBackgroundReconnection(to: peripheral)
+                }
+            }
         }
     }
 
