@@ -2,10 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>Aquavate uses Bluetooth to sync water intake data from your smart water bottle.</string>
-	<key>NSBluetoothPeripheralUsageDescription</key>
-	<string>Aquavate uses Bluetooth to sync water intake data from your smart water bottle.</string>
+	<key>NSHealthShareUsageDescription</key>
+	<string>Aquavate reads your water intake history to avoid duplicates.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>Aquavate logs your water intake from your smart bottle to Apple Health.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>bluetooth-central</string>

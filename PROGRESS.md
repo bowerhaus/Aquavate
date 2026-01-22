@@ -1,7 +1,7 @@
 # Aquavate - Active Development Progress
 
-**Last Updated:** 2026-01-21
-**Current Branch:** `daily-reset-from-records`
+**Last Updated:** 2026-01-22
+**Current Branch:** `master`
 
 ---
 
@@ -42,9 +42,7 @@
 
 ## Branch Status
 
-- `daily-reset-from-records` - **ACTIVE**: Ready for PR
-- `swipe-to-delete-drinks` - Ready to merge
-- `master` - Stable baseline
+- `master` - Stable baseline (HealthKit integration merged)
 
 ---
 

@@ -369,7 +369,19 @@ For detailed screen specifications, layouts, and UX flows, see [iOS-UX-PRD.md](i
 #### Sync Logic
 - Sync to HealthKit after successful puck sync
 - Mark records as synced to avoid duplicates
-- Request HealthKit authorization on first launch
+- Store HealthKit sample UUID for deletion support
+- Request HealthKit authorization from Settings (opt-in)
+
+#### Day Boundary Difference
+
+**Important:** Aquavate uses a **4am daily reset boundary** while Apple HealthKit uses **midnight-to-midnight** days.
+
+| System | Day Boundary | Example: 2am drink |
+|--------|--------------|-------------------|
+| Aquavate (bottle + app) | 4:00 AM | Counts as "yesterday" |
+| Apple Health | 12:00 AM (midnight) | Counts as "today" |
+
+This means daily totals may differ slightly for drinks taken between midnight and 4am. Individual drink timestamps are preserved correctly in HealthKit. This design prioritizes user experience (late-night drinks feel like "yesterday") over strict calendar alignment.
 
 ### 6. Notifications
 - Daily goal reminders (configurable times)
