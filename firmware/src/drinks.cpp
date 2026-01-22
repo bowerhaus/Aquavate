@@ -1,5 +1,8 @@
 // drinks.cpp - Daily water intake tracking implementation
 // Part of the Aquavate smart water bottle firmware
+//
+// Daily totals are computed dynamically from drink records using the 4am boundary,
+// matching the iOS app's calculation. This ensures consistency between devices.
 
 #include "drinks.h"
 #include "storage_drinks.h"
@@ -12,10 +15,15 @@
 extern int8_t g_timezone_offset;  // Timezone offset in hours
 extern bool g_time_valid;         // True if time has been set
 extern bool g_rtc_ds3231_present; // DS3231 RTC detected
+extern bool g_debug_drink_tracking; // Debug flag for drink tracking
 
 // Static state for drink detection
 static DailyState g_daily_state;
 static bool g_drinks_initialized = false;
+
+// Cached computed values (recalculated on init and after changes)
+static uint16_t g_cached_daily_total_ml = 0;
+static uint16_t g_cached_drink_count = 0;
 
 // RTC memory for drink detection baseline across deep sleep
 // Persists last stable ADC reading to prevent false drink detection on wake
@@ -44,62 +52,63 @@ static void saveTimestampOnEvent(const char* event_type) {
     }
 }
 
-// Helper: Check if daily counter should reset
-// Returns true on first drink after 4am boundary
-static bool shouldResetDailyCounter(uint32_t current_time) {
-    // First run - always reset
-    if (g_daily_state.last_reset_timestamp == 0) {
-        Serial.println("First run - initializing daily counter");
-        return true;
-    }
-
-    // Convert timestamps to struct tm for date comparison
-    time_t last_reset_t = g_daily_state.last_reset_timestamp;
+// Helper: Calculate today's 4am boundary timestamp
+static uint32_t getTodayResetTimestamp() {
+    uint32_t current_time = getCurrentUnixTime();
     time_t current_t = current_time;
-
-    struct tm last_reset_tm;
     struct tm current_tm;
-
-    gmtime_r(&last_reset_t, &last_reset_tm);
     gmtime_r(&current_t, &current_tm);
 
-    // Check if 20+ hours have passed (handles night-only drinking)
-    uint32_t hours_elapsed = (current_time - g_daily_state.last_reset_timestamp) / 3600;
-    if (hours_elapsed >= 20) {
-        Serial.println("20+ hours since last reset - triggering daily reset");
-        return true;
+    // Calculate timestamp for 4am today
+    struct tm reset_tm = current_tm;
+    reset_tm.tm_hour = DRINK_DAILY_RESET_HOUR;
+    reset_tm.tm_min = 0;
+    reset_tm.tm_sec = 0;
+    uint32_t today_reset_timestamp = (uint32_t)mktime(&reset_tm);
+
+    // If we're before 4am today, use yesterday's 4am as the reset boundary
+    if (current_tm.tm_hour < DRINK_DAILY_RESET_HOUR) {
+        today_reset_timestamp -= 24 * 3600;  // Subtract 24 hours
     }
 
-    // Check if we've crossed the 4am boundary
-    // Day changed AND current time >= 4am
-    if (last_reset_tm.tm_yday != current_tm.tm_yday ||
-        last_reset_tm.tm_year != current_tm.tm_year) {
-        // Different day - check if current time is past 4am
-        if (current_tm.tm_hour >= DRINK_DAILY_RESET_HOUR) {
-            Serial.println("Crossed 4am boundary - triggering daily reset");
-            return true;
+    return today_reset_timestamp;
+}
+
+// Helper: Recalculate daily totals from drink records
+// This is the authoritative calculation using the 4am boundary
+static void recalculateDailyTotals() {
+    uint32_t today_reset_timestamp = getTodayResetTimestamp();
+
+    // Load metadata
+    CircularBufferMetadata meta;
+    if (!storageLoadBufferMetadata(meta) || meta.record_count == 0) {
+        g_cached_daily_total_ml = 0;
+        g_cached_drink_count = 0;
+        Serial.println("Drinks: Recalculated total = 0ml (no records)");
+        return;
+    }
+
+    // Sum all today's non-deleted drink records
+    uint16_t total_ml = 0;
+    uint16_t drink_count = 0;
+
+    for (uint16_t i = 0; i < meta.record_count; i++) {
+        DrinkRecord record;
+        if (storageGetDrinkRecord(i, record)) {
+            // Check: from today (after 4am reset), not deleted, is a drink (positive amount)
+            if (record.timestamp >= today_reset_timestamp &&
+                (record.flags & 0x04) == 0 &&  // Not deleted
+                record.amount_ml > 0) {         // Drink, not refill
+                total_ml += (uint16_t)record.amount_ml;
+                drink_count++;
+            }
         }
     }
 
-    return false;
-}
+    g_cached_daily_total_ml = total_ml;
+    g_cached_drink_count = drink_count;
 
-// Helper: Perform atomic daily reset
-static void performAtomicDailyReset(uint32_t current_time) {
-    Serial.println("\n=== ATOMIC DAILY RESET ===");
-    Serial.printf("Previous total: %dml (%d drinks)\n",
-                 g_daily_state.daily_total_ml,
-                 g_daily_state.drink_count_today);
-
-    // Reset all daily counters atomically
-    g_daily_state.daily_total_ml = 0;
-    g_daily_state.drink_count_today = 0;
-    g_daily_state.last_displayed_total_ml = 0;
-    g_daily_state.last_reset_timestamp = current_time;
-    g_daily_state.last_recorded_adc = 0;  // Reset baseline ADC
-
-    storageSaveDailyState(g_daily_state);
-    Serial.println("Daily counter reset complete");
+    Serial.printf("Drinks: Recalculated total = %dml (%d drinks)\n", total_ml, drink_count);
 }
 
 // Initialize drink tracking system
@@ -110,18 +119,16 @@ void drinksInit() {
         return;
     }
 
-    // Load daily state from NVS
+    // Load daily state from NVS (baseline ADC and display threshold)
     if (!storageLoadDailyState(g_daily_state)) {
-        // First run - initialize state
+        // First run or struct size changed - initialize state
         Serial.println("Initializing new daily state");
         memset(&g_daily_state, 0, sizeof(DailyState));
-        g_daily_state.last_reset_timestamp = getCurrentUnixTime();
         storageSaveDailyState(g_daily_state);
     } else {
-        Serial.println("Loaded daily state from NVS:");
-        Serial.printf("  Daily total: %dml\n", g_daily_state.daily_total_ml);
-        Serial.printf("  Drink count: %d\n", g_daily_state.drink_count_today);
-        Serial.printf("  Last drink: %u\n", g_daily_state.last_drink_timestamp);
+        Serial.println("Loaded daily state from NVS");
+        Serial.printf("  Baseline ADC: %d\n", g_daily_state.last_recorded_adc);
+        Serial.printf("  Last displayed: %dml\n", g_daily_state.last_displayed_total_ml);
     }
 
     // IMPORTANT: Always reset baseline ADC on cold boot
@@ -129,23 +136,35 @@ void drinksInit() {
     // establish a fresh baseline to avoid false drink detection
     g_daily_state.last_recorded_adc = 0;
 
+    // Calculate daily totals from records (authoritative source)
+    recalculateDailyTotals();
+
     g_drinks_initialized = true;
 }
 
+// Get current daily total (computed from records)
+uint16_t drinksGetDailyTotal() {
+    return g_cached_daily_total_ml;
+}
+
+// Get current drink count (computed from records)
+uint16_t drinksGetDrinkCount() {
+    return g_cached_drink_count;
+}
+
+// Force recalculation of daily totals (public wrapper)
+void drinksRecalculateTotals() {
+    recalculateDailyTotals();
+}
+
 // Main drink detection and tracking update
-void drinksUpdate(int32_t current_adc, const CalibrationData& cal) {
+// Returns true if a drink was recorded, false otherwise
+bool drinksUpdate(int32_t current_adc, const CalibrationData& cal) {
     if (!g_drinks_initialized || !g_time_valid) {
-        return;
+        return false;
     }
 
     uint32_t current_time = getCurrentUnixTime();
-
-    // Check for daily reset FIRST
-    if (shouldResetDailyCounter(current_time)) {
-        performAtomicDailyReset(current_time);
-        // Early return to establish fresh baseline on next call
-        return;
-    }
 
     // Convert current ADC to ml using calibration
     float current_ml = calibrationGetWaterWeight(current_adc, cal);
@@ -170,12 +189,18 @@ void drinksUpdate(int32_t current_adc, const CalibrationData& cal) {
                       current_adc, current_ml);
         g_daily_state.last_recorded_adc = current_adc;
         storageSaveDailyState(g_daily_state);
-        return;  // Wait for next reading before detecting drinks
+        return false;  // Wait for next reading before detecting drinks
     }
 
     // Calculate delta from last recorded baseline
     float baseline_ml = calibrationGetWaterWeight(g_daily_state.last_recorded_adc, cal);
     float delta_ml = baseline_ml - current_ml;  // Positive = water removed (drink)
+
+    // Debug output for drink tracking
+    if (g_debug_drink_tracking) {
+        Serial.printf("Drinks: baseline=%.1fml, current=%.1fml, delta=%.1fml\n",
+                      baseline_ml, current_ml, delta_ml);
+    }
 
     // Detect drink event (≥30ml decrease)
     if (delta_ml >= DRINK_MIN_THRESHOLD_ML) {
@@ -187,7 +212,7 @@ void drinksUpdate(int32_t current_adc, const CalibrationData& cal) {
 
         Serial.printf("\n=== DRINK DETECTED: %.1fml (%s) ===\n", delta_ml, type_str);
 
-        // Create new drink record (no aggregation)
+        // Create new drink record
         DrinkRecord record;
         record.timestamp = current_time;
         record.amount_ml = (int16_t)delta_ml;
@@ -197,30 +222,28 @@ void drinksUpdate(int32_t current_adc, const CalibrationData& cal) {
 
         storageSaveDrinkRecord(record);
 
-        // Update daily total
-        g_daily_state.daily_total_ml += (uint16_t)delta_ml;
-        g_daily_state.drink_count_today++;
-        g_daily_state.last_drink_timestamp = current_time;
+        // Update baseline
         g_daily_state.last_recorded_adc = current_adc;
-
         storageSaveDailyState(g_daily_state);
+
+        // Recalculate totals from records
+        recalculateDailyTotals();
 
         // Save timestamp to NVS on drink event (for time persistence)
         saveTimestampOnEvent("drink");
 
         Serial.printf("Daily total: %dml (%d drinks)\n",
-                     g_daily_state.daily_total_ml,
-                     g_daily_state.drink_count_today);
+                     g_cached_daily_total_ml, g_cached_drink_count);
 
         // Check if display should update (≥50ml change)
-        uint16_t display_delta = abs((int)g_daily_state.daily_total_ml -
+        uint16_t display_delta = abs((int)g_cached_daily_total_ml -
                                      (int)g_daily_state.last_displayed_total_ml);
         if (display_delta >= DRINK_DISPLAY_UPDATE_THRESHOLD_ML) {
             Serial.println("Display update threshold reached - should refresh");
-            g_daily_state.last_displayed_total_ml = g_daily_state.daily_total_ml;
+            g_daily_state.last_displayed_total_ml = g_cached_daily_total_ml;
             storageSaveDailyState(g_daily_state);
-            // TODO: Trigger display refresh
         }
+        return true;  // Drink was recorded
     }
     // Detect refill event (≥100ml increase)
     else if (delta_ml <= -DRINK_REFILL_THRESHOLD_ML) {
@@ -240,6 +263,7 @@ void drinksUpdate(int32_t current_adc, const CalibrationData& cal) {
     else {
         g_daily_state.last_recorded_adc = current_adc;
     }
+    return false;  // No drink recorded
 }
 
 // Debug function: Get current daily state
@@ -247,134 +271,80 @@ void drinksGetState(DailyState& state) {
     state = g_daily_state;
 }
 
-// Debug function: Set daily intake to a specific value
-bool drinksSetDailyIntake(uint16_t ml) {
-    if (ml > 10000) {
-        return false;  // Value out of range
-    }
-
-    if (!g_drinks_initialized) {
-        // Initialize if not already done
-        drinksInit();
-    }
-
-    // Update daily total
-    uint16_t previous_total = g_daily_state.daily_total_ml;
-    g_daily_state.daily_total_ml = ml;
-
-    // Save to NVS
-    if (!storageSaveDailyState(g_daily_state)) {
-        return false;
-    }
-
-    Serial.printf("Daily intake set: %dml (was %dml)\n", ml, previous_total);
-    return true;
-}
-
-// Debug function: Reset daily intake (for testing)
+// Reset daily intake (marks today's records as deleted)
 void drinksResetDaily() {
     Serial.println("=== MANUAL DAILY RESET ===");
-    performAtomicDailyReset(getCurrentUnixTime());
-    Serial.println("Daily intake reset to 0ml");
-}
 
-// Recalculate daily total from non-deleted drink records
-// Called after a record is soft-deleted via BLE command
-uint16_t drinksRecalculateTotal() {
-    uint32_t current_time = getCurrentUnixTime();
+    uint32_t today_reset_timestamp = getTodayResetTimestamp();
 
-    // Calculate today's 4am boundary
-    time_t current_t = current_time;
-    struct tm current_tm;
-    gmtime_r(&current_t, &current_tm);
-
-    // Calculate timestamp for 4am today (or yesterday if before 4am)
-    struct tm reset_tm = current_tm;
-    reset_tm.tm_hour = DRINK_DAILY_RESET_HOUR;
-    reset_tm.tm_min = 0;
-    reset_tm.tm_sec = 0;
-    uint32_t today_reset_timestamp = (uint32_t)mktime(&reset_tm);
-
-    // If we're before 4am today, use yesterday's 4am as the reset boundary
-    if (current_tm.tm_hour < DRINK_DAILY_RESET_HOUR) {
-        today_reset_timestamp -= 24 * 3600;  // Subtract 24 hours
-    }
-
-    // Load metadata
+    // Mark all today's drink records as deleted
     CircularBufferMetadata meta;
-    if (!storageLoadBufferMetadata(meta) || meta.record_count == 0) {
-        g_daily_state.daily_total_ml = 0;
-        g_daily_state.drink_count_today = 0;
-        storageSaveDailyState(g_daily_state);
-        Serial.println("Drinks: Recalculated total = 0ml (no records)");
-        return 0;
-    }
-
-    // Sum all today's non-deleted drink records
-    uint16_t total_ml = 0;
-    uint16_t drink_count = 0;
-
-    for (uint16_t i = 0; i < meta.record_count; i++) {
-        DrinkRecord record;
-        if (storageGetDrinkRecord(i, record)) {
-            // Check: from today (after 4am reset), not deleted, is a drink (positive amount)
-            if (record.timestamp >= today_reset_timestamp &&
-                (record.flags & 0x04) == 0 &&  // Not deleted
-                record.amount_ml > 0) {         // Drink, not refill
-                total_ml += (uint16_t)record.amount_ml;
-                drink_count++;
+    if (storageLoadBufferMetadata(meta) && meta.record_count > 0) {
+        for (uint16_t i = 0; i < meta.record_count; i++) {
+            DrinkRecord record;
+            if (storageGetDrinkRecord(i, record)) {
+                if (record.timestamp >= today_reset_timestamp &&
+                    (record.flags & 0x04) == 0 &&  // Not already deleted
+                    record.amount_ml > 0) {         // Drink, not refill
+                    // Mark as deleted
+                    storageMarkDeleted(record.record_id);
+                }
             }
         }
     }
 
-    // Update daily state
-    g_daily_state.daily_total_ml = total_ml;
-    g_daily_state.drink_count_today = drink_count;
+    // Recalculate (should be 0 now)
+    recalculateDailyTotals();
+
+    // Reset display threshold
+    g_daily_state.last_displayed_total_ml = 0;
     storageSaveDailyState(g_daily_state);
 
-    Serial.printf("Drinks: Recalculated total = %dml (%d drinks)\n", total_ml, drink_count);
-    return total_ml;
+    Serial.println("Daily intake reset to 0ml");
 }
 
-// Cancel the most recent drink record (bottle emptied gesture)
+// Cancel the most recent drink record (marks it as deleted)
 bool drinksCancelLast() {
-    // Check if any drinks today
-    if (g_daily_state.drink_count_today == 0) {
+    uint32_t today_reset_timestamp = getTodayResetTimestamp();
+
+    // Find the most recent non-deleted drink from today
+    CircularBufferMetadata meta;
+    if (!storageLoadBufferMetadata(meta) || meta.record_count == 0) {
+        Serial.println("Drinks: No records to cancel");
+        return false;
+    }
+
+    // Search backwards for the most recent drink
+    DrinkRecord last_drink;
+    bool found = false;
+
+    // Iterate from newest to oldest
+    for (int i = meta.record_count - 1; i >= 0; i--) {
+        DrinkRecord record;
+        if (storageGetDrinkRecord(i, record)) {
+            if (record.timestamp >= today_reset_timestamp &&
+                (record.flags & 0x04) == 0 &&  // Not deleted
+                record.amount_ml > 0) {         // Drink, not refill
+                last_drink = record;
+                found = true;
+                break;
+            }
+        }
+    }
+
+    if (!found) {
         Serial.println("Drinks: No drinks to cancel");
         return false;
     }
 
-    // Load last drink record
-    DrinkRecord last_drink;
-    if (!storageLoadLastDrinkRecord(last_drink)) {
-        Serial.println("Drinks: Failed to load last drink record");
-        return false;
-    }
+    // Mark as deleted
+    storageMarkDeleted(last_drink.record_id);
 
-    // Verify it's a drink (positive amount) not a refill
-    if (last_drink.amount_ml <= 0) {
-        Serial.println("Drinks: Last record is a refill, not cancelling");
-        return false;
-    }
+    // Recalculate totals
+    recalculateDailyTotals();
 
-    // Subtract from daily total
-    uint16_t cancel_amount = (uint16_t)last_drink.amount_ml;
-    if (g_daily_state.daily_total_ml >= cancel_amount) {
-        g_daily_state.daily_total_ml -= cancel_amount;
-    } else {
-        g_daily_state.daily_total_ml = 0;
-    }
-
-    // Decrement drink count
-    if (g_daily_state.drink_count_today > 0) {
-        g_daily_state.drink_count_today--;
-    }
-
-    // Save updated state
-    storageSaveDailyState(g_daily_state);
-
-    Serial.printf("Drinks: Cancelled last drink of %dml. New total: %dml (%d drinks)\n",
-                  cancel_amount, g_daily_state.daily_total_ml, g_daily_state.drink_count_today);
+    Serial.printf("Drinks: Cancelled drink of %dml. New total: %dml (%d drinks)\n",
+                  last_drink.amount_ml, g_cached_daily_total_ml, g_cached_drink_count);
 
     return true;
 }
@@ -385,7 +355,6 @@ void drinksClearAll() {
 
     // Reset daily state
     memset(&g_daily_state, 0, sizeof(DailyState));
-    g_daily_state.last_reset_timestamp = getCurrentUnixTime();
     storageSaveDailyState(g_daily_state);
 
     // Reset circular buffer metadata
@@ -396,6 +365,10 @@ void drinksClearAll() {
     meta.next_record_id = 1;  // Start IDs at 1 (0 = invalid/unassigned)
     meta._reserved = 0;
     storageSaveBufferMetadata(meta);
+
+    // Reset cached values
+    g_cached_daily_total_ml = 0;
+    g_cached_drink_count = 0;
 
     Serial.println("All drink records cleared");
 }
@@ -433,4 +406,16 @@ bool drinksRestoreFromRTC() {
                   rtc_last_stable_adc, rtc_last_stable_water_ml);
 
     return true;
+}
+
+// Get current baseline water level (for shake-to-empty detection)
+float drinksGetBaselineWaterLevel(const CalibrationData& cal) {
+    return calibrationGetWaterWeight(g_daily_state.last_recorded_adc, cal);
+}
+
+// Reset baseline ADC to current value (prevents re-detection after cancel)
+void drinksResetBaseline(int32_t adc) {
+    g_daily_state.last_recorded_adc = adc;
+    storageSaveDailyState(g_daily_state);
+    Serial.printf("Drinks: Baseline reset to ADC=%d\n", adc);
 }

@@ -18,14 +18,12 @@ struct DrinkRecord {
     uint8_t  type;              // Drink type: 0=gulp (<100ml), 1=pour (≥100ml)
 };
 
-// DailyState structure: Tracks current day's drinking state (18 bytes)
+// DailyState structure: Tracks drink detection state (8 bytes)
+// Note: daily_total_ml and drink_count are computed dynamically from records
 struct DailyState {
-    uint32_t last_reset_timestamp;      // Last 4am daily reset (Unix time)
-    uint32_t last_drink_timestamp;      // Most recent drink event (Unix time)
     int32_t  last_recorded_adc;         // Baseline ADC value for drink detection
-    uint16_t daily_total_ml;            // Today's cumulative water intake (ml)
-    uint16_t drink_count_today;         // Number of drink events today
     uint16_t last_displayed_total_ml;   // Last displayed total (for hysteresis)
+    uint16_t _reserved;                 // Padding for alignment
 };
 
 // Public API functions
@@ -43,8 +41,9 @@ void drinksInit();
  *
  * @param current_adc Current ADC reading from load cell
  * @param cal Calibration data (for ADC to ml conversion)
+ * @return true if a drink was recorded, false otherwise
  */
-void drinksUpdate(int32_t current_adc, const CalibrationData& cal);
+bool drinksUpdate(int32_t current_adc, const CalibrationData& cal);
 
 /**
  * Get current Unix timestamp (RTC + timezone offset)
@@ -61,23 +60,13 @@ uint32_t getCurrentUnixTime();
 void drinksGetState(DailyState& state);
 
 /**
- * Set daily intake to a specific value (for testing/manual adjustment)
- * Updates internal state and saves to NVS
- *
- * @param ml Daily intake value in milliliters (0-10000)
- * @return true if successful, false if value out of range
- */
-bool drinksSetDailyIntake(uint16_t ml);
-
-/**
- * Reset daily intake counter (for testing)
- * Clears daily total and drink count, keeps drink records
+ * Reset daily intake (marks today's drink records as deleted)
+ * Used for manual reset or testing
  */
 void drinksResetDaily();
 
 /**
- * Cancel the most recent drink record
- * Subtracts the last drink amount from daily total and decrements drink count
+ * Cancel the most recent drink record (marks it as deleted)
  * Used when bottle is emptied (shake to empty gesture)
  *
  * @return true if a drink was cancelled, false if no drinks to cancel
@@ -91,13 +80,25 @@ bool drinksCancelLast();
 void drinksClearAll();
 
 /**
- * Recalculate daily total from non-deleted drink records
- * Called after a record is soft-deleted via BLE command
- * Updates g_daily_state.daily_total_ml and saves to NVS
+ * Get current daily total (computed from drink records using 4am boundary)
+ * This is the authoritative source for daily intake
  *
- * @return The recalculated daily total in ml
+ * @return Today's cumulative water intake in ml
  */
-uint16_t drinksRecalculateTotal();
+uint16_t drinksGetDailyTotal();
+
+/**
+ * Get current drink count (computed from drink records using 4am boundary)
+ *
+ * @return Number of drink events today
+ */
+uint16_t drinksGetDrinkCount();
+
+/**
+ * Force recalculation of daily totals from drink records
+ * Call this after external changes to drink records (e.g., BLE delete)
+ */
+void drinksRecalculateTotals();
 
 /**
  * RTC memory persistence for deep sleep
@@ -105,5 +106,22 @@ uint16_t drinksRecalculateTotal();
  */
 void drinksSaveToRTC();
 bool drinksRestoreFromRTC();
+
+/**
+ * Get current baseline water level in ml
+ * Used by shake-to-empty to check if bottle was empty when shake triggered
+ *
+ * @param cal Calibration data (for ADC to ml conversion)
+ * @return Current baseline water level in ml
+ */
+float drinksGetBaselineWaterLevel(const CalibrationData& cal);
+
+/**
+ * Reset baseline ADC to current value
+ * Called after drink cancellation to prevent re-detection
+ *
+ * @param adc Current ADC reading to use as new baseline
+ */
+void drinksResetBaseline(int32_t adc);
 
 #endif // DRINKS_H

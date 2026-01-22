@@ -9,8 +9,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @EnvironmentObject var bleManager: BLEManager
-    let bottle = Bottle.sample
-    @State private var useOunces = false
+    @EnvironmentObject var healthKitManager: HealthKitManager
     @State private var notificationsEnabled = true
 
     private var connectionStatusColor: Color {
@@ -168,23 +167,23 @@ struct SettingsView: View {
                 // Bottle Configuration
                 Section("Bottle Configuration") {
                     HStack {
-                        Text("Name")
+                        Text("Device")
                         Spacer()
-                        Text(bottle.name)
+                        Text(bleManager.connectedDeviceName ?? "Not connected")
                             .foregroundStyle(.secondary)
                     }
 
                     HStack {
                         Text("Capacity")
                         Spacer()
-                        Text("\(bottle.capacityMl)ml")
+                        Text("\(bleManager.bottleCapacityMl)ml")
                             .foregroundStyle(.secondary)
                     }
 
                     HStack {
                         Text("Daily Goal")
                         Spacer()
-                        Text("\(bottle.dailyGoalMl)ml")
+                        Text("\(bleManager.dailyGoalMl)ml")
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -325,16 +324,52 @@ struct SettingsView: View {
                     }
                 }
 
-                // Preferences
-                Section("Preferences") {
-                    Toggle(isOn: $useOunces) {
+                // Apple Health Integration
+                Section("Apple Health") {
+                    if healthKitManager.isHealthKitAvailable {
+                        Toggle(isOn: $healthKitManager.isEnabled) {
+                            HStack {
+                                Image(systemName: "heart.fill")
+                                    .foregroundStyle(.red)
+                                Text("Sync to Health")
+                            }
+                        }
+                        .onChange(of: healthKitManager.isEnabled) { _, enabled in
+                            if enabled {
+                                Task {
+                                    do {
+                                        try await healthKitManager.requestAuthorization()
+                                    } catch {
+                                        print("[HealthKit] Authorization error: \(error)")
+                                        healthKitManager.isEnabled = false
+                                    }
+                                }
+                            }
+                        }
+
+                        if healthKitManager.isEnabled {
+                            HStack {
+                                Image(systemName: healthKitManager.isAuthorized ? "checkmark.circle.fill" : "exclamationmark.circle")
+                                    .foregroundStyle(healthKitManager.isAuthorized ? .green : .orange)
+                                Text("Status")
+                                Spacer()
+                                Text(healthKitManager.isAuthorized ? "Connected" : "Not Authorized")
+                                    .foregroundStyle(.secondary)
+                                    .font(.subheadline)
+                            }
+                        }
+                    } else {
                         HStack {
-                            Image(systemName: "ruler")
-                                .foregroundStyle(.orange)
-                            Text("Use Ounces (oz)")
+                            Image(systemName: "heart.slash")
+                                .foregroundStyle(.secondary)
+                            Text("HealthKit not available on this device")
+                                .foregroundStyle(.secondary)
                         }
                     }
+                }
 
+                // Preferences
+                Section("Preferences") {
                     Toggle(isOn: $notificationsEnabled) {
                         HStack {
                             Image(systemName: "bell.fill")
@@ -346,14 +381,6 @@ struct SettingsView: View {
 
                 // About
                 Section("About") {
-                    HStack {
-                        Text("Version")
-                        Spacer()
-                        Text("1.0.0 (Pull-to-Refresh)")
-                            .foregroundStyle(.secondary)
-                            .font(.caption)
-                    }
-
                     Link(destination: URL(string: "https://github.com/bowerhaus/Aquavate")!) {
                         HStack {
                             Image(systemName: "link")
@@ -373,4 +400,5 @@ struct SettingsView: View {
 #Preview {
     SettingsView()
         .environmentObject(BLEManager())
+        .environmentObject(HealthKitManager())
 }

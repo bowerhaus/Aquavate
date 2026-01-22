@@ -44,8 +44,13 @@ static bool isAdvertising = false;
 static BLE_CurrentState currentState = {0};
 static uint8_t lastBatteryPercent = 0;
 
-// Bottle config cache
-static BLE_BottleConfig bottleConfig = {0};
+// Bottle config cache (defaults used if no calibration data)
+static BLE_BottleConfig bottleConfig = {
+    .scale_factor = 1.0f,
+    .tare_weight_grams = 0,
+    .bottle_capacity_ml = 830,
+    .daily_goal_ml = DRINK_DAILY_GOAL_ML
+};
 
 // Sync Control state
 static BLE_SyncControl syncControl = {0};
@@ -177,7 +182,7 @@ class CommandCallbacks : public NimBLECharacteristicCallbacks {
 
             bool found = storageMarkDeleted(recordId);
             if (found) {
-                drinksRecalculateTotal();
+                drinksRecalculateTotals();
                 BLE_DEBUG_F("DELETE_DRINK_RECORD: %lu deleted, total recalculated", recordId);
             } else {
                 BLE_DEBUG_F("DELETE_DRINK_RECORD: %lu not found (rolled off)", recordId);
@@ -387,7 +392,7 @@ void bleLoadBottleConfig() {
         bottleConfig.scale_factor = cal.scale_factor;
         bottleConfig.tare_weight_grams = (int32_t)(cal.empty_bottle_adc / cal.scale_factor);
         bottleConfig.bottle_capacity_ml = 830; // Default capacity (could be configurable later)
-        bottleConfig.daily_goal_ml = 2000;     // Default goal (could be configurable later)
+        bottleConfig.daily_goal_ml = DRINK_DAILY_GOAL_ML;
 
         // Update characteristic value
         if (pBottleConfigChar) {
@@ -689,14 +694,14 @@ void bleUpdateBatteryLevel(uint8_t percent) {
 }
 
 // Update Current State (Phase 3B - full implementation)
-void bleUpdateCurrentState(const DailyState& state, int32_t current_adc,
+void bleUpdateCurrentState(uint16_t daily_total_ml, int32_t current_adc,
                            const CalibrationData& cal, uint8_t battery_percent,
                            bool calibrated, bool time_valid, bool stable) {
     // Save previous state for change detection
     BLE_CurrentState previousState = currentState;
 
-    // Update timestamp
-    currentState.timestamp = state.last_drink_timestamp;
+    // Update timestamp (use current time)
+    currentState.timestamp = getCurrentUnixTime();
 
     // Calculate current weight from ADC if calibrated
     if (calibrated && cal.scale_factor != 0.0f) {
@@ -716,7 +721,7 @@ void bleUpdateCurrentState(const DailyState& state, int32_t current_adc,
     }
 
     // Update daily total
-    currentState.daily_total_ml = state.daily_total_ml;
+    currentState.daily_total_ml = daily_total_ml;
 
     // Update battery
     currentState.battery_percent = battery_percent;
@@ -813,6 +818,10 @@ bool bleCheckForceDisplayRefresh() {
         return true;
     }
     return false;
+}
+
+uint16_t bleGetDailyGoalMl() {
+    return bottleConfig.daily_goal_ml;
 }
 
 #endif // ENABLE_BLE

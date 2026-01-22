@@ -1,10 +1,12 @@
 # Aquavate iOS App - UX Product Requirements Document
 
-**Version:** 1.4
-**Date:** 2026-01-21
-**Status:** Approved and Tested (Bidirectional Sync)
+**Version:** 1.6
+**Date:** 2026-01-22
+**Status:** Approved and Tested (Settings Cleanup)
 
 **Changelog:**
+- **v1.6 (2026-01-22):** Settings page cleanup - replaced static "Name" with live "Device" showing connected device name, removed unused "Use Ounces" toggle, removed Version row from About section.
+- **v1.5 (2026-01-21):** Added Apple HealthKit integration (Section 2.7). Drinks sync to Health app as water intake samples. Added day boundary documentation (4am vs midnight).
 - **v1.4 (2026-01-21):** Bidirectional drink record sync. Swipe-to-delete now requires bottle connection and uses pessimistic delete with firmware confirmation. HomeView shows ALL today's drinks (not just recent 5).
 - **v1.3 (2026-01-20):** Added swipe-to-delete for drink records (Section 4 Gestures). Updated Reset Daily to also clear today's CoreData records.
 - **v1.2 (2026-01-18):** Added Pull-to-Refresh sync for Home screen (Section 2.4). Connection stays open 60s for real-time updates. Settings connection controls wrapped in `#if DEBUG` (Section 2.6).
@@ -441,7 +443,7 @@ Sarah's Bluetooth is accidentally turned off. When she opens the app, she sees a
 │                                 │
 │  BOTTLE CONFIGURATION           │  ← Section header
 │  ┌─────────────────────────────┐│
-│  │ Name           My Bottle    ││
+│  │ Device      Aquavate-A3F2   ││  ← Shows connected/last device name
 │  ├─────────────────────────────┤│
 │  │ Capacity           750ml    ││
 │  ├─────────────────────────────┤│
@@ -470,17 +472,20 @@ Sarah's Bluetooth is accidentally turned off. When she opens the app, she sees a
 │  │ 🗑 Clear History     ⚠️     ││  ← Destructive (red text)
 │  └─────────────────────────────┘│
 │                                 │
+│  APPLE HEALTH                   │
+│  ┌─────────────────────────────┐│
+│  │ ❤️ Sync to Health    [OFF]  ││  ← Toggle (triggers auth prompt)
+│  ├─────────────────────────────┤│
+│  │ Status          Connected   ││  ← Shows after auth granted
+│  └─────────────────────────────┘│
+│                                 │
 │  PREFERENCES                    │
 │  ┌─────────────────────────────┐│
-│  │ 📏 Use Ounces        [OFF]  ││  ← Toggle
-│  ├─────────────────────────────┤│
-│  │ 🔔 Notifications     [ON]   ││
+│  │ 🔔 Notifications     [ON]   ││  ← Toggle
 │  └─────────────────────────────┘│
 │                                 │
 │  ABOUT                          │
 │  ┌─────────────────────────────┐│
-│  │ Version      1.0.0 (Build 1)││
-│  ├─────────────────────────────┤│
 │  │ 🔗 GitHub Repository    →   ││
 │  └─────────────────────────────┘│
 │                                 │
@@ -513,6 +518,27 @@ If `time_valid` flag is false:
 │  │ ⏱ Device Time    ⚠️ Not Set ││  ← Orange warning icon
 ```
 - Tap row → Sends time sync command automatically
+
+**Apple Health Integration (Added 2026-01-21):**
+
+| Element | Behavior |
+|---------|----------|
+| Toggle "Sync to Health" | When enabled, triggers iOS HealthKit authorization prompt |
+| Status row | Shows "Connected" (green checkmark) or "Not Authorized" (orange warning) |
+| iPad handling | Section shows "HealthKit not available on this device" (gray text) |
+
+**Sync Behavior:**
+- Each drink synced from bottle creates a water intake sample in HealthKit
+- Samples include accurate timestamp from drink record
+- Deleting a drink in Aquavate removes the corresponding HealthKit sample
+- Drinks are marked with `syncedToHealth` flag to prevent duplicates
+- HealthKit sample UUID stored for deletion support
+
+**Day Boundary Note:**
+Aquavate uses a **4am daily reset** while Apple Health uses **midnight**. This means:
+- A drink at 2am shows as "yesterday" in Aquavate but "today" in Health app
+- Individual drink timestamps are accurate in both systems
+- Only daily totals may differ for late-night drinks (midnight-4am)
 
 ---
 
@@ -1498,9 +1524,15 @@ struct CircularProgressView {
 
 This UX PRD defines the complete user experience for the Aquavate iOS app. Upon approval, Phase 4 implementation will begin following both this document and the technical plan in [Plans/014-ios-ble-coredata-integration.md](../Plans/014-ios-ble-coredata-integration.md).
 
-**Document Status:** Approved (v1.4)
+**Document Status:** Approved (v1.5)
 
-**Update Note (2026-01-21):**
+**Update Note (2026-01-21 - HealthKit):**
+- Apple HealthKit integration implemented (Settings toggle, auto-sync)
+- Each drink creates a water intake sample in Health app
+- Deleting drinks removes corresponding HealthKit samples
+- Day boundary difference documented (4am vs midnight)
+
+**Update Note (2026-01-21 - Bidirectional Sync):**
 - Bidirectional drink record sync implemented
 - Swipe-to-delete now requires bottle connection (pessimistic delete)
 - HomeView shows ALL today's drinks (removed 5-drink limit)
@@ -1522,5 +1554,6 @@ This UX PRD defines the complete user experience for the Aquavate iOS app. Upon 
 1. ✅ Phase 4.1-4.6 implementation (Complete)
 2. ✅ Pull-to-Refresh sync (Complete - 2026-01-18)
 3. ✅ Bidirectional drink sync (Complete - 2026-01-21)
-4. Phase 4.7 implementation (Calibration Wizard) - Optional/Future
-5. Begin Phase 5 (Advanced features)
+4. ✅ HealthKit integration (Complete - 2026-01-21)
+5. Phase 4.7 implementation (Calibration Wizard) - Optional/Future
+6. Begin Phase 5 (Advanced features)

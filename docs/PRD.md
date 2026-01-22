@@ -165,8 +165,10 @@ After cutting, verify LED no longer illuminates when board is powered.
 
 #### Empty Gesture (Inverted + Shake)
 1. Detect inverted orientation: Z-axis strongly negative (<-0.8g)
-2. While inverted, detect shake: acceleration variance > threshold for 1 second
-3. On detection: Record "empty" event, reset reference weight to tare
+2. While inverted, detect shake: acceleration variance > threshold for 1.5 seconds
+3. On returning upright: Show "Bottle Emptied" confirmation, reset drink detection baseline to current level
+
+**Note:** The baseline is reset to the current water level (not tare/empty) to prevent false positives if the user shakes mid-pour. This means refill detection won't trigger after shake-to-empty, but avoids incorrectly marking a half-full bottle as empty.
 
 ### 3. Data Storage (Offline Mode)
 
@@ -367,7 +369,19 @@ For detailed screen specifications, layouts, and UX flows, see [iOS-UX-PRD.md](i
 #### Sync Logic
 - Sync to HealthKit after successful puck sync
 - Mark records as synced to avoid duplicates
-- Request HealthKit authorization on first launch
+- Store HealthKit sample UUID for deletion support
+- Request HealthKit authorization from Settings (opt-in)
+
+#### Day Boundary Difference
+
+**Important:** Aquavate uses a **4am daily reset boundary** while Apple HealthKit uses **midnight-to-midnight** days.
+
+| System | Day Boundary | Example: 2am drink |
+|--------|--------------|-------------------|
+| Aquavate (bottle + app) | 4:00 AM | Counts as "yesterday" |
+| Apple Health | 12:00 AM (midnight) | Counts as "today" |
+
+This means daily totals may differ slightly for drinks taken between midnight and 4am. Individual drink timestamps are preserved correctly in HealthKit. This design prioritizes user experience (late-night drinks feel like "yesterday") over strict calendar alignment.
 
 ### 6. Notifications
 - Daily goal reminders (configurable times)

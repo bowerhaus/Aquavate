@@ -502,9 +502,8 @@ void forceDisplayRefresh() {
     int32_t current_adc = nau.read();
     float water_ml = calibrationGetWaterWeight(current_adc, g_calibration);
 
-    // Get current daily state
-    DailyState daily_state;
-    drinksGetState(daily_state);
+    // Get current daily total (computed from records)
+    uint16_t daily_total = drinksGetDailyTotal();
 
     // Get current time
     uint8_t time_hour = 0, time_minute = 0;
@@ -524,7 +523,7 @@ void forceDisplayRefresh() {
     battery_pct = getBatteryPercent(voltage);
 
     Serial.println("Forcing display refresh...");
-    displayForceUpdate(water_ml, daily_state.daily_total_ml,
+    displayForceUpdate(water_ml, daily_total,
                       time_hour, time_minute, battery_pct, false);
 #endif
 }
@@ -920,6 +919,9 @@ void setup() {
     if (bleInit()) {
         Serial.println("BLE service initialized!");
 
+        // Sync daily goal from BLE config to display
+        displaySetDailyGoal(bleGetDailyGoalMl());
+
         // Start advertising on motion wake (not timer wake)
         if (wakeup_reason == ESP_SLEEP_WAKEUP_EXT0) {
             Serial.println("Motion wake detected - starting BLE advertising");
@@ -966,10 +968,11 @@ void loop() {
         wakeTime = millis(); // Reset sleep timer
     }
 
+    // Note: SET_DAILY_TOTAL command deprecated - daily totals computed from records
     uint16_t setDailyValue;
     if (bleCheckSetDailyTotalRequested(setDailyValue)) {
-        Serial.printf("BLE Command: SET_DAILY_TOTAL to %dml\n", setDailyValue);
-        drinksSetDailyIntake(setDailyValue);
+        Serial.printf("BLE Command: SET_DAILY_TOTAL ignored (deprecated) - value was %dml\n", setDailyValue);
+        // This command is no longer supported since daily totals are computed from records
         wakeTime = millis(); // Reset sleep timer
     }
 
@@ -1023,51 +1026,45 @@ void loop() {
     if (gesture == GESTURE_SHAKE_WHILE_INVERTED) {
         if (!g_cancel_drink_pending) {
             g_cancel_drink_pending = true;
-            Serial.println("Main: Shake gesture detected - cancel drink pending (return bottle upright to confirm)");
+            Serial.println("Main: Shake gesture detected - bottle emptied pending");
+            // Reset extended sleep timer - shake is unambiguous user interaction
+            g_continuous_awake_start = millis();
         }
     }
 
-    // Handle pending drink cancellation when bottle returns to upright stable
+    // Handle bottle emptied when bottle returns to upright stable
+    // Workflow: user pours out water → shakes while inverted → puts down
+    // The shake signals "I emptied the bottle, don't count this as a drink"
+    // We skip drinksUpdate() and just reset the baseline to prevent recording a false drink
     if (gesture == GESTURE_UPRIGHT_STABLE && g_cancel_drink_pending) {
         g_cancel_drink_pending = false;
+        Serial.println("Main: Bottle emptied - skipping drink detection, resetting baseline");
 
-        // Verify bottle is actually empty before cancelling
-        if (current_water_ml < BOTTLE_EMPTY_THRESHOLD_ML) {
-            // Bottle is empty - cancel the last drink
-            if (drinksCancelLast()) {
-                Serial.println("Main: Last drink cancelled - showing confirmation");
 #if defined(BOARD_ADAFRUIT_FEATHER)
-                uiShowBottleEmptied(display);
-                delay(3000);  // Show confirmation for 3 seconds
+        uiShowBottleEmptied(display);
+        delay(3000);  // Show confirmation for 3 seconds
 
-                // Get current values for display update
-                DailyState daily_state;
-                drinksGetState(daily_state);
+        // Get current values for display update
+        uint16_t daily_total = drinksGetDailyTotal();
 
-                uint8_t time_hour = 0, time_minute = 0;
-                if (g_time_valid) {
-                    struct timeval tv;
-                    gettimeofday(&tv, NULL);
-                    time_t now = tv.tv_sec + (g_timezone_offset * 3600);
-                    struct tm timeinfo;
-                    gmtime_r(&now, &timeinfo);
-                    time_hour = timeinfo.tm_hour;
-                    time_minute = timeinfo.tm_min;
-                }
-
-                uint8_t battery_pct = getBatteryPercent(getBatteryVoltage());
-
-                displayForceUpdate(current_water_ml, daily_state.daily_total_ml,
-                                  time_hour, time_minute, battery_pct, false);
-#endif
-            }
-            // If drinksCancelLast() returns false (nothing to cancel), silently ignore
-        } else {
-            // Bottle still has liquid - ignore shake gesture, process as normal
-            Serial.printf("Main: Bottle not empty (%.1fml >= %dml) - ignoring shake gesture\n",
-                         current_water_ml, BOTTLE_EMPTY_THRESHOLD_ML);
-            // Normal drink detection will happen below via drinksUpdate()
+        uint8_t time_hour = 0, time_minute = 0;
+        if (g_time_valid) {
+            struct timeval tv;
+            gettimeofday(&tv, NULL);
+            time_t now = tv.tv_sec + (g_timezone_offset * 3600);
+            struct tm timeinfo;
+            gmtime_r(&now, &timeinfo);
+            time_hour = timeinfo.tm_hour;
+            time_minute = timeinfo.tm_min;
         }
+
+        uint8_t battery_pct = getBatteryPercent(getBatteryVoltage());
+
+        displayForceUpdate(current_water_ml, daily_total,
+                          time_hour, time_minute, battery_pct, false);
+#endif
+        // Reset baseline to current level - this prevents drinksUpdate() from detecting a drink
+        drinksResetBaseline(current_adc);
     }
 
     // Check calibration state (used in display logic even if standalone calibration disabled)
@@ -1092,16 +1089,18 @@ void loop() {
             // Gesture released - allow new calibration trigger
             g_cal_just_cancelled = false;
         }
+    }
+#endif
 
-        // If calibrated, show water level
-        if (g_debug_enabled && g_debug_water_level && g_calibrated && nauReady) {
-            float water_ml = calibrationGetWaterWeight(current_adc, g_calibration);
-            Serial.print("Water level: ");
-            Serial.print(water_ml);
-            Serial.println(" ml");
-        }
+    // If calibrated, show water level (always available, not just in standalone calibration mode)
+    if (g_debug_enabled && g_debug_water_level && g_calibrated && nauReady) {
+        float water_ml = calibrationGetWaterWeight(current_adc, g_calibration);
+        Serial.print("Water level: ");
+        Serial.print(water_ml);
+        Serial.println(" ml");
     }
 
+#if ENABLE_STANDALONE_CALIBRATION
     // If in calibration mode, update state machine
     if (calibrationIsActive()) {
         CalibrationState new_state = calibrationUpdate(gesture, current_adc);
@@ -1152,8 +1151,7 @@ void loop() {
                     if (water_ml > 830) water_ml = 830;
                 }
 
-                DailyState daily_state;
-                drinksGetState(daily_state);
+                uint16_t daily_total = drinksGetDailyTotal();
 
                 uint8_t time_hour = 0, time_minute = 0;
                 if (g_time_valid) {
@@ -1170,7 +1168,7 @@ void loop() {
                 float voltage = getBatteryVoltage();
                 battery_pct = getBatteryPercent(voltage);
 
-                displayForceUpdate(water_ml, daily_state.daily_total_ml,
+                displayForceUpdate(water_ml, daily_total,
                                   time_hour, time_minute, battery_pct, false);
 #endif
                 return;  // Exit early - don't update g_last_cal_state
@@ -1196,8 +1194,7 @@ void loop() {
                     if (water_ml > 830) water_ml = 830;
                 }
 
-                DailyState daily_state;
-                drinksGetState(daily_state);
+                uint16_t daily_total = drinksGetDailyTotal();
 
                 uint8_t time_hour = 0, time_minute = 0;
                 if (g_time_valid) {
@@ -1214,7 +1211,7 @@ void loop() {
                 float voltage = getBatteryVoltage();
                 battery_pct = getBatteryPercent(voltage);
 
-                displayForceUpdate(water_ml, daily_state.daily_total_ml,
+                displayForceUpdate(water_ml, daily_total,
                                   time_hour, time_minute, battery_pct, false);
 #endif
                 return;  // Exit early
@@ -1246,8 +1243,7 @@ void loop() {
                     if (water_ml > 830) water_ml = 830;
                 }
 
-                DailyState daily_state;
-                drinksGetState(daily_state);
+                uint16_t daily_total = drinksGetDailyTotal();
 
                 uint8_t time_hour = 0, time_minute = 0;
                 if (g_time_valid) {
@@ -1264,7 +1260,7 @@ void loop() {
                 float voltage = getBatteryVoltage();
                 battery_pct = getBatteryPercent(voltage);
 
-                displayForceUpdate(water_ml, daily_state.daily_total_ml,
+                displayForceUpdate(water_ml, daily_total,
                                   time_hour, time_minute, battery_pct, false);
 #endif
                 }
@@ -1338,16 +1334,19 @@ void loop() {
                 // Process drink tracking (we're already UPRIGHT_STABLE)
                 // Only track drinks if weight is valid (>= -50ml threshold)
                 if (g_time_valid && display_water_ml >= -50.0f) {
-                    drinksUpdate(current_adc, g_calibration);
+                    bool drink_recorded = drinksUpdate(current_adc, g_calibration);
+                    if (drink_recorded) {
+                        // Reset extended sleep timer - drink is unambiguous user interaction
+                        g_continuous_awake_start = millis();
+                    }
                 }
 
                 // Check interval timers for time and battery updates
                 bool time_interval_elapsed = (millis() - last_time_check >= DISPLAY_TIME_UPDATE_INTERVAL_MS);
                 bool battery_interval_elapsed = (millis() - last_battery_check >= DISPLAY_BATTERY_UPDATE_INTERVAL_MS);
 
-                // Get current daily total
-                DailyState daily_state;
-                drinksGetState(daily_state);
+                // Get current daily total (computed from records)
+                uint16_t daily_total = drinksGetDailyTotal();
 
                 // Get current time
                 uint8_t time_hour = 0, time_minute = 0;
@@ -1377,7 +1376,7 @@ void loop() {
                 // OR if we need to clear Zzzz indicator after extended sleep
                 // OR if BLE command requested a forced refresh
                 if (g_force_display_clear_sleep || ble_force_refresh ||
-                    displayNeedsUpdate(display_water_ml, daily_state.daily_total_ml,
+                    displayNeedsUpdate(display_water_ml, daily_total,
                                       time_interval_elapsed, battery_interval_elapsed)) {
 
                     if (g_force_display_clear_sleep) {
@@ -1388,7 +1387,7 @@ void loop() {
                         Serial.println("BLE: Forced display refresh");
                     }
 
-                    displayUpdate(display_water_ml, daily_state.daily_total_ml,
+                    displayUpdate(display_water_ml, daily_total,
                                  time_hour, time_minute, battery_pct, false);
 
                     // Reset interval timers if they triggered the update
@@ -1398,7 +1397,7 @@ void loop() {
 
                 // Update BLE Current State (send notifications if connected - conditional)
 #if ENABLE_BLE
-                bleUpdateCurrentState(daily_state, current_adc, g_calibration,
+                bleUpdateCurrentState(daily_total, current_adc, g_calibration,
                                     battery_pct, g_calibrated, g_time_valid,
                                     gesture == GESTURE_UPRIGHT_STABLE);
 
@@ -1474,6 +1473,12 @@ void loop() {
     }
 
     // Check for extended sleep trigger (backpack mode - continuous motion prevents normal sleep)
+    // UPRIGHT_STABLE is an unambiguous user interaction - bottle placed on surface
+    // Reset extended sleep timer whenever this occurs (not just after threshold)
+    if (gesture == GESTURE_UPRIGHT_STABLE) {
+        g_continuous_awake_start = millis();
+    }
+
     if (!g_in_extended_sleep_mode
 #if ENABLE_STANDALONE_CALIBRATION
         && !calibrationIsActive()
@@ -1481,19 +1486,15 @@ void loop() {
     ) {
         unsigned long total_awake_time = millis() - g_continuous_awake_start;
         if (total_awake_time >= (g_extended_sleep_threshold_sec * 1000)) {
-            // Reset extended sleep timer when bottle is upright and stable (not in backpack)
-            if (gesture == GESTURE_UPRIGHT_STABLE) {
-                // Bottle is stationary - reset timer, normal sleep will handle this
-                g_continuous_awake_start = millis();
-            }
             // Block extended sleep when BLE is connected (same as normal sleep - conditional)
 #if ENABLE_BLE
-            else if (bleIsConnected()) {
+            if (bleIsConnected()) {
                 Serial.println("Extended sleep blocked - BLE connected");
                 g_continuous_awake_start = millis(); // Reset timer while connected
             }
+            else
 #endif
-            else {
+            {
                 Serial.print("Extended sleep: Continuous awake threshold exceeded (");
                 Serial.print(total_awake_time / 1000);
                 Serial.print("s >= ");

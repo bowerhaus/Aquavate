@@ -12,6 +12,7 @@ import CoreData
 struct AquavateApp: App {
     @State private var showSplash = true
     @StateObject private var bleManager = BLEManager()
+    @StateObject private var healthKitManager = HealthKitManager()
     @Environment(\.scenePhase) private var scenePhase
 
     let persistenceController = PersistenceController.shared
@@ -31,6 +32,11 @@ struct AquavateApp: App {
                 ContentView()
                     .environment(\.managedObjectContext, persistenceController.viewContext)
                     .environmentObject(bleManager)
+                    .environmentObject(healthKitManager)
+                    .onAppear {
+                        // Wire up HealthKitManager to BLEManager for drink sync
+                        bleManager.healthKitManager = healthKitManager
+                    }
             }
         }
         .onChange(of: scenePhase) { oldPhase, newPhase in

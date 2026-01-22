@@ -189,6 +189,9 @@ class BLEManager: NSObject, ObservableObject {
     /// When set, iOS will auto-connect when the device advertises
     private var pendingBackgroundReconnectPeripheral: CBPeripheral?
 
+    /// Reference to HealthKitManager for syncing drinks (set by AquavateApp)
+    weak var healthKitManager: HealthKitManager?
+
     // MARK: - Initialization
 
     override init() {
@@ -523,7 +526,6 @@ class BLEManager: NSObject, ObservableObject {
             connectionState = .disconnected
             errorMessage = "Connection timeout"
             connectedPeripheral = nil
-            connectedDeviceName = nil
         }
     }
 
@@ -652,7 +654,6 @@ extension BLEManager: CBCentralManagerDelegate {
             connectionState = .disconnected
             errorMessage = "Failed to connect: \(error?.localizedDescription ?? "Unknown error")"
             connectedPeripheral = nil
-            connectedDeviceName = nil
         }
     }
 
@@ -672,7 +673,6 @@ extension BLEManager: CBCentralManagerDelegate {
 
             connectionState = .disconnected
             connectedPeripheral = nil
-            connectedDeviceName = nil
             characteristics.removeAll()
 
             // Check if we should request background reconnection
@@ -1152,6 +1152,13 @@ extension BLEManager: CBPeripheralDelegate {
         if let bottleId = currentBottleId {
             PersistenceController.shared.saveDrinkRecords(syncBuffer, for: bottleId)
             logger.info("Saved \(self.syncBuffer.count) records to CoreData")
+
+            // Sync to HealthKit if enabled
+            if let healthKitManager = healthKitManager, healthKitManager.isEnabled && healthKitManager.isAuthorized {
+                Task {
+                    await syncDrinksToHealthKit()
+                }
+            }
         } else {
             logger.error("No bottle ID for saving records")
         }
@@ -1166,6 +1173,40 @@ extension BLEManager: CBPeripheralDelegate {
         lastSyncTime = Date()
 
         logger.info("Drink sync complete: \(recordCount) records synced")
+    }
+
+    /// Sync any unsynced drinks to HealthKit
+    private func syncDrinksToHealthKit() async {
+        guard let healthKitManager = healthKitManager,
+              healthKitManager.isEnabled && healthKitManager.isAuthorized else {
+            return
+        }
+
+        let unsyncedDrinks = PersistenceController.shared.getUnsyncedDrinkRecords()
+        guard !unsyncedDrinks.isEmpty else {
+            logger.info("[HealthKit] No unsynced drinks to sync")
+            return
+        }
+
+        logger.info("[HealthKit] Syncing \(unsyncedDrinks.count) drinks to HealthKit")
+
+        for drink in unsyncedDrinks {
+            guard let drinkId = drink.id,
+                  let timestamp = drink.timestamp else {
+                continue
+            }
+
+            do {
+                let hkUUID = try await healthKitManager.logWater(
+                    milliliters: Int(drink.amountMl),
+                    date: timestamp
+                )
+                PersistenceController.shared.markDrinkSyncedToHealth(id: drinkId, healthKitUUID: hkUUID)
+            } catch {
+                logger.error("[HealthKit] Failed to sync drink \(drinkId): \(error.localizedDescription)")
+                // Continue with next drink - failed ones will retry on next sync
+            }
+        }
     }
 
     /// Handle sync failure
