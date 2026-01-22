@@ -209,6 +209,11 @@ class CommandCallbacks : public NimBLECharacteristicCallbacks {
 
             // Set flags for main loop to handle
             switch (cmd.command) {
+                case BLE_CMD_PING:
+                    BLE_DEBUG("Command: PING (activity timeout reset)");
+                    // No action needed - g_ble_data_activity already set above
+                    break;
+
                 case BLE_CMD_TARE_NOW:
                     BLE_DEBUG("Command: TARE_NOW");
                     g_ble_tare_requested = true;

@@ -345,6 +345,11 @@ struct BLECommand {
         BLECommand(command: 0x01, param1: 0, param2: 0)
     }
 
+    /// Create PING command (0x02) - keep-alive to reset activity timeout
+    static func ping() -> BLECommand {
+        BLECommand(command: 0x02, param1: 0, param2: 0)
+    }
+
     /// Create RESET_DAILY command (0x05)
     static func resetDaily() -> BLECommand {
         BLECommand(command: 0x05, param1: 0, param2: 0)

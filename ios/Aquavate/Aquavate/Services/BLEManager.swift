@@ -1234,6 +1234,12 @@ extension BLEManager: CBPeripheralDelegate {
         logger.info("Sent TARE_NOW command")
     }
 
+    /// Send PING command to reset activity timeout (keep-alive)
+    func sendPingCommand() {
+        writeCommand(BLECommand.ping())
+        logger.debug("Sent PING command")
+    }
+
     /// Send RESET_DAILY command to reset daily intake counter
     func sendResetDailyCommand() {
         writeCommand(BLECommand.resetDaily())
@@ -1399,6 +1405,9 @@ extension BLEManager: CBPeripheralDelegate {
         } else {
             logger.info("performRefresh: already connected")
         }
+
+        // Send ping to reset activity timeout before sync
+        sendPingCommand()
 
         // Perform sync
         let syncResult = await performSyncOnly()
