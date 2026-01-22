@@ -10,5 +10,7 @@
 	<array>
 		<string>bluetooth-central</string>
 	</array>
+	<key>WKCompanionAppBundleIdentifier</key>
+	<string>com.bowerhaus.Aquavate.watchkitapp</string>
 </dict>
 </plist>

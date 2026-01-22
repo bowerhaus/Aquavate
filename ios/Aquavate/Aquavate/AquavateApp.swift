@@ -13,6 +13,8 @@ struct AquavateApp: App {
     @State private var showSplash = true
     @StateObject private var bleManager = BLEManager()
     @StateObject private var healthKitManager = HealthKitManager()
+    @StateObject private var notificationManager = NotificationManager()
+    @StateObject private var hydrationReminderService = HydrationReminderService()
     @Environment(\.scenePhase) private var scenePhase
 
     let persistenceController = PersistenceController.shared
@@ -33,9 +35,14 @@ struct AquavateApp: App {
                     .environment(\.managedObjectContext, persistenceController.viewContext)
                     .environmentObject(bleManager)
                     .environmentObject(healthKitManager)
+                    .environmentObject(notificationManager)
+                    .environmentObject(hydrationReminderService)
                     .onAppear {
                         // Wire up HealthKitManager to BLEManager for drink sync
                         bleManager.healthKitManager = healthKitManager
+                        // Wire up HydrationReminderService
+                        hydrationReminderService.notificationManager = notificationManager
+                        bleManager.hydrationReminderService = hydrationReminderService
                     }
             }
         }

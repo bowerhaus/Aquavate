@@ -192,6 +192,9 @@ class BLEManager: NSObject, ObservableObject {
     /// Reference to HealthKitManager for syncing drinks (set by AquavateApp)
     weak var healthKitManager: HealthKitManager?
 
+    /// Reference to HydrationReminderService for triggering reminders (set by AquavateApp)
+    weak var hydrationReminderService: HydrationReminderService?
+
     // MARK: - Initialization
 
     override init() {
@@ -1182,6 +1185,19 @@ extension BLEManager: CBPeripheralDelegate {
         syncState = .idle
         syncProgress = 1.0
         lastSyncTime = Date()
+
+        // Notify hydration reminder service that drinks were synced
+        hydrationReminderService?.drinkRecorded()
+        hydrationReminderService?.updateState(
+            totalMl: dailyTotalMl,
+            goalMl: dailyGoalMl,
+            lastDrink: Date()  // Use current time as last drink since we just synced
+        )
+
+        // Check if goal achieved
+        if dailyTotalMl >= dailyGoalMl {
+            hydrationReminderService?.goalAchieved()
+        }
 
         logger.info("Drink sync complete: \(recordCount) records synced")
     }

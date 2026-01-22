@@ -6,20 +6,75 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		19FD2D4C2F225FFE00F96E9E /* AquavateWatch Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 19FD2D422F225FFC00F96E9E /* AquavateWatch Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		19FD2D4A2F225FFE00F96E9E /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 19879E3B2F14429500ED8F60 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 19FD2D412F225FFC00F96E9E;
+			remoteInfo = "AquavateWatch Watch App";
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		19FD2D502F225FFE00F96E9E /* Embed Watch Content */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
+			dstSubfolderSpec = 16;
+			files = (
+				19FD2D4C2F225FFE00F96E9E /* AquavateWatch Watch App.app in Embed Watch Content */,
+			);
+			name = "Embed Watch Content";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		19879E432F14429500ED8F60 /* Aquavate.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Aquavate.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		19FD2D422F225FFC00F96E9E /* AquavateWatch Watch App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "AquavateWatch Watch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		19FD2D5C2F226F1900F96E9E /* Exceptions for "Aquavate" folder in "AquavateWatch Watch App" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Models/HydrationState.swift,
+				Services/SharedDataManager.swift,
+			);
+			target = 19FD2D412F225FFC00F96E9E /* AquavateWatch Watch App */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		19879E452F14429500ED8F60 /* Aquavate */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				19FD2D5C2F226F1900F96E9E /* Exceptions for "Aquavate" folder in "AquavateWatch Watch App" target */,
+			);
 			path = Aquavate;
+			sourceTree = "<group>";
+		};
+		19FD2D432F225FFC00F96E9E /* AquavateWatch Watch App */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "AquavateWatch Watch App";
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		19879E402F14429500ED8F60 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		19FD2D3F2F225FFC00F96E9E /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -33,6 +88,7 @@
 			isa = PBXGroup;
 			children = (
 				19879E452F14429500ED8F60 /* Aquavate */,
+				19FD2D432F225FFC00F96E9E /* AquavateWatch Watch App */,
 				19879E442F14429500ED8F60 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -41,6 +97,7 @@
 			isa = PBXGroup;
 			children = (
 				19879E432F14429500ED8F60 /* Aquavate.app */,
+				19FD2D422F225FFC00F96E9E /* AquavateWatch Watch App.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -55,10 +112,12 @@
 				19879E3F2F14429500ED8F60 /* Sources */,
 				19879E402F14429500ED8F60 /* Frameworks */,
 				19879E412F14429500ED8F60 /* Resources */,
+				19FD2D502F225FFE00F96E9E /* Embed Watch Content */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				19FD2D4B2F225FFE00F96E9E /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				19879E452F14429500ED8F60 /* Aquavate */,
@@ -70,6 +129,28 @@
 			productReference = 19879E432F14429500ED8F60 /* Aquavate.app */;
 			productType = "com.apple.product-type.application";
 		};
+		19FD2D412F225FFC00F96E9E /* AquavateWatch Watch App */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 19FD2D4D2F225FFE00F96E9E /* Build configuration list for PBXNativeTarget "AquavateWatch Watch App" */;
+			buildPhases = (
+				19FD2D3E2F225FFC00F96E9E /* Sources */,
+				19FD2D3F2F225FFC00F96E9E /* Frameworks */,
+				19FD2D402F225FFC00F96E9E /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				19FD2D432F225FFC00F96E9E /* AquavateWatch Watch App */,
+			);
+			name = "AquavateWatch Watch App";
+			packageProductDependencies = (
+			);
+			productName = "AquavateWatch Watch App";
+			productReference = 19FD2D422F225FFC00F96E9E /* AquavateWatch Watch App.app */;
+			productType = "com.apple.product-type.application";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -77,11 +158,14 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 1620;
-				LastUpgradeCheck = 1620;
+				LastSwiftUpdateCheck = 2620;
+				LastUpgradeCheck = 2620;
 				TargetAttributes = {
 					19879E422F14429500ED8F60 = {
 						CreatedOnToolsVersion = 16.2;
+					};
+					19FD2D412F225FFC00F96E9E = {
+						CreatedOnToolsVersion = 26.2;
 					};
 				};
 			};
@@ -100,12 +184,20 @@
 			projectRoot = "";
 			targets = (
 				19879E422F14429500ED8F60 /* Aquavate */,
+				19FD2D412F225FFC00F96E9E /* AquavateWatch Watch App */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		19879E412F14429500ED8F60 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		19FD2D402F225FFC00F96E9E /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -122,7 +214,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		19FD2D3E2F225FFC00F96E9E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		19FD2D4B2F225FFE00F96E9E /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 19FD2D412F225FFC00F96E9E /* AquavateWatch Watch App */;
+			targetProxy = 19FD2D4A2F225FFE00F96E9E /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		19879E4F2F14429B00ED8F60 /* Debug */ = {
@@ -160,6 +267,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = VUC7F5R3K4;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -183,6 +291,7 @@
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
@@ -223,6 +332,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = VUC7F5R3K4;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -239,6 +349,7 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				VALIDATE_PRODUCT = YES;
 			};
@@ -253,7 +364,6 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"Aquavate/Preview Content\"";
-				DEVELOPMENT_TEAM = VUC7F5R3K4;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Info.plist;
@@ -286,7 +396,6 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"Aquavate/Preview Content\"";
-				DEVELOPMENT_TEAM = VUC7F5R3K4;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Info.plist;
@@ -310,6 +419,72 @@
 			};
 			name = Release;
 		};
+		19FD2D4E2F225FFE00F96E9E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "AquavateWatch Watch App/AquavateWatch Watch App.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = AquavateWatch;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.bowerhaus.Aquavate;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.bowerhaus.Aquavate.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 11.0;
+			};
+			name = Debug;
+		};
+		19FD2D4F2F225FFE00F96E9E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "AquavateWatch Watch App/AquavateWatch Watch App.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = AquavateWatch;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.bowerhaus.Aquavate;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.bowerhaus.Aquavate.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 11.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -327,6 +502,15 @@
 			buildConfigurations = (
 				19879E522F14429B00ED8F60 /* Debug */,
 				19879E532F14429B00ED8F60 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		19FD2D4D2F225FFE00F96E9E /* Build configuration list for PBXNativeTarget "AquavateWatch Watch App" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				19FD2D4E2F225FFE00F96E9E /* Debug */,
+				19FD2D4F2F225FFE00F96E9E /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
