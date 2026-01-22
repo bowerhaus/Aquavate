@@ -10,8 +10,6 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject var bleManager: BLEManager
     @EnvironmentObject var healthKitManager: HealthKitManager
-    let bottle = Bottle.sample
-    @State private var useOunces = false
     @State private var notificationsEnabled = true
 
     private var connectionStatusColor: Color {
@@ -169,23 +167,23 @@ struct SettingsView: View {
                 // Bottle Configuration
                 Section("Bottle Configuration") {
                     HStack {
-                        Text("Name")
+                        Text("Device")
                         Spacer()
-                        Text(bottle.name)
+                        Text(bleManager.connectedDeviceName ?? "Not connected")
                             .foregroundStyle(.secondary)
                     }
 
                     HStack {
                         Text("Capacity")
                         Spacer()
-                        Text("\(bottle.capacityMl)ml")
+                        Text("\(bleManager.bottleCapacityMl)ml")
                             .foregroundStyle(.secondary)
                     }
 
                     HStack {
                         Text("Daily Goal")
                         Spacer()
-                        Text("\(bottle.dailyGoalMl)ml")
+                        Text("\(bleManager.dailyGoalMl)ml")
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -372,14 +370,6 @@ struct SettingsView: View {
 
                 // Preferences
                 Section("Preferences") {
-                    Toggle(isOn: $useOunces) {
-                        HStack {
-                            Image(systemName: "ruler")
-                                .foregroundStyle(.orange)
-                            Text("Use Ounces (oz)")
-                        }
-                    }
-
                     Toggle(isOn: $notificationsEnabled) {
                         HStack {
                             Image(systemName: "bell.fill")
@@ -391,14 +381,6 @@ struct SettingsView: View {
 
                 // About
                 Section("About") {
-                    HStack {
-                        Text("Version")
-                        Spacer()
-                        Text("1.0.0 (Pull-to-Refresh)")
-                            .foregroundStyle(.secondary)
-                            .font(.caption)
-                    }
-
                     Link(destination: URL(string: "https://github.com/bowerhaus/Aquavate")!) {
                         HStack {
                             Image(systemName: "link")

@@ -347,7 +347,6 @@ class BLEManager: NSObject, ObservableObject {
             connectionState = .disconnected
             errorMessage = "Connection timeout"
             connectedPeripheral = nil
-            connectedDeviceName = nil
         }
     }
 
@@ -453,7 +452,6 @@ extension BLEManager: CBCentralManagerDelegate {
             connectionState = .disconnected
             errorMessage = "Failed to connect: \(error?.localizedDescription ?? "Unknown error")"
             connectedPeripheral = nil
-            connectedDeviceName = nil
         }
     }
 
@@ -468,7 +466,6 @@ extension BLEManager: CBCentralManagerDelegate {
 
             connectionState = .disconnected
             connectedPeripheral = nil
-            connectedDeviceName = nil
             characteristics.removeAll()
         }
     }

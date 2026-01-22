@@ -1,10 +1,11 @@
 # Aquavate iOS App - UX Product Requirements Document
 
-**Version:** 1.5
-**Date:** 2026-01-21
-**Status:** Approved and Tested (HealthKit Integration)
+**Version:** 1.6
+**Date:** 2026-01-22
+**Status:** Approved and Tested (Settings Cleanup)
 
 **Changelog:**
+- **v1.6 (2026-01-22):** Settings page cleanup - replaced static "Name" with live "Device" showing connected device name, removed unused "Use Ounces" toggle, removed Version row from About section.
 - **v1.5 (2026-01-21):** Added Apple HealthKit integration (Section 2.7). Drinks sync to Health app as water intake samples. Added day boundary documentation (4am vs midnight).
 - **v1.4 (2026-01-21):** Bidirectional drink record sync. Swipe-to-delete now requires bottle connection and uses pessimistic delete with firmware confirmation. HomeView shows ALL today's drinks (not just recent 5).
 - **v1.3 (2026-01-20):** Added swipe-to-delete for drink records (Section 4 Gestures). Updated Reset Daily to also clear today's CoreData records.
@@ -442,7 +443,7 @@ Sarah's Bluetooth is accidentally turned off. When she opens the app, she sees a
 │                                 │
 │  BOTTLE CONFIGURATION           │  ← Section header
 │  ┌─────────────────────────────┐│
-│  │ Name           My Bottle    ││
+│  │ Device      Aquavate-A3F2   ││  ← Shows connected/last device name
 │  ├─────────────────────────────┤│
 │  │ Capacity           750ml    ││
 │  ├─────────────────────────────┤│
@@ -480,15 +481,11 @@ Sarah's Bluetooth is accidentally turned off. When she opens the app, she sees a
 │                                 │
 │  PREFERENCES                    │
 │  ┌─────────────────────────────┐│
-│  │ 📏 Use Ounces        [OFF]  ││  ← Toggle
-│  ├─────────────────────────────┤│
-│  │ 🔔 Notifications     [ON]   ││
+│  │ 🔔 Notifications     [ON]   ││  ← Toggle
 │  └─────────────────────────────┘│
 │                                 │
 │  ABOUT                          │
 │  ┌─────────────────────────────┐│
-│  │ Version      1.0.0 (Build 1)││
-│  ├─────────────────────────────┤│
 │  │ 🔗 GitHub Repository    →   ││
 │  └─────────────────────────────┘│
 │                                 │

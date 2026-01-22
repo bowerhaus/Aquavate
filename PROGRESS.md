@@ -7,12 +7,17 @@
 
 ## Current Status
 
-**IDLE** - No active development task
+**IDLE** - No active tasks
 
 ---
 
 ## Recently Completed
 
+- ✅ Settings Page Cleanup (Issue #22) - [Plan 033](Plans/033-settings-page-cleanup.md)
+  - Replaced hardcoded `Bottle.sample` with live BLEManager properties
+  - Removed unused `useOunces` preference
+  - Removed version string from About section
+  - Device name now persists after disconnect (shows last connected device)
 - ✅ Fix Hydration Graphic Update on Deletion (Issue #20) - [Plan 032](Plans/032-hydration-graphic-update-fix.md)
   - iOS: Added `@MainActor` to Task in BLE deletion completion handler (HomeView.swift)
   - Firmware: Synced daily goal between display and BLE config (now uses DRINK_DAILY_GOAL_ML=2500)
