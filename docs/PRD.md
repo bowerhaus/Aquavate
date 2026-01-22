@@ -191,7 +191,8 @@ typedef struct {
 
 #### Advertising
 - Start advertising when bottle picked up (wake event)
-- Stop after 30 seconds if no connection
+- Stop after 30 seconds if no connection (no unsynced records)
+- Extended 4-minute advertising if unsynced records exist (enables iOS background sync)
 - Device name: "Aquavate-XXXX" (last 4 of MAC)
 
 #### GATT Services
@@ -354,9 +355,11 @@ For detailed screen specifications, layouts, and UX flows, see [iOS-UX-PRD.md](i
 5. Initiate sync if pending records
 
 #### Background Operation
-- Use CoreBluetooth state restoration
-- Reconnect automatically when app returns to foreground
-- No background BLE scanning (iOS limitation)
+- Use CoreBluetooth state restoration for reconnection after app termination
+- Request background reconnection when app goes to background (iOS auto-connects when bottle advertises)
+- Foreground scan burst (5 seconds) when app returns to foreground
+- Extended firmware awake duration (4 min) when unsynced records exist enables opportunistic background sync
+- No continuous background BLE scanning (iOS limitation)
 
 ### 5. HealthKit Integration
 

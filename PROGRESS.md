@@ -1,7 +1,7 @@
 # Aquavate - Active Development Progress
 
 **Last Updated:** 2026-01-22
-**Current Branch:** `timer-rationalization`
+**Current Branch:** `master`
 
 ---
 
@@ -12,6 +12,12 @@ None - ready for next task.
 ---
 
 ## Recently Completed
+
+- ✅ Extended Awake Duration for Unsynced Records (Issue #24) - [Plan 035](Plans/035-extended-awake-unsynced.md)
+  - Re-introduced 4-minute extended timeout when unsynced records exist
+  - Enables iOS opportunistic background sync while bottle advertises
+  - iOS: Request background reconnection even when already disconnected
+  - Tested: Background sync works when app backgrounded, drink taken, app foregrounded
 
 - ✅ Timer & Sleep Rationalization - [Plan 034](Plans/034-timer-rationalization.md)
   - Simplified firmware from 6 timers to 2-timer model

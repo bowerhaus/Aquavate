@@ -125,7 +125,8 @@ extern uint8_t g_daily_intake_display_mode;
 
 // Timer 1: Activity timeout - how long to stay awake after last activity
 // Resets on: gesture change, BLE data activity (sync, commands)
-#define ACTIVITY_TIMEOUT_MS         30000   // 30 seconds idle → enter sleep
+#define ACTIVITY_TIMEOUT_MS             30000   // 30 seconds idle → enter sleep
+#define ACTIVITY_TIMEOUT_EXTENDED_MS   240000   // 4 minutes when unsynced records exist (background sync)
 
 // Timer 2: Extended deep sleep configuration (backpack mode)
 // When bottle hasn't been stable (UPRIGHT_STABLE) for threshold duration,

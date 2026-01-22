@@ -1512,9 +1512,16 @@ void loop() {
     }
 
     // Check if activity timeout expired (only if sleep enabled)
-    // Plan 034: Simplified - single activity timeout, no extended timeout for unsynced records
+    // Plan 035: Use extended timeout when unsynced records exist to allow iOS background sync
     // BLE data activity resets the timeout via bleCheckDataActivity() above
-    if (g_sleep_timeout_ms > 0 && millis() - wakeTime >= g_sleep_timeout_ms) {
+    uint32_t timeout_ms = g_sleep_timeout_ms;
+#if ENABLE_BLE
+    uint16_t unsynced = storageGetUnsyncedCount();
+    if (unsynced > 0) {
+        timeout_ms = ACTIVITY_TIMEOUT_EXTENDED_MS;
+    }
+#endif
+    if (g_sleep_timeout_ms > 0 && millis() - wakeTime >= timeout_ms) {
         bool sleep_blocked = false;
 
         // Prevent sleep during active calibration
@@ -1552,6 +1559,19 @@ void loop() {
 #if ENABLE_BLE
             bleStopAdvertising();
 #endif
+
+            // Log which timeout was used (Plan 035)
+            Serial.print("Activity timeout expired (");
+            Serial.print(timeout_ms / 1000);
+            Serial.print("s");
+#if ENABLE_BLE
+            if (unsynced > 0) {
+                Serial.print(" - extended due to ");
+                Serial.print(unsynced);
+                Serial.print(" unsynced records");
+            }
+#endif
+            Serial.println(")");
 
             if (adxlReady) {
                 // ADXL343 auto-clears interrupt, but read for diagnostics
