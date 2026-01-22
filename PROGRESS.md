@@ -13,6 +13,11 @@
 
 ## Recently Completed
 
+- ✅ Fix Daily Intake Reset at 4am (Issue #17) - [Plan 031](Plans/031-daily-reset-from-records.md)
+  - Removed redundant cached fields from DailyState struct
+  - Daily totals now computed dynamically from drink records using 4am boundary
+  - Matches iOS app calculation logic for consistency
+  - Removed deprecated SET_DAILY_INTAKE command
 - ✅ Shake-to-Empty Improvements - [Plan 030](Plans/030-shake-to-empty-improvements.md)
   - Fixed extended sleep lockout when shaking to empty
   - Extended sleep timer now resets on user interactions (shake, drink, stable)

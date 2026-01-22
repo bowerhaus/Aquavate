@@ -177,7 +177,7 @@ class CommandCallbacks : public NimBLECharacteristicCallbacks {
 
             bool found = storageMarkDeleted(recordId);
             if (found) {
-                drinksRecalculateTotal();
+                drinksRecalculateTotals();
                 BLE_DEBUG_F("DELETE_DRINK_RECORD: %lu deleted, total recalculated", recordId);
             } else {
                 BLE_DEBUG_F("DELETE_DRINK_RECORD: %lu not found (rolled off)", recordId);
@@ -684,14 +684,14 @@ void bleUpdateBatteryLevel(uint8_t percent) {
 }
 
 // Update Current State (Phase 3B - full implementation)
-void bleUpdateCurrentState(const DailyState& state, int32_t current_adc,
+void bleUpdateCurrentState(uint16_t daily_total_ml, int32_t current_adc,
                            const CalibrationData& cal, uint8_t battery_percent,
                            bool calibrated, bool time_valid, bool stable) {
     // Save previous state for change detection
     BLE_CurrentState previousState = currentState;
 
-    // Update timestamp
-    currentState.timestamp = state.last_drink_timestamp;
+    // Update timestamp (use current time)
+    currentState.timestamp = getCurrentUnixTime();
 
     // Calculate current weight from ADC if calibrated
     if (calibrated && cal.scale_factor != 0.0f) {
@@ -711,7 +711,7 @@ void bleUpdateCurrentState(const DailyState& state, int32_t current_adc,
     }
 
     // Update daily total
-    currentState.daily_total_ml = state.daily_total_ml;
+    currentState.daily_total_ml = daily_total_ml;
 
     // Update battery
     currentState.battery_percent = battery_percent;

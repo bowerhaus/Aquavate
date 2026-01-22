@@ -501,9 +501,8 @@ void forceDisplayRefresh() {
     int32_t current_adc = nau.read();
     float water_ml = calibrationGetWaterWeight(current_adc, g_calibration);
 
-    // Get current daily state
-    DailyState daily_state;
-    drinksGetState(daily_state);
+    // Get current daily total (computed from records)
+    uint16_t daily_total = drinksGetDailyTotal();
 
     // Get current time
     uint8_t time_hour = 0, time_minute = 0;
@@ -523,7 +522,7 @@ void forceDisplayRefresh() {
     battery_pct = getBatteryPercent(voltage);
 
     Serial.println("Forcing display refresh...");
-    displayForceUpdate(water_ml, daily_state.daily_total_ml,
+    displayForceUpdate(water_ml, daily_total,
                       time_hour, time_minute, battery_pct, false);
 #endif
 }
@@ -965,10 +964,11 @@ void loop() {
         wakeTime = millis(); // Reset sleep timer
     }
 
+    // Note: SET_DAILY_TOTAL command deprecated - daily totals computed from records
     uint16_t setDailyValue;
     if (bleCheckSetDailyTotalRequested(setDailyValue)) {
-        Serial.printf("BLE Command: SET_DAILY_TOTAL to %dml\n", setDailyValue);
-        drinksSetDailyIntake(setDailyValue);
+        Serial.printf("BLE Command: SET_DAILY_TOTAL ignored (deprecated) - value was %dml\n", setDailyValue);
+        // This command is no longer supported since daily totals are computed from records
         wakeTime = millis(); // Reset sleep timer
     }
 
@@ -1041,8 +1041,7 @@ void loop() {
         delay(3000);  // Show confirmation for 3 seconds
 
         // Get current values for display update
-        DailyState daily_state;
-        drinksGetState(daily_state);
+        uint16_t daily_total = drinksGetDailyTotal();
 
         uint8_t time_hour = 0, time_minute = 0;
         if (g_time_valid) {
@@ -1057,7 +1056,7 @@ void loop() {
 
         uint8_t battery_pct = getBatteryPercent(getBatteryVoltage());
 
-        displayForceUpdate(current_water_ml, daily_state.daily_total_ml,
+        displayForceUpdate(current_water_ml, daily_total,
                           time_hour, time_minute, battery_pct, false);
 #endif
         // Reset baseline to current level - this prevents drinksUpdate() from detecting a drink
@@ -1148,8 +1147,7 @@ void loop() {
                     if (water_ml > 830) water_ml = 830;
                 }
 
-                DailyState daily_state;
-                drinksGetState(daily_state);
+                uint16_t daily_total = drinksGetDailyTotal();
 
                 uint8_t time_hour = 0, time_minute = 0;
                 if (g_time_valid) {
@@ -1166,7 +1164,7 @@ void loop() {
                 float voltage = getBatteryVoltage();
                 battery_pct = getBatteryPercent(voltage);
 
-                displayForceUpdate(water_ml, daily_state.daily_total_ml,
+                displayForceUpdate(water_ml, daily_total,
                                   time_hour, time_minute, battery_pct, false);
 #endif
                 return;  // Exit early - don't update g_last_cal_state
@@ -1192,8 +1190,7 @@ void loop() {
                     if (water_ml > 830) water_ml = 830;
                 }
 
-                DailyState daily_state;
-                drinksGetState(daily_state);
+                uint16_t daily_total = drinksGetDailyTotal();
 
                 uint8_t time_hour = 0, time_minute = 0;
                 if (g_time_valid) {
@@ -1210,7 +1207,7 @@ void loop() {
                 float voltage = getBatteryVoltage();
                 battery_pct = getBatteryPercent(voltage);
 
-                displayForceUpdate(water_ml, daily_state.daily_total_ml,
+                displayForceUpdate(water_ml, daily_total,
                                   time_hour, time_minute, battery_pct, false);
 #endif
                 return;  // Exit early
@@ -1242,8 +1239,7 @@ void loop() {
                     if (water_ml > 830) water_ml = 830;
                 }
 
-                DailyState daily_state;
-                drinksGetState(daily_state);
+                uint16_t daily_total = drinksGetDailyTotal();
 
                 uint8_t time_hour = 0, time_minute = 0;
                 if (g_time_valid) {
@@ -1260,7 +1256,7 @@ void loop() {
                 float voltage = getBatteryVoltage();
                 battery_pct = getBatteryPercent(voltage);
 
-                displayForceUpdate(water_ml, daily_state.daily_total_ml,
+                displayForceUpdate(water_ml, daily_total,
                                   time_hour, time_minute, battery_pct, false);
 #endif
                 }
@@ -1345,9 +1341,8 @@ void loop() {
                 bool time_interval_elapsed = (millis() - last_time_check >= DISPLAY_TIME_UPDATE_INTERVAL_MS);
                 bool battery_interval_elapsed = (millis() - last_battery_check >= DISPLAY_BATTERY_UPDATE_INTERVAL_MS);
 
-                // Get current daily total
-                DailyState daily_state;
-                drinksGetState(daily_state);
+                // Get current daily total (computed from records)
+                uint16_t daily_total = drinksGetDailyTotal();
 
                 // Get current time
                 uint8_t time_hour = 0, time_minute = 0;
@@ -1377,7 +1372,7 @@ void loop() {
                 // OR if we need to clear Zzzz indicator after extended sleep
                 // OR if BLE command requested a forced refresh
                 if (g_force_display_clear_sleep || ble_force_refresh ||
-                    displayNeedsUpdate(display_water_ml, daily_state.daily_total_ml,
+                    displayNeedsUpdate(display_water_ml, daily_total,
                                       time_interval_elapsed, battery_interval_elapsed)) {
 
                     if (g_force_display_clear_sleep) {
@@ -1388,7 +1383,7 @@ void loop() {
                         Serial.println("BLE: Forced display refresh");
                     }
 
-                    displayUpdate(display_water_ml, daily_state.daily_total_ml,
+                    displayUpdate(display_water_ml, daily_total,
                                  time_hour, time_minute, battery_pct, false);
 
                     // Reset interval timers if they triggered the update
@@ -1398,7 +1393,7 @@ void loop() {
 
                 // Update BLE Current State (send notifications if connected - conditional)
 #if ENABLE_BLE
-                bleUpdateCurrentState(daily_state, current_adc, g_calibration,
+                bleUpdateCurrentState(daily_total, current_adc, g_calibration,
                                     battery_pct, g_calibrated, g_time_valid,
                                     gesture == GESTURE_UPRIGHT_STABLE);
 
