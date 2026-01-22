@@ -7,11 +7,31 @@
 //
 
 import SwiftUI
+import CoreData
 
 struct DebugView: View {
     @EnvironmentObject var bleManager: BLEManager
+    @Environment(\.managedObjectContext) private var viewContext
     @State private var logEntries: [LogEntry] = []
     @State private var showClearConfirmation = false
+
+    // Fetch all drink records for stats display
+    @FetchRequest(
+        sortDescriptors: [NSSortDescriptor(keyPath: \CDDrinkRecord.timestamp, ascending: false)],
+        animation: .default
+    )
+    private var allRecordsCD: FetchedResults<CDDrinkRecord>
+
+    // Computed: today's records using 4am boundary
+    private var todaysRecordsCD: [CDDrinkRecord] {
+        let todayStart = Calendar.current.startOfAquavateDay(for: Date())
+        return allRecordsCD.filter { ($0.timestamp ?? .distantPast) >= todayStart }
+    }
+
+    // Computed: today's total ml
+    private var todaysTotalMl: Int {
+        todaysRecordsCD.reduce(0) { $0 + Int($1.amountMl) }
+    }
 
     struct LogEntry: Identifiable {
         let id = UUID()
@@ -149,21 +169,17 @@ struct DebugView: View {
                     .disabled(!bleManager.connectionState.isConnected)
                 }
 
-                // CoreData Stats
+                // CoreData Stats (using @FetchRequest to avoid memory churn)
                 Section("CoreData") {
-                    let todaysRecords = PersistenceController.shared.getTodaysDrinkRecords()
-                    let todaysTotal = PersistenceController.shared.getTodaysTotalMl()
-                    let allRecords = PersistenceController.shared.getAllDrinkRecords()
-
-                    LabeledContent("Today's Records", value: "\(todaysRecords.count)")
-                    LabeledContent("Today's Total", value: "\(todaysTotal) ml")
-                    LabeledContent("All Records", value: "\(allRecords.count)")
+                    LabeledContent("Today's Records", value: "\(todaysRecordsCD.count)")
+                    LabeledContent("Today's Total", value: "\(todaysTotalMl) ml")
+                    LabeledContent("All Records", value: "\(allRecordsCD.count)")
 
                     // Show recent record timestamps for debugging
-                    if !allRecords.isEmpty {
+                    if !allRecordsCD.isEmpty {
                         Divider()
                         Text("Recent Records:").font(.caption).foregroundStyle(.secondary)
-                        ForEach(allRecords.prefix(5), id: \.objectID) { record in
+                        ForEach(allRecordsCD.prefix(5), id: \.objectID) { record in
                             let ts = record.timestamp ?? Date.distantPast
                             let amount = record.amountMl
                             HStack {
@@ -221,14 +237,6 @@ struct DebugView: View {
                 Button("Cancel", role: .cancel) {}
             } message: {
                 Text("This will delete all drink records on the device. This cannot be undone.")
-            }
-            .onReceive(bleManager.$connectionState) { state in
-                addLog("Connection: \(state.rawValue)", type: state.isConnected ? .success : .info)
-            }
-            .onReceive(bleManager.$syncState) { state in
-                if state != .idle {
-                    addLog("Sync: \(state.rawValue)", type: state == .complete ? .success : .info)
-                }
             }
         }
     }

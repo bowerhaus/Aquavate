@@ -1,13 +1,32 @@
 # Aquavate - Active Development Progress
 
 **Last Updated:** 2026-01-22
-**Current Branch:** `master`
+**Current Branch:** `ios-memory-exhaustion-fix`
 
 ---
 
 ## Current Task
 
-None - ready for next task.
+**Fix iOS App Memory Exhaustion** - [Plan 036](Plans/036-ios-memory-exhaustion-fix.md) - GitHub Issue #28
+
+iOS app is being killed after ~31 minutes due to memory exhaustion. Fix memory leaks in DebugView, optimize CoreData fetches, cache DateFormatters, and add Task cancellation.
+
+### Progress
+
+- [x] Plan approved and copied to Plans/036-ios-memory-exhaustion-fix.md
+- [x] Created branch `ios-memory-exhaustion-fix` from master
+- [x] Fix DebugView `.onReceive` publishers (removed - causing continuous re-rendering)
+- [x] Convert DebugView CoreData queries to @FetchRequest (using managed FetchRequest)
+- [x] Cache DateFormatters in HistoryView/DayCard (static properties)
+- [x] Add Task cancellation to BLEManager reconnection logic (delayedReconnectTask property)
+- [x] Build verified - compiles successfully
+- [ ] Test on device and verify app survives >31 minutes runtime
+
+### Files to Modify
+
+- `ios/Aquavate/Aquavate/Views/DebugView.swift` - Remove `.onReceive`, use @FetchRequest
+- `ios/Aquavate/Aquavate/Views/HistoryView.swift` - Cache DateFormatters
+- `ios/Aquavate/Aquavate/Services/BLEManager.swift` - Task cancellation
 
 ---
 

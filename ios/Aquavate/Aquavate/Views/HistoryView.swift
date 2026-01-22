@@ -216,10 +216,15 @@ struct HistoryView: View {
         }
     }
 
-    private func formattedDate(_ date: Date) -> String {
+    // Static DateFormatter to avoid recreation on every call
+    private static let mediumDateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
-        return formatter.string(from: date)
+        return formatter
+    }()
+
+    private func formattedDate(_ date: Date) -> String {
+        Self.mediumDateFormatter.string(from: date)
     }
 }
 
@@ -228,16 +233,25 @@ struct DayCard: View {
     let totalMl: Int
     let isSelected: Bool
 
-    private var dayName: String {
+    // Static DateFormatters to avoid recreation on every render
+    private static let dayNameFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "EEE"
-        return formatter.string(from: date)
+        return formatter
+    }()
+
+    private static let dayNumberFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "d"
+        return formatter
+    }()
+
+    private var dayName: String {
+        Self.dayNameFormatter.string(from: date)
     }
 
     private var dayNumber: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "d"
-        return formatter.string(from: date)
+        Self.dayNumberFormatter.string(from: date)
     }
 
     private var isToday: Bool {

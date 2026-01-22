@@ -192,6 +192,9 @@ class BLEManager: NSObject, ObservableObject {
     /// Reference to HealthKitManager for syncing drinks (set by AquavateApp)
     weak var healthKitManager: HealthKitManager?
 
+    /// Task for delayed operations (reconnection, etc.) - tracked for cancellation
+    private var delayedReconnectTask: Task<Void, Never>?
+
     // MARK: - Initialization
 
     override init() {
@@ -261,6 +264,10 @@ class BLEManager: NSObject, ObservableObject {
     /// Connect to a specific peripheral
     func connect(to peripheral: CBPeripheral) {
         stopScanning()
+
+        // Cancel any delayed reconnect task since we're manually connecting
+        delayedReconnectTask?.cancel()
+        delayedReconnectTask = nil
 
         logger.info("Connecting to peripheral: \(peripheral.name ?? "Unknown")")
         connectionState = .connecting
@@ -374,9 +381,13 @@ class BLEManager: NSObject, ObservableObject {
             return
         }
 
+        // Cancel any existing delayed reconnect task
+        delayedReconnectTask?.cancel()
+
         // Small delay to let Bluetooth stabilize after app activation
-        Task {
+        delayedReconnectTask = Task {
             try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s
+            guard !Task.isCancelled else { return }
             await MainActor.run {
                 self.performForegroundScanBurst()
             }
@@ -387,6 +398,10 @@ class BLEManager: NSObject, ObservableObject {
     /// Disconnect after a short delay to allow bottle to sleep
     func appDidEnterBackground() {
         logger.info("App entered background")
+
+        // Cancel any pending delayed reconnect task
+        delayedReconnectTask?.cancel()
+        delayedReconnectTask = nil
 
         // Cancel any pending auto-reconnect attempts
         foregroundScanTimer?.invalidate()
@@ -700,8 +715,11 @@ extension BLEManager: CBCentralManagerDelegate {
             // Delay slightly to allow bottle to restart advertising
             if wasConnected && error != nil && autoReconnectEnabled {
                 logger.info("Scheduling reconnect attempt in \(self.scanAfterDisconnectDelay)s")
-                Task {
+                // Cancel any existing delayed reconnect task
+                delayedReconnectTask?.cancel()
+                delayedReconnectTask = Task {
                     try? await Task.sleep(nanoseconds: UInt64(scanAfterDisconnectDelay * 1_000_000_000))
+                    guard !Task.isCancelled else { return }
                     await MainActor.run {
                         self.performForegroundScanBurst()
                     }
