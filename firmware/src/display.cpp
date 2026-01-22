@@ -30,6 +30,9 @@ extern int getBatteryPercent(float voltage);
 static DisplayState g_display_state;
 static ThinkInk_213_Mono_GDEY0213B74* g_display_ptr = nullptr;
 
+// Daily goal for hydration graphic (synced from BLE config, default matches DRINK_DAILY_GOAL_ML)
+static uint16_t g_daily_goal_ml = DRINK_DAILY_GOAL_ML;
+
 // RTC memory for display state persistence across deep sleep
 // RTC_DATA_ATTR keeps data in RTC slow memory (survives deep sleep, lost on power cycle)
 #define RTC_MAGIC_DISPLAY 0x41515541  // "AQUA" in hex
@@ -507,6 +510,11 @@ void displayInit(ThinkInk_213_Mono_GDEY0213B74& display_ref) {
     Serial.println("Display: Initialized state tracking");
 }
 
+void displaySetDailyGoal(uint16_t goal_ml) {
+    g_daily_goal_ml = goal_ml;
+    Serial.printf("Display: Daily goal set to %dml\n", goal_ml);
+}
+
 bool displayNeedsUpdate(float current_water_ml,
                        uint16_t current_daily_ml,
                        bool time_interval_elapsed,
@@ -731,9 +739,9 @@ void drawMainScreen() {
     float daily_fill = 0.0f;
     bool goal_reached = false;
     if (g_time_valid) {
-        daily_fill = (float)g_display_state.daily_total_ml / (float)DRINK_DAILY_GOAL_ML;
+        daily_fill = (float)g_display_state.daily_total_ml / (float)g_daily_goal_ml;
         if (daily_fill > 1.0f) daily_fill = 1.0f;
-        goal_reached = (g_display_state.daily_total_ml >= DRINK_DAILY_GOAL_ML);
+        goal_reached = (g_display_state.daily_total_ml >= g_daily_goal_ml);
     }
 
     // Use runtime display mode instead of compile-time constant (shifted down 3px)

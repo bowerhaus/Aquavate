@@ -13,6 +13,11 @@
 
 ## Recently Completed
 
+- ✅ Fix Hydration Graphic Update on Deletion (Issue #20) - [Plan 032](Plans/032-hydration-graphic-update-fix.md)
+  - iOS: Added `@MainActor` to Task in BLE deletion completion handler (HomeView.swift)
+  - Firmware: Synced daily goal between display and BLE config (now uses DRINK_DAILY_GOAL_ML=2500)
+  - Added `displaySetDailyGoal()` function for runtime configuration
+  - Fixed bottleConfig defaults to prevent divide-by-zero
 - ✅ Fix Daily Intake Reset at 4am (Issue #17) - [Plan 031](Plans/031-daily-reset-from-records.md)
   - Removed redundant cached fields from DailyState struct
   - Daily totals now computed dynamically from drink records using 4am boundary
@@ -42,7 +47,7 @@
 
 ## Branch Status
 
-- `master` - Stable baseline (HealthKit integration merged)
+- `master` - Stable baseline
 
 ---
 
