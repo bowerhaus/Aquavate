@@ -683,7 +683,7 @@ void setup() {
         // Sync ESP32 RTC from DS3231 on every boot/wake
         DateTime now = rtc.now();
         struct timeval tv = {
-            .tv_sec = now.unixtime(),
+            .tv_sec = static_cast<time_t>(now.unixtime()),
             .tv_usec = 0
         };
         settimeofday(&tv, NULL);
