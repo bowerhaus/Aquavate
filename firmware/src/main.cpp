@@ -918,6 +918,9 @@ void setup() {
     if (bleInit()) {
         Serial.println("BLE service initialized!");
 
+        // Sync daily goal from BLE config to display
+        displaySetDailyGoal(bleGetDailyGoalMl());
+
         // Start advertising on motion wake (not timer wake)
         if (wakeup_reason == ESP_SLEEP_WAKEUP_EXT0) {
             Serial.println("Motion wake detected - starting BLE advertising");

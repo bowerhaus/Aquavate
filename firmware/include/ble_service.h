@@ -52,7 +52,7 @@ struct __attribute__((packed)) BLE_BottleConfig {
     float    scale_factor;        // ADC counts per gram
     int32_t  tare_weight_grams;   // Empty bottle weight
     uint16_t bottle_capacity_ml;  // Max capacity (default 830ml)
-    uint16_t daily_goal_ml;       // User's daily target (default 2000ml)
+    uint16_t daily_goal_ml;       // User's daily target (default DRINK_DAILY_GOAL_ML)
 };
 
 // Sync Control Characteristic (8 bytes)
@@ -174,6 +174,12 @@ bool bleCheckResetDailyRequested();
 bool bleCheckClearHistoryRequested();
 bool bleCheckSetDailyTotalRequested(uint16_t& value);
 bool bleCheckForceDisplayRefresh();
+
+/**
+ * Get daily hydration goal from bottle config
+ * @return Daily goal in ml (default 2500)
+ */
+uint16_t bleGetDailyGoalMl();
 
 #endif // ENABLE_BLE
 

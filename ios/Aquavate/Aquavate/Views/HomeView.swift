@@ -95,7 +95,7 @@ struct HomeView: View {
                         bleManager.deleteDrinkRecord(firmwareRecordId: UInt32(firmwareId)) { success in
                             if success {
                                 // Delete from HealthKit first (if synced)
-                                Task {
+                                Task { @MainActor in
                                     if let hkUUID = healthKitUUID,
                                        self.healthKitManager.isEnabled && self.healthKitManager.isAuthorized {
                                         do {
