@@ -1,7 +1,7 @@
 # Aquavate - Active Development Progress
 
-**Last Updated:** 2026-01-21
-**Current Branch:** `healthkit-integration`
+**Last Updated:** 2026-01-22
+**Current Branch:** `master`
 
 ---
 
@@ -12,16 +12,6 @@
 ---
 
 ## Recently Completed
-
-- ✅ HealthKit Water Intake Integration (Issue #10) - [Plan 029](Plans/029-healthkit-integration.md)
-  - Created `HealthKitManager` service with authorization, write, and delete methods
-  - Added `healthKitSampleUUID` field to CoreData schema
-  - Drinks auto-sync to Apple Health after bottle sync
-  - Deleting drinks removes corresponding HealthKit samples
-  - Settings toggle for enabling/disabling HealthKit sync
-  - Info.plist usage descriptions added
-  - **Note:** HealthKit capability must be added manually in Xcode (Signing & Capabilities)
-  - **Note:** Uses 4am day boundary (differs from HealthKit's midnight) - documented in PRD
 
 - ✅ Shake-to-Empty Improvements - [Plan 030](Plans/030-shake-to-empty-improvements.md)
   - Fixed extended sleep lockout when shaking to empty
@@ -47,9 +37,7 @@
 
 ## Branch Status
 
-- `healthkit-integration` - **ACTIVE**: Ready for next task
-- `swipe-to-delete-drinks` - Ready to merge
-- `master` - Stable baseline
+- `master` - Stable baseline (HealthKit integration merged)
 
 ---
 
