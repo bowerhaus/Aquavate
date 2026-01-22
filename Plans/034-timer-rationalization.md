@@ -1,9 +1,9 @@
 # Plan 034: Timer & Sleep Behavior Rationalization
 
-**Status:** Implemented
-**Branch:** `ble-auto-reconnection`
+**Status:** ✅ Complete
+**Branch:** `timer-rationalization`
 **Created:** 2026-01-22
-**Implemented:** 2026-01-22
+**Completed:** 2026-01-22
 **Related:** [Plan 028 - BLE Auto-Reconnection](028-ble-auto-reconnection.md)
 
 ---

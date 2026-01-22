@@ -1,79 +1,25 @@
 # Aquavate - Active Development Progress
 
 **Last Updated:** 2026-01-22
-**Current Branch:** `ble-auto-reconnection`
+**Current Branch:** `timer-rationalization`
 
 ---
 
 ## Current Task
 
-**Timer & Sleep Rationalization** - [Plan 034](Plans/034-timer-rationalization.md)
-
-Simplifying the firmware timer architecture from 6 confusing timers to 2 clear concepts. This arose from debugging [Plan 028 (BLE Auto-Reconnection)](Plans/028-ble-auto-reconnection.md).
-
-### Status: Implementation Complete - Ready for Testing
-
-### Problem (Solved)
-
-The firmware had too many overlapping timers with different reset conditions. This has been simplified to a two-timer model.
-
-### Solution: Two-Timer Model (Implemented)
-
-**Timer 1: Activity Timeout (`wakeTime` - 30s)**
-- Resets on: gesture change, BLE data activity (sync, commands)
-- Does NOT reset on: BLE connect/disconnect alone
-- When expires: stop advertising, enter normal sleep (motion wake)
-
-**Timer 2: Time Since Stable (`g_time_since_stable_start` - 3 min)**
-- Resets when: bottle becomes UPRIGHT_STABLE (also on shake/drink as user interaction)
-- Does NOT reset on: BLE connect/disconnect alone
-- When expires: extended sleep (timer wake 60s) - "backpack mode"
-
-### Implementation Complete
-
-- [x] **Step 1**: Remove BLE advertising timeout - advertising stops at sleep
-- [x] **Step 2**: Implement activity timeout with BLE activity reset
-- [x] **Step 3**: Rename `g_continuous_awake_start` → `g_time_since_stable_start`, change threshold 5min → 3min
-- [x] **Step 4**: Remove `AWAKE_DURATION_EXTENDED_MS` and unsynced-record conditional
-- [x] **Step 5**: Update config.h with clear comments
-- [x] **Step 6**: Remove "Sleep blocked - BLE connected" logic for activity timeout
-- [x] **Step 7**: Audit all timer reset points
-- [x] **Step 8**: Remove "Extended sleep blocked - BLE connected" logic (same issue as Step 6)
-
-### Timer Reset Audit (2026-01-22)
-
-**`wakeTime` resets - all appropriate:**
-- Gesture change (main.cpp:1304) ✅
-- BLE data activity via `bleCheckDataActivity()` (main.cpp:964) ✅
-- BLE commands: RESET_DAILY, CLEAR_HISTORY, SET_DAILY_TOTAL, TARE_NOW ✅
-- Calibration activity (lines 1153, 1245, 1532) ✅
-- Setup initialization (main.cpp:541) ✅
-
-**`g_time_since_stable_start` resets - fixed:**
-- UPRIGHT_STABLE gesture (main.cpp:1490) ✅
-- Shake gesture - user interaction (main.cpp:1042) ✅
-- Drink recorded - user interaction (main.cpp:1351) ✅
-- Wake/power-on initialization (lines 579, 582, 841) ✅
-- ~~BLE connected (main.cpp:1504)~~ ❌ **REMOVED** - same bug as activity timeout
-
-**Fix applied:** Removed `bleIsConnected()` check that was blocking extended sleep and resetting `g_time_since_stable_start`. Extended sleep now triggers regardless of BLE connection status, consistent with activity timeout behavior.
-
-### Files Modified
-- `firmware/src/config.h` - Two-timer model documentation, renamed constants
-- `firmware/src/main.cpp` - Simplified sleep logic, removed BLE-connected sleep block
-- `firmware/src/ble_service.cpp` - Removed advertising timeout, added `bleCheckDataActivity()`
-- `firmware/include/ble_service.h` - Removed timeout constants, added activity check function
-- `firmware/src/serial_commands.cpp` - Updated variable references for STATUS command
-
-### Build Status
-Firmware: **SUCCESS** (2026-01-22)
-- RAM: 11.6% (37920/327680 bytes)
-- Flash: 54.3% (712361/1310720 bytes)
+None - ready for next task.
 
 ---
 
 ## Recently Completed
 
+- ✅ Timer & Sleep Rationalization - [Plan 034](Plans/034-timer-rationalization.md)
+  - Simplified firmware from 6 timers to 2-timer model
+  - Timer 1: Activity timeout (30s) - resets on gesture change or BLE data activity
+  - Timer 2: Time since stable (3 min) - resets on UPRIGHT_STABLE, triggers extended sleep
+  - Removed BLE connection blocking sleep (connection alone is not activity)
+  - Added PING command for keep-alive during app refresh
+  - Added pull-down refresh to HistoryView
 - ✅ HealthKit Water Intake Integration - [Plan 029](Plans/029-healthkit-integration.md)
 - ✅ Settings Page Cleanup (Issue #22) - [Plan 033](Plans/033-settings-page-cleanup.md)
   - Replaced hardcoded `Bottle.sample` with live BLEManager properties
