@@ -1034,8 +1034,17 @@ void loop() {
     GestureType gesture = sensors.gesture;
 
     // Handle shake-while-inverted gesture (shake to empty)
+    // Can be disabled via iOS app settings (Issue #32)
     if (gesture == GESTURE_SHAKE_WHILE_INVERTED) {
-        if (!g_cancel_drink_pending) {
+#if ENABLE_BLE
+        bool shake_enabled = bleGetShakeToEmptyEnabled();
+#else
+        bool shake_enabled = true;  // Always enabled when BLE disabled
+#endif
+        if (!shake_enabled) {
+            // Shake-to-empty disabled via iOS app - ignore gesture
+            // (logged once when gesture first detected via gestures.cpp)
+        } else if (!g_cancel_drink_pending) {
             g_cancel_drink_pending = true;
             Serial.println("Main: Shake gesture detected - bottle emptied pending");
             // Reset extended sleep timer - shake is unambiguous user interaction

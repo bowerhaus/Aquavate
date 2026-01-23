@@ -34,6 +34,7 @@ static NimBLECharacteristic* pBottleConfigChar = nullptr;
 static NimBLECharacteristic* pSyncControlChar = nullptr;
 static NimBLECharacteristic* pDrinkDataChar = nullptr;
 static NimBLECharacteristic* pCommandChar = nullptr;
+static NimBLECharacteristic* pDeviceSettingsChar = nullptr;
 
 // Connection state
 static bool isConnected = false;
@@ -50,6 +51,13 @@ static BLE_BottleConfig bottleConfig = {
     .tare_weight_grams = 0,
     .bottle_capacity_ml = 830,
     .daily_goal_ml = DRINK_DAILY_GOAL_ML
+};
+
+// Device settings cache (loaded from NVS on init)
+static BLE_DeviceSettings deviceSettings = {
+    .flags = DEVICE_SETTINGS_FLAG_SHAKE_EMPTY_ENABLED,  // Default: enabled
+    .reserved1 = 0,
+    .reserved2 = 0
 };
 
 // Sync Control state
@@ -375,6 +383,40 @@ class SyncControlCallbacks : public NimBLECharacteristicCallbacks {
     }
 };
 
+// Device Settings characteristic callbacks
+class DeviceSettingsCallbacks : public NimBLECharacteristicCallbacks {
+    void onRead(NimBLECharacteristic* pCharacteristic) {
+        BLE_DEBUG("Device Settings read");
+        // Load from NVS to ensure fresh data
+        bool shakeEnabled = storageLoadShakeToEmptyEnabled();
+        deviceSettings.flags = shakeEnabled ? DEVICE_SETTINGS_FLAG_SHAKE_EMPTY_ENABLED : 0;
+        pCharacteristic->setValue((uint8_t*)&deviceSettings, sizeof(deviceSettings));
+    }
+
+    void onWrite(NimBLECharacteristic* pCharacteristic) {
+        BLE_DEBUG("Device Settings write");
+        g_ble_data_activity = true;  // Signal activity for timeout reset
+
+        // Get written data
+        std::string value = pCharacteristic->getValue();
+        if (value.length() == sizeof(BLE_DeviceSettings)) {
+            memcpy(&deviceSettings, value.data(), sizeof(BLE_DeviceSettings));
+
+            // Extract shake-to-empty setting
+            bool shakeEnabled = (deviceSettings.flags & DEVICE_SETTINGS_FLAG_SHAKE_EMPTY_ENABLED) != 0;
+
+            BLE_DEBUG_F("Device Settings updated: shake_to_empty=%s",
+                       shakeEnabled ? "enabled" : "disabled");
+
+            // Save to NVS
+            storageSaveShakeToEmptyEnabled(shakeEnabled);
+        } else {
+            BLE_DEBUG_F("Invalid device settings size: %d bytes (expected %d)",
+                       value.length(), sizeof(BLE_DeviceSettings));
+        }
+    }
+};
+
 // Server callbacks
 class AquavateServerCallbacks : public NimBLEServerCallbacks {
     void onConnect(NimBLEServer* pServer) {
@@ -628,8 +670,20 @@ bool bleInit() {
     static const uint8_t emptyChunk[6] = {0, 0, 0, 0, 0, 0}; // chunk_index=0, total_chunks=0, record_count=0, reserved=0
     pDrinkDataChar->setValue(emptyChunk, sizeof(emptyChunk));
 
+    // Device Settings characteristic (Issue #32 - shake-to-empty toggle)
+    pDeviceSettingsChar = pAquavateService->createCharacteristic(
+        AQUAVATE_DEVICE_SETTINGS_UUID,
+        NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE
+    );
+    pDeviceSettingsChar->setCallbacks(new DeviceSettingsCallbacks());
+    // Load initial settings from NVS
+    bool shakeEnabled = storageLoadShakeToEmptyEnabled();
+    deviceSettings.flags = shakeEnabled ? DEVICE_SETTINGS_FLAG_SHAKE_EMPTY_ENABLED : 0;
+    pDeviceSettingsChar->setValue((uint8_t*)&deviceSettings, sizeof(deviceSettings));
+    BLE_DEBUG_F("Device Settings initialized: shake_to_empty=%s", shakeEnabled ? "enabled" : "disabled");
+
     pAquavateService->start();
-    BLE_DEBUG("Aquavate Service started (Current State + Config + Commands + Sync)");
+    BLE_DEBUG("Aquavate Service started (Current State + Config + Commands + Sync + Settings)");
 
     // Setup advertising
     pAdvertising = NimBLEDevice::getAdvertising();
@@ -834,6 +888,11 @@ bool bleCheckDataActivity() {
         return true;
     }
     return false;
+}
+
+// Check if shake-to-empty gesture is enabled
+bool bleGetShakeToEmptyEnabled() {
+    return (deviceSettings.flags & DEVICE_SETTINGS_FLAG_SHAKE_EMPTY_ENABLED) != 0;
 }
 
 #endif // ENABLE_BLE
