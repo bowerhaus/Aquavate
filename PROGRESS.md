@@ -41,6 +41,33 @@ Migrated from time-based urgency to pace-based urgency model:
 - [x] 6.4 Initial sync on app launch (previously implemented)
 - [x] 6.5 Periodic Watch sync (every 60s) - timer now calls `updateUrgency()` + `syncStateToWatch()`
 
+#### Phase 7: Background Notifications - IMPLEMENTED ✅
+Added BGAppRefreshTask support for background notification delivery:
+
+- [x] 7.1 Register background task in `AquavateApp.init()`
+- [x] 7.2 Schedule task when app enters background
+- [x] 7.3 Handle task: check deficit, send notification if behind pace
+- [x] 7.4 Add `fetch` background mode and task identifier to Info.plist
+
+**How it works:**
+- When app backgrounds, schedules BGAppRefreshTask for ~15 minutes
+- iOS controls actual timing (may be 15 min to hours depending on usage)
+- Task wakes app briefly, calculates deficit from CoreData, sends notification if needed
+- Reschedules next check before completing
+
+#### Phase 8: Goal Reached Notification - IMPLEMENTED ✅
+Added celebration notification when daily goal is achieved:
+
+- [x] 8.1 Add `scheduleGoalReachedNotification()` to NotificationManager
+- [x] 8.2 Add `goalNotificationSentToday` flag to HydrationReminderService (persisted to UserDefaults)
+- [x] 8.3 Call notification from `goalAchieved()` (only once per day)
+- [x] 8.4 Reset flag in `dailyReset()`
+- [x] 8.5 Add goal reached check to background task handler
+
+**Notification:**
+- Title: "Goal Reached! 💧"
+- Body: "Good job! You've hit your daily hydration goal."
+
 #### Testing Status
 - [x] Test pace tracking - amber urgency showing correctly
 - [x] Test "Xml to catch up" display on Watch - working
@@ -51,8 +78,9 @@ Migrated from time-based urgency to pace-based urgency model:
 - [ ] Test quiet hours
 - [ ] Test max 8 reminders
 - [ ] Test Watch complication color changes
+- [ ] Test background notifications (may need to wait for iOS to schedule)
 
-### Current Status: Phase 6 Implemented and Partially Tested
+### Current Status: Phase 8 (Goal Reached Notification) Implemented
 
 **Pace-Based Model Working:**
 - Urgency based on deficit from expected pace (not time since last drink)
@@ -85,6 +113,12 @@ Migrated from time-based urgency to pace-based urgency model:
 - `ios/Aquavate/Aquavate/Services/NotificationManager.swift` - updated `scheduleHydrationReminder()` to use deficit instead of minutes
 - `ios/Aquavate/AquavateWatch Watch App/AquavateWatch/ContentView.swift` - status text display, removed time since last drink
 - `ios/Aquavate/AquavateWatch Watch App/AquavateWatch/WatchSessionManager.swift` - check existing context on activation
+- `ios/Aquavate/Aquavate/AquavateApp.swift` - BGAppRefreshTask for background notifications:
+  - Import BackgroundTasks framework
+  - Register background task on init
+  - Schedule hydration check when app enters background
+  - Handle task: calculate deficit, send notification if behind pace
+- `ios/Aquavate/Info.plist` - added `fetch` background mode and `BGTaskSchedulerPermittedIdentifiers`
 
 **Note:** There are duplicate Watch files in two locations. The **actual running code** is in:
 - `ios/Aquavate/AquavateWatch Watch App/AquavateWatch/` (this is what runs on device)

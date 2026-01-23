@@ -192,6 +192,35 @@ class NotificationManager: ObservableObject {
         }
     }
 
+    /// Schedule a goal reached celebration notification
+    func scheduleGoalReachedNotification() {
+        guard isEnabled && isAuthorized else {
+            print("[Notifications] Cannot schedule goal notification - enabled: \(isEnabled), authorized: \(isAuthorized)")
+            return
+        }
+
+        let content = UNMutableNotificationContent()
+        content.title = "Goal Reached! 💧"
+        content.body = "Good job! You've hit your daily hydration goal."
+        content.sound = .default
+
+        // Schedule immediately
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
+        let request = UNNotificationRequest(
+            identifier: "hydration-goal-reached",
+            content: content,
+            trigger: trigger
+        )
+
+        notificationCenter.add(request) { error in
+            if let error = error {
+                print("[Notifications] Failed to schedule goal notification: \(error.localizedDescription)")
+            } else {
+                print("[Notifications] Scheduled goal reached notification")
+            }
+        }
+    }
+
     /// Cancel all pending hydration reminder notifications
     func cancelAllPendingReminders() {
         Task {

@@ -29,6 +29,11 @@ class HydrationReminderService: ObservableObject {
     @Published private(set) var dailyTotalMl: Int = 0
     @Published private(set) var dailyGoalMl: Int = 2500
     @Published private(set) var deficitMl: Int = 0
+    @Published private(set) var goalNotificationSentToday: Bool = false {
+        didSet {
+            UserDefaults.standard.set(goalNotificationSentToday, forKey: "goalNotificationSentToday")
+        }
+    }
 
     #if DEBUG
     @Published var testModeEnabled: Bool = false {
@@ -53,6 +58,7 @@ class HydrationReminderService: ObservableObject {
         #if DEBUG
         self.testModeEnabled = UserDefaults.standard.bool(forKey: "hydrationTestModeEnabled")
         #endif
+        self.goalNotificationSentToday = UserDefaults.standard.bool(forKey: "goalNotificationSentToday")
         startPeriodicEvaluation()
     }
 
@@ -134,7 +140,15 @@ class HydrationReminderService: ObservableObject {
     func goalAchieved() {
         lastNotifiedUrgency = nil
         notificationManager?.cancelAllPendingReminders()
-        print("[HydrationReminder] Goal achieved - reminders cancelled")
+
+        // Only send goal notification once per day
+        if !goalNotificationSentToday {
+            notificationManager?.scheduleGoalReachedNotification()
+            goalNotificationSentToday = true
+            print("[HydrationReminder] Goal achieved - reminders cancelled, celebration sent")
+        } else {
+            print("[HydrationReminder] Goal achieved - reminders cancelled (notification already sent)")
+        }
     }
 
     /// Called at 4am daily reset
@@ -142,6 +156,7 @@ class HydrationReminderService: ObservableObject {
         lastNotifiedUrgency = nil
         dailyTotalMl = 0
         currentUrgency = .onTrack
+        goalNotificationSentToday = false
         notificationManager?.resetReminderCount()
         print("[HydrationReminder] Daily reset")
     }

@@ -9,6 +9,11 @@
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>bluetooth-central</string>
+		<string>fetch</string>
+	</array>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.bowerhaus.Aquavate.hydrationCheck</string>
 	</array>
 	<key>WKCompanionAppBundleIdentifier</key>
 	<string>com.bowerhaus.Aquavate.watchkitapp</string>
