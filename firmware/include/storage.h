@@ -77,4 +77,10 @@ bool storageSaveExtendedSleepThreshold(uint32_t seconds);
 // Load extended sleep threshold from NVS in seconds (default: 120 seconds)
 uint32_t storageLoadExtendedSleepThreshold();
 
+// Save shake-to-empty enabled setting to NVS
+bool storageSaveShakeToEmptyEnabled(bool enabled);
+
+// Load shake-to-empty enabled setting from NVS (default: true = enabled)
+bool storageLoadShakeToEmptyEnabled();
+
 #endif // STORAGE_H

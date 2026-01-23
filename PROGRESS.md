@@ -1,13 +1,50 @@
 # Aquavate - Active Development Progress
 
 **Last Updated:** 2026-01-22
-**Current Branch:** `master`
+**Current Branch:** `shake-to-empty-toggle`
 
 ---
 
 ## Current Task
 
-None - ready for next task.
+**Shake-to-Empty Toggle Setting (Issue #32)** - [Plan 036](Plans/036-shake-to-empty-toggle.md)
+
+Add a toggle in iOS Settings to enable/disable the shake-to-empty gesture. The setting syncs to firmware via BLE and persists in NVS.
+
+### Progress
+
+- [x] Plan created and approved
+- [x] Branch created: `shake-to-empty-toggle` (from `watch-hydration-reminders`)
+- [x] **Task 1: Firmware Storage** - Add NVS functions for shake_empty_en setting
+  - Added `storageSaveShakeToEmptyEnabled()` and `storageLoadShakeToEmptyEnabled()` to storage.h/cpp
+  - NVS key: `shake_empty_en`, default: true (enabled)
+- [x] **Task 2: Firmware BLE Service** - Add Device Settings characteristic
+  - Added UUID `AQUAVATE_DEVICE_SETTINGS_UUID` (0006)
+  - Added `BLE_DeviceSettings` struct with flags field
+  - Added `DeviceSettingsCallbacks` class with onRead/onWrite
+  - Added `bleGetShakeToEmptyEnabled()` public function
+- [x] **Task 3: Firmware Main Loop** - Check setting before acting on shake gesture
+  - Modified main.cpp ~line 1037 to check `bleGetShakeToEmptyEnabled()` before setting `g_cancel_drink_pending`
+- [x] **Task 4: iOS BLE Constants** - Add deviceSettingsUUID
+  - Added `deviceSettingsUUID` to BLEConstants.swift
+  - Added to `aquavateCharacteristics` array
+  - Added `DeviceSettingsFlags` OptionSet
+- [x] **Task 5: iOS BLE Structs** - Add BLEDeviceSettings struct
+  - Added `BLEDeviceSettings` struct with parse/toData/create methods
+- [x] **Task 6: iOS BLE Manager** - Add property, handler, and write method
+  - Added `@Published var isShakeToEmptyEnabled: Bool = true`
+  - Added `deviceSettingsUUID` to required characteristics in `checkDiscoveryComplete()`
+  - Added case for `deviceSettingsUUID` in `didUpdateValueFor` switch
+  - Added `handleDeviceSettingsUpdate()` private method
+  - Added `setShakeToEmptyEnabled(_:)` public method
+- [x] **Task 7: iOS Settings UI** - Add toggle in Gestures section
+  - Added "Gestures" section in SettingsView.swift (visible when connected)
+  - Toggle for "Shake to Empty" with description
+- [x] Build and test firmware
+- [x] Build iOS app
+
+### Remaining
+- [ ] Integration testing (manual - upload firmware and test with iOS app)
 
 ---
 

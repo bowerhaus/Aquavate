@@ -322,6 +322,25 @@ struct SettingsView: View {
                             }
                         }
                     }
+
+                    // Gestures
+                    Section("Gestures") {
+                        Toggle(isOn: Binding(
+                            get: { bleManager.isShakeToEmptyEnabled },
+                            set: { bleManager.setShakeToEmptyEnabled($0) }
+                        )) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack {
+                                    Image(systemName: "hand.wave.fill")
+                                        .foregroundStyle(.orange)
+                                    Text("Shake to Empty")
+                                }
+                                Text("Shake bottle while inverted to reset water level to zero")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
                 }
 
                 // Apple Health Integration

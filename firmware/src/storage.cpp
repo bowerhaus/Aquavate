@@ -24,6 +24,7 @@ static const char* KEY_DISPLAY_MODE = "display_mode";
 static const char* KEY_SLEEP_TIMEOUT = "sleep_timeout";
 static const char* KEY_EXT_SLEEP_TMR = "ext_sleep_tmr";
 static const char* KEY_EXT_SLEEP_THR = "ext_sleep_thr";
+static const char* KEY_SHAKE_EMPTY_EN = "shake_empty_en";
 
 bool storageInit() {
     if (g_initialized) {
@@ -309,4 +310,28 @@ uint32_t storageLoadExtendedSleepThreshold() {
     Serial.print(seconds);
     Serial.println(" seconds");
     return seconds;
+}
+
+bool storageSaveShakeToEmptyEnabled(bool enabled) {
+    if (!g_initialized) {
+        Serial.println("Storage: Not initialized");
+        return false;
+    }
+
+    g_preferences.putBool(KEY_SHAKE_EMPTY_EN, enabled);
+    Serial.print("Storage: Saved shake_to_empty_enabled = ");
+    Serial.println(enabled ? "true" : "false");
+    return true;
+}
+
+bool storageLoadShakeToEmptyEnabled() {
+    if (!g_initialized) {
+        Serial.println("Storage: Not initialized, using default shake_to_empty_enabled true");
+        return true; // Default: enabled
+    }
+
+    bool enabled = g_preferences.getBool(KEY_SHAKE_EMPTY_EN, true); // Default: enabled
+    Serial.print("Storage: Loaded shake_to_empty_enabled = ");
+    Serial.println(enabled ? "true" : "false");
+    return enabled;
 }
