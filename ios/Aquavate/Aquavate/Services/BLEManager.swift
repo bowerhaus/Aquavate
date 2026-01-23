@@ -53,6 +53,25 @@ enum RefreshResult {
     case syncFailed(String)         // Sync error with message
 }
 
+/// State for activity stats fetch operation (Issue #36)
+enum ActivityFetchState: Equatable {
+    case idle
+    case fetchingSummary
+    case fetchingMotionEvents(currentChunk: Int, totalChunks: Int)
+    case fetchingBackpackSessions(currentChunk: Int, totalChunks: Int)
+    case complete
+    case failed(String)
+
+    var isLoading: Bool {
+        switch self {
+        case .fetchingSummary, .fetchingMotionEvents, .fetchingBackpackSessions:
+            return true
+        default:
+            return false
+        }
+    }
+}
+
 /// BLE Manager for Aquavate device communication
 @MainActor
 class BLEManager: NSObject, ObservableObject {
@@ -145,6 +164,20 @@ class BLEManager: NSObject, ObservableObject {
         }
     }
 
+    // MARK: - Published Properties (Activity Stats - Issue #36)
+
+    /// Current activity fetch state
+    @Published private(set) var activityFetchState: ActivityFetchState = .idle
+
+    /// Activity summary from device
+    @Published private(set) var activitySummary: BLEActivitySummary?
+
+    /// Motion wake events from device
+    @Published private(set) var motionWakeEvents: [BLEMotionWakeEvent] = []
+
+    /// Backpack sessions from device
+    @Published private(set) var backpackSessions: [BLEBackpackSession] = []
+
     // MARK: - Private Properties
 
     /// Buffer for drink records during sync
@@ -158,6 +191,26 @@ class BLEManager: NSObject, ObservableObject {
 
     /// Bottle ID for current sync (from CoreData)
     private var currentBottleId: UUID?
+
+    // MARK: - Activity Stats Fetch Tracking
+
+    /// Expected motion event count from summary
+    private var expectedMotionEventCount: Int = 0
+
+    /// Expected backpack session count from summary
+    private var expectedBackpackSessionCount: Int = 0
+
+    /// Current motion event chunk being fetched
+    private var currentMotionChunkIndex: UInt8 = 0
+
+    /// Total motion event chunks to fetch
+    private var totalMotionChunks: UInt8 = 0
+
+    /// Current backpack session chunk being fetched
+    private var currentBackpackChunkIndex: UInt8 = 0
+
+    /// Total backpack session chunks to fetch
+    private var totalBackpackChunks: UInt8 = 0
 
     private var centralManager: CBCentralManager!
     private var connectedPeripheral: CBPeripheral?
@@ -834,7 +887,8 @@ extension BLEManager: CBPeripheralDelegate {
                 if characteristic.properties.contains(.notify) {
                     if characteristic.uuid == BLEConstants.currentStateUUID ||
                        characteristic.uuid == BLEConstants.drinkDataUUID ||
-                       characteristic.uuid == BLEConstants.batteryLevelUUID {
+                       characteristic.uuid == BLEConstants.batteryLevelUUID ||
+                       characteristic.uuid == BLEConstants.activityStatsUUID {
                         peripheral.setNotifyValue(true, for: characteristic)
                         logger.info("Subscribed to notifications for \(characteristic.uuid)")
                     }
@@ -884,6 +938,9 @@ extension BLEManager: CBPeripheralDelegate {
 
             case BLEConstants.deviceSettingsUUID:
                 handleDeviceSettingsUpdate(data)
+
+            case BLEConstants.activityStatsUUID:
+                handleActivityStatsUpdate(data)
 
             default:
                 logger.debug("Received data from unknown characteristic: \(characteristic.uuid)")
@@ -1453,6 +1510,154 @@ extension BLEManager: CBPeripheralDelegate {
 
         // Update local state
         isShakeToEmptyEnabled = enabled
+    }
+
+    // MARK: - Activity Stats (On-Demand Fetch)
+
+    /// Fetch activity stats on-demand (called when user opens Activity Stats view)
+    /// This is a lazy-loaded feature - data is only fetched when explicitly requested
+    func fetchActivityStats() {
+        guard connectionState.isConnected else {
+            logger.warning("Cannot fetch activity stats: not connected")
+            activityFetchState = .failed("Not connected")
+            return
+        }
+
+        logger.info("Starting activity stats fetch")
+
+        // Reset state for new fetch
+        activityFetchState = .fetchingSummary
+        activitySummary = nil
+        motionWakeEvents = []
+        backpackSessions = []
+        expectedMotionEventCount = 0
+        expectedBackpackSessionCount = 0
+        currentMotionChunkIndex = 0
+        totalMotionChunks = 0
+        currentBackpackChunkIndex = 0
+        totalBackpackChunks = 0
+
+        // Send command to get activity summary
+        writeCommand(BLECommand.getActivitySummary())
+        logger.info("Sent GET_ACTIVITY_SUMMARY command")
+    }
+
+    /// Handle activity stats characteristic update
+    private func handleActivityStatsUpdate(_ data: Data) {
+        let hexString = data.map { String(format: "%02X", $0) }.joined(separator: " ")
+        logger.debug("Activity Stats raw (\(data.count) bytes): \(hexString)")
+
+        switch activityFetchState {
+        case .fetchingSummary:
+            handleActivitySummaryResponse(data)
+
+        case .fetchingMotionEvents:
+            handleMotionEventChunkResponse(data)
+
+        case .fetchingBackpackSessions:
+            handleBackpackSessionChunkResponse(data)
+
+        default:
+            logger.debug("Received activity stats data in unexpected state: \(String(describing: self.activityFetchState))")
+        }
+    }
+
+    /// Handle activity summary response
+    private func handleActivitySummaryResponse(_ data: Data) {
+        guard let summary = BLEActivitySummary.parse(from: data) else {
+            logger.error("Failed to parse activity summary (expected 12 bytes, got \(data.count))")
+            activityFetchState = .failed("Invalid summary data")
+            return
+        }
+
+        logger.info("Activity Summary: motionEvents=\(summary.motionEventCount), backpackSessions=\(summary.backpackSessionCount), inBackpack=\(summary.isInBackpackMode)")
+
+        // Store summary
+        activitySummary = summary
+        expectedMotionEventCount = Int(summary.motionEventCount)
+        expectedBackpackSessionCount = Int(summary.backpackSessionCount)
+
+        // Calculate expected chunks
+        totalMotionChunks = UInt8((expectedMotionEventCount + BLEMotionEventChunk.maxEventsPerChunk - 1) / BLEMotionEventChunk.maxEventsPerChunk)
+        totalBackpackChunks = UInt8((expectedBackpackSessionCount + BLEBackpackSessionChunk.maxSessionsPerChunk - 1) / BLEBackpackSessionChunk.maxSessionsPerChunk)
+
+        // Request motion events if any
+        if expectedMotionEventCount > 0 {
+            activityFetchState = .fetchingMotionEvents(currentChunk: 0, totalChunks: Int(totalMotionChunks))
+            currentMotionChunkIndex = 0
+            writeCommand(BLECommand.getMotionChunk(index: 0))
+            logger.info("Requesting motion event chunk 0/\(self.totalMotionChunks)")
+        } else if expectedBackpackSessionCount > 0 {
+            // No motion events, skip to backpack sessions
+            activityFetchState = .fetchingBackpackSessions(currentChunk: 0, totalChunks: Int(totalBackpackChunks))
+            currentBackpackChunkIndex = 0
+            writeCommand(BLECommand.getBackpackChunk(index: 0))
+            logger.info("Requesting backpack session chunk 0/\(self.totalBackpackChunks)")
+        } else {
+            // No data to fetch
+            activityFetchState = .complete
+            logger.info("Activity stats fetch complete (no events)")
+        }
+    }
+
+    /// Handle motion event chunk response
+    private func handleMotionEventChunkResponse(_ data: Data) {
+        guard let chunk = BLEMotionEventChunk.parse(from: data) else {
+            logger.error("Failed to parse motion event chunk")
+            activityFetchState = .failed("Invalid motion event data")
+            return
+        }
+
+        logger.info("Received motion event chunk \(chunk.chunkIndex + 1)/\(chunk.totalChunks) with \(chunk.eventCount) events")
+
+        // Append events
+        motionWakeEvents.append(contentsOf: chunk.events)
+        currentMotionChunkIndex = chunk.chunkIndex
+
+        // Check if we have more chunks to fetch
+        if !chunk.isLastChunk {
+            let nextChunk = chunk.chunkIndex + 1
+            activityFetchState = .fetchingMotionEvents(currentChunk: Int(nextChunk), totalChunks: Int(chunk.totalChunks))
+            writeCommand(BLECommand.getMotionChunk(index: nextChunk))
+            logger.info("Requesting motion event chunk \(nextChunk)/\(chunk.totalChunks)")
+        } else if expectedBackpackSessionCount > 0 {
+            // Done with motion events, fetch backpack sessions
+            activityFetchState = .fetchingBackpackSessions(currentChunk: 0, totalChunks: Int(totalBackpackChunks))
+            currentBackpackChunkIndex = 0
+            writeCommand(BLECommand.getBackpackChunk(index: 0))
+            logger.info("Requesting backpack session chunk 0/\(self.totalBackpackChunks)")
+        } else {
+            // All done
+            activityFetchState = .complete
+            logger.info("Activity stats fetch complete (\(self.motionWakeEvents.count) motion events)")
+        }
+    }
+
+    /// Handle backpack session chunk response
+    private func handleBackpackSessionChunkResponse(_ data: Data) {
+        guard let chunk = BLEBackpackSessionChunk.parse(from: data) else {
+            logger.error("Failed to parse backpack session chunk")
+            activityFetchState = .failed("Invalid backpack session data")
+            return
+        }
+
+        logger.info("Received backpack session chunk \(chunk.chunkIndex + 1)/\(chunk.totalChunks) with \(chunk.sessionCount) sessions")
+
+        // Append sessions
+        backpackSessions.append(contentsOf: chunk.sessions)
+        currentBackpackChunkIndex = chunk.chunkIndex
+
+        // Check if we have more chunks to fetch
+        if !chunk.isLastChunk {
+            let nextChunk = chunk.chunkIndex + 1
+            activityFetchState = .fetchingBackpackSessions(currentChunk: Int(nextChunk), totalChunks: Int(chunk.totalChunks))
+            writeCommand(BLECommand.getBackpackChunk(index: nextChunk))
+            logger.info("Requesting backpack session chunk \(nextChunk)/\(chunk.totalChunks)")
+        } else {
+            // All done
+            activityFetchState = .complete
+            logger.info("Activity stats fetch complete (\(self.motionWakeEvents.count) motion events, \(self.backpackSessions.count) backpack sessions)")
+        }
     }
 
     // MARK: - Pull-to-Refresh (Async API)

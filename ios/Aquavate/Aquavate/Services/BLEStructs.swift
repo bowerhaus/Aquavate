@@ -396,6 +396,23 @@ struct BLECommand {
         }
         return data
     }
+
+    // MARK: - Activity Stats Commands
+
+    /// Create GET_ACTIVITY_SUMMARY command (0x21)
+    static func getActivitySummary() -> BLECommand {
+        BLECommand(command: 0x21, param1: 0, param2: 0)
+    }
+
+    /// Create GET_MOTION_CHUNK command (0x22) with chunk index
+    static func getMotionChunk(index: UInt8) -> BLECommand {
+        BLECommand(command: 0x22, param1: index, param2: 0)
+    }
+
+    /// Create GET_BACKPACK_CHUNK command (0x23) with chunk index
+    static func getBackpackChunk(index: UInt8) -> BLECommand {
+        BLECommand(command: 0x23, param1: index, param2: 0)
+    }
 }
 
 // MARK: - Device Settings Characteristic (4 bytes)
@@ -459,4 +476,191 @@ struct BLEDeviceSettings {
         }
         return data
     }
+}
+
+// MARK: - Activity Stats Structures (Issue #36)
+
+/// Activity Summary (12 bytes) - first response to GET_ACTIVITY_SUMMARY
+struct BLEActivitySummary {
+    let motionEventCount: UInt8         // Number of motion wake events stored
+    let backpackSessionCount: UInt8     // Number of backpack sessions stored
+    let inBackpackMode: UInt8           // 1 if currently in backpack mode
+    let flags: UInt8                    // Bit 0: time_valid
+    let currentSessionStart: UInt32     // If in backpack mode, when it started
+    let currentTimerWakes: UInt16       // Timer wakes in current session
+    let reserved: UInt16
+
+    static let size = 12
+
+    static func parse(from data: Data) -> BLEActivitySummary? {
+        guard data.count >= size else { return nil }
+
+        return data.withUnsafeBytes { (ptr: UnsafeRawBufferPointer) -> BLEActivitySummary? in
+            guard let baseAddress = ptr.baseAddress else { return nil }
+
+            return BLEActivitySummary(
+                motionEventCount: baseAddress.load(as: UInt8.self),
+                backpackSessionCount: baseAddress.load(fromByteOffset: 1, as: UInt8.self),
+                inBackpackMode: baseAddress.load(fromByteOffset: 2, as: UInt8.self),
+                flags: baseAddress.load(fromByteOffset: 3, as: UInt8.self),
+                currentSessionStart: baseAddress.loadUnaligned(fromByteOffset: 4, as: UInt32.self),
+                currentTimerWakes: baseAddress.loadUnaligned(fromByteOffset: 8, as: UInt16.self),
+                reserved: baseAddress.loadUnaligned(fromByteOffset: 10, as: UInt16.self)
+            )
+        }
+    }
+
+    var isInBackpackMode: Bool { inBackpackMode != 0 }
+    var isTimeValid: Bool { (flags & 0x01) != 0 }
+
+    var currentSessionStartDate: Date? {
+        guard isInBackpackMode && currentSessionStart > 0 else { return nil }
+        return Date(timeIntervalSince1970: TimeInterval(currentSessionStart))
+    }
+}
+
+/// Motion Wake Event (8 bytes)
+struct BLEMotionWakeEvent {
+    let timestamp: UInt32              // Unix timestamp when wake occurred
+    let durationSec: UInt16            // How long device stayed awake
+    let wakeReason: UInt8              // 0=motion, 1=timer, 2=power_on
+    let sleepType: UInt8               // Bits 0-6: sleep type, Bit 7: drink taken flag
+
+    static let size = 8
+
+    // Bit masks for sleepType field (matches firmware SLEEP_TYPE_* constants)
+    private static let drinkTakenFlag: UInt8 = 0x80  // Bit 7
+    private static let sleepTypeMask: UInt8 = 0x7F   // Bits 0-6
+
+    enum WakeReason: UInt8 {
+        case motion = 0
+        case timer = 1
+        case powerOn = 2
+        case other = 3
+    }
+
+    enum SleepType: UInt8 {
+        case normal = 0
+        case extended = 1
+    }
+
+    var date: Date { Date(timeIntervalSince1970: TimeInterval(timestamp)) }
+    var reason: WakeReason { WakeReason(rawValue: wakeReason) ?? .other }
+    var enteredSleepType: SleepType { SleepType(rawValue: sleepType & Self.sleepTypeMask) ?? .normal }
+    var drinkTaken: Bool { (sleepType & Self.drinkTakenFlag) != 0 }
+}
+
+/// Backpack Session (12 bytes)
+struct BLEBackpackSession {
+    let startTimestamp: UInt32         // Unix timestamp when session started
+    let durationSec: UInt32            // Total time in backpack mode
+    let timerWakeCount: UInt16         // Number of timer wakes during session
+    let exitReason: UInt8              // 0=motion_detected, 1=still_active
+    let flags: UInt8                   // Reserved
+
+    static let size = 12
+
+    enum ExitReason: UInt8 {
+        case motionDetected = 0
+        case stillActive = 1
+        case powerCycle = 2
+    }
+
+    var startDate: Date { Date(timeIntervalSince1970: TimeInterval(startTimestamp)) }
+    var exit: ExitReason { ExitReason(rawValue: exitReason) ?? .motionDetected }
+}
+
+/// Motion Event Chunk (variable size, max 84 bytes)
+struct BLEMotionEventChunk {
+    let chunkIndex: UInt8              // Current chunk (0-9 for 100 events)
+    let totalChunks: UInt8             // Total chunks available
+    let eventCount: UInt8              // Events in this chunk (1-10)
+    let events: [BLEMotionWakeEvent]
+
+    static let headerSize = 4
+    static let maxEventsPerChunk = 10
+
+    static func parse(from data: Data) -> BLEMotionEventChunk? {
+        guard data.count >= headerSize else { return nil }
+
+        return data.withUnsafeBytes { (ptr: UnsafeRawBufferPointer) -> BLEMotionEventChunk? in
+            guard let baseAddress = ptr.baseAddress else { return nil }
+
+            let chunkIndex = baseAddress.load(as: UInt8.self)
+            let totalChunks = baseAddress.load(fromByteOffset: 1, as: UInt8.self)
+            let eventCount = baseAddress.load(fromByteOffset: 2, as: UInt8.self)
+
+            let expectedSize = headerSize + (Int(eventCount) * BLEMotionWakeEvent.size)
+            guard data.count >= expectedSize else { return nil }
+
+            var events: [BLEMotionWakeEvent] = []
+            for i in 0..<Int(eventCount) {
+                let offset = headerSize + (i * BLEMotionWakeEvent.size)
+                let event = BLEMotionWakeEvent(
+                    timestamp: baseAddress.loadUnaligned(fromByteOffset: offset, as: UInt32.self),
+                    durationSec: baseAddress.loadUnaligned(fromByteOffset: offset + 4, as: UInt16.self),
+                    wakeReason: baseAddress.load(fromByteOffset: offset + 6, as: UInt8.self),
+                    sleepType: baseAddress.load(fromByteOffset: offset + 7, as: UInt8.self)
+                )
+                events.append(event)
+            }
+
+            return BLEMotionEventChunk(
+                chunkIndex: chunkIndex,
+                totalChunks: totalChunks,
+                eventCount: eventCount,
+                events: events
+            )
+        }
+    }
+
+    var isLastChunk: Bool { chunkIndex + 1 >= totalChunks }
+}
+
+/// Backpack Session Chunk (variable size, max 64 bytes)
+struct BLEBackpackSessionChunk {
+    let chunkIndex: UInt8              // Current chunk (0-3 for 20 sessions)
+    let totalChunks: UInt8             // Total chunks available
+    let sessionCount: UInt8            // Sessions in this chunk (1-5)
+    let sessions: [BLEBackpackSession]
+
+    static let headerSize = 4
+    static let maxSessionsPerChunk = 5
+
+    static func parse(from data: Data) -> BLEBackpackSessionChunk? {
+        guard data.count >= headerSize else { return nil }
+
+        return data.withUnsafeBytes { (ptr: UnsafeRawBufferPointer) -> BLEBackpackSessionChunk? in
+            guard let baseAddress = ptr.baseAddress else { return nil }
+
+            let chunkIndex = baseAddress.load(as: UInt8.self)
+            let totalChunks = baseAddress.load(fromByteOffset: 1, as: UInt8.self)
+            let sessionCount = baseAddress.load(fromByteOffset: 2, as: UInt8.self)
+
+            let expectedSize = headerSize + (Int(sessionCount) * BLEBackpackSession.size)
+            guard data.count >= expectedSize else { return nil }
+
+            var sessions: [BLEBackpackSession] = []
+            for i in 0..<Int(sessionCount) {
+                let offset = headerSize + (i * BLEBackpackSession.size)
+                let session = BLEBackpackSession(
+                    startTimestamp: baseAddress.loadUnaligned(fromByteOffset: offset, as: UInt32.self),
+                    durationSec: baseAddress.loadUnaligned(fromByteOffset: offset + 4, as: UInt32.self),
+                    timerWakeCount: baseAddress.loadUnaligned(fromByteOffset: offset + 8, as: UInt16.self),
+                    exitReason: baseAddress.load(fromByteOffset: offset + 10, as: UInt8.self),
+                    flags: baseAddress.load(fromByteOffset: offset + 11, as: UInt8.self)
+                )
+                sessions.append(session)
+            }
+
+            return BLEBackpackSessionChunk(
+                chunkIndex: chunkIndex,
+                totalChunks: totalChunks,
+                sessionCount: sessionCount,
+                sessions: sessions
+            )
+        }
+    }
+
+    var isLastChunk: Bool { chunkIndex + 1 >= totalChunks }
 }
