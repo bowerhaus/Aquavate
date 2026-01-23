@@ -1,10 +1,11 @@
 # Aquavate iOS App - UX Product Requirements Document
 
-**Version:** 1.7
+**Version:** 1.8
 **Date:** 2026-01-23
-**Status:** Approved and Tested (Shake-to-Empty Toggle)
+**Status:** Approved and Tested (Activity Stats)
 
 **Changelog:**
+- **v1.8 (2026-01-23):** Added Diagnostics section to Settings with Activity Stats view (Issue #36). Shows motion wake events and backpack sessions for battery analysis. Includes "drink taken" indicator (water drop icon) for wakes where user took a drink.
 - **v1.7 (2026-01-23):** Added Gestures section to Settings with Shake-to-Empty toggle. Setting syncs to firmware via BLE Device Settings characteristic.
 - **v1.6 (2026-01-22):** Settings page cleanup - replaced static "Name" with live "Device" showing connected device name, removed unused "Use Ounces" toggle, removed Version row from About section.
 - **v1.5 (2026-01-21):** Added Apple HealthKit integration (Section 2.7). Drinks sync to Health app as water intake samples. Added day boundary documentation (4am vs midnight).
@@ -493,6 +494,11 @@ Sarah's Bluetooth is accidentally turned off. When she opens the app, she sees a
 │  │ 🔔 Notifications     [ON]   ││  ← Toggle
 │  └─────────────────────────────┘│
 │                                 │
+│  DIAGNOSTICS                    │
+│  ┌─────────────────────────────┐│
+│  │ 📊 Activity Stats       →   ││  ← Opens ActivityStatsView
+│  └─────────────────────────────┘│
+│                                 │
 │  ABOUT                          │
 │  ┌─────────────────────────────┐│
 │  │ 🔗 GitHub Repository    →   ││
@@ -548,6 +554,80 @@ Aquavate uses a **4am daily reset** while Apple Health uses **midnight**. This m
 - A drink at 2am shows as "yesterday" in Aquavate but "today" in Health app
 - Individual drink timestamps are accurate in both systems
 - Only daily totals may differ for late-night drinks (midnight-4am)
+
+---
+
+### 2.7 Activity Stats View (Issue #36)
+
+**Purpose:** Diagnostic view for analyzing bottle activity and sleep mode behavior for battery analysis
+
+**Access:** Settings → Diagnostics → Activity Stats
+
+**Layout:**
+```
+┌─────────────────────────────────┐
+│  < Settings    Activity Stats   │
+│                                 │
+│  CURRENT STATUS                 │
+│  ┌─────────────────────────────┐│
+│  │ 💧 Normal Mode       Ready  ││  ← Or "🎒 In Backpack Mode"
+│  └─────────────────────────────┘│
+│                                 │
+│  SINCE LAST CHARGE              │
+│  ┌─────────────────────────────┐│
+│  │ ✋ Motion Wakes         42  ││
+│  ├─────────────────────────────┤│
+│  │ 🎒 Backpack Sessions     3  ││
+│  └─────────────────────────────┘│
+│                                 │
+│  RECENT MOTION WAKES            │
+│  ┌─────────────────────────────┐│
+│  │ 2:30 PM  💧      45s Normal ││  ← Water drop = drink taken
+│  ├─────────────────────────────┤│
+│  │ 11:15 AM         32s Normal ││  ← No drop = no drink
+│  ├─────────────────────────────┤│
+│  │ 9:00 AM  💧    180s Backpack││  ← Entered backpack mode
+│  └─────────────────────────────┘│
+│                                 │
+│  BACKPACK SESSIONS              │
+│  ┌─────────────────────────────┐│
+│  │ Jan 23, 9:03 AM             ││
+│  │ 🕐 1h 30m    ⏱ 90 wakes    ││
+│  │ Exit: Motion detected       ││
+│  └─────────────────────────────┘│
+│                                 │
+└─────────────────────────────────┘
+```
+
+**Data Displayed:**
+
+| Element | Source | Description |
+|---------|--------|-------------|
+| Current Status | BLE Activity Summary | Normal mode or backpack mode |
+| Motion Wakes | BLE Activity Summary | Count since last power cycle |
+| Backpack Sessions | BLE Activity Summary | Count since last power cycle |
+| Motion Wake List | BLE Motion Chunks | Time, duration, sleep type, drink flag |
+| Backpack List | BLE Backpack Chunks | Start time, duration, timer wakes, exit reason |
+
+**Drink Taken Indicator:**
+- Blue water drop icon (`drop.fill`) shown next to wake events where user took a drink
+- No icon shown for wakes without a drink
+- Uses bit 7 of `sleep_type` field from firmware
+
+**Behavior:**
+- **Lazy loading:** Data fetched only when view appears (not on app launch)
+- **Pull-to-refresh:** Re-fetches all activity data
+- **Disconnected state:** Shows "Connect to bottle to view activity stats" message
+- **Loading state:** Progress indicator while fetching chunks
+
+**Edge Cases:**
+
+| Scenario | Behavior |
+|----------|----------|
+| Not connected | Shows connection required message |
+| No activity data | Shows "No activity recorded since last charge" |
+| Fetch error | Shows error message with retry option |
+| In backpack mode | Shows current session start time and timer wake count |
 
 ---
 
@@ -1516,7 +1596,8 @@ struct CircularProgressView {
 | Calibration Wizard | 🔄 Updated | 4.7 | Two-point calibration (updated 2026-01-17) |
 | Home Screen | 🔄 Modify | 4.2-4.6 | Wire BLE data |
 | History Screen | 🔄 Modify | 4.3-4.4 | Wire CoreData |
-| Settings Screen | 🔄 Modify | 4.2-4.5 | Add "Calibrate Bottle" button |
+| Settings Screen | 🔄 Modify | 4.2-4.5 | Add "Calibrate Bottle" button, Diagnostics section |
+| Activity Stats | ✅ Complete | - | Battery diagnostics (Issue #36, 2026-01-23) |
 
 | Component | Status | Phase |
 |-----------|--------|-------|
@@ -1533,7 +1614,13 @@ struct CircularProgressView {
 
 This UX PRD defines the complete user experience for the Aquavate iOS app. Upon approval, Phase 4 implementation will begin following both this document and the technical plan in [Plans/014-ios-ble-coredata-integration.md](../Plans/014-ios-ble-coredata-integration.md).
 
-**Document Status:** Approved (v1.7)
+**Document Status:** Approved (v1.8)
+
+**Update Note (2026-01-23 - Activity Stats):**
+- Added Diagnostics section to Settings screen
+- New Activity Stats view for battery analysis (Issue #36)
+- Shows motion wake events, backpack sessions, and "drink taken" indicators
+- Lazy loading design - data fetched only when view opened
 
 **Update Note (2026-01-23 - Shake-to-Empty Toggle):**
 - Added Gestures section to Settings screen (visible when connected)

@@ -13,6 +13,7 @@
 #include "aquavate.h"
 #include "config.h"
 #include "storage_drinks.h"
+#include "activity_stats.h"
 
 // NimBLE objects
 static NimBLEServer* pServer = nullptr;
@@ -35,6 +36,7 @@ static NimBLECharacteristic* pSyncControlChar = nullptr;
 static NimBLECharacteristic* pDrinkDataChar = nullptr;
 static NimBLECharacteristic* pCommandChar = nullptr;
 static NimBLECharacteristic* pDeviceSettingsChar = nullptr;
+static NimBLECharacteristic* pActivityStatsChar = nullptr;
 
 // Connection state
 static bool isConnected = false;
@@ -92,6 +94,9 @@ extern bool g_debug_ble;
 void bleLoadBottleConfig();
 void bleSaveBottleConfig();
 void bleSyncSendNextChunk();
+void bleSendActivitySummary();
+void bleSendMotionEventChunk(uint8_t chunkIndex);
+void bleSendBackpackSessionChunk(uint8_t chunkIndex);
 
 // Bottle Config characteristic callbacks
 class BottleConfigCallbacks : public NimBLECharacteristicCallbacks {
@@ -235,6 +240,21 @@ class CommandCallbacks : public NimBLECharacteristicCallbacks {
                 case BLE_CMD_CLEAR_HISTORY:
                     BLE_DEBUG("Command: CLEAR_HISTORY (WARNING)");
                     g_ble_clear_history_requested = true;
+                    break;
+
+                case BLE_CMD_GET_ACTIVITY_SUMMARY:
+                    BLE_DEBUG("Command: GET_ACTIVITY_SUMMARY");
+                    bleSendActivitySummary();
+                    break;
+
+                case BLE_CMD_GET_MOTION_CHUNK:
+                    BLE_DEBUG_F("Command: GET_MOTION_CHUNK, chunk=%d", cmd.param1);
+                    bleSendMotionEventChunk(cmd.param1);
+                    break;
+
+                case BLE_CMD_GET_BACKPACK_CHUNK:
+                    BLE_DEBUG_F("Command: GET_BACKPACK_CHUNK, chunk=%d", cmd.param1);
+                    bleSendBackpackSessionChunk(cmd.param1);
                     break;
 
                 default:
@@ -682,8 +702,18 @@ bool bleInit() {
     pDeviceSettingsChar->setValue((uint8_t*)&deviceSettings, sizeof(deviceSettings));
     BLE_DEBUG_F("Device Settings initialized: shake_to_empty=%s", shakeEnabled ? "enabled" : "disabled");
 
+    // Activity Stats characteristic (Issue #36 - sleep mode tracking)
+    pActivityStatsChar = pAquavateService->createCharacteristic(
+        AQUAVATE_ACTIVITY_STATS_UUID,
+        NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
+    );
+    // Set initial value with empty summary
+    BLE_ActivitySummary emptySummary = {0};
+    pActivityStatsChar->setValue((uint8_t*)&emptySummary, sizeof(emptySummary));
+    BLE_DEBUG("Activity Stats characteristic initialized");
+
     pAquavateService->start();
-    BLE_DEBUG("Aquavate Service started (Current State + Config + Commands + Sync + Settings)");
+    BLE_DEBUG("Aquavate Service started (Current State + Config + Commands + Sync + Settings + Activity)");
 
     // Setup advertising
     pAdvertising = NimBLEDevice::getAdvertising();
@@ -893,6 +923,114 @@ bool bleCheckDataActivity() {
 // Check if shake-to-empty gesture is enabled
 bool bleGetShakeToEmptyEnabled() {
     return (deviceSettings.flags & DEVICE_SETTINGS_FLAG_SHAKE_EMPTY_ENABLED) != 0;
+}
+
+// Activity Stats helper functions (Issue #36)
+
+void bleSendActivitySummary() {
+    BLE_ActivitySummary summary;
+    summary.motion_event_count = activityStatsGetMotionEventCount();
+    summary.backpack_session_count = activityStatsGetBackpackSessionCount();
+    summary.in_backpack_mode = activityStatsIsInBackpackMode() ? 1 : 0;
+    summary.flags = g_time_valid ? 0x01 : 0x00;
+    summary.current_session_start = activityStatsGetCurrentSessionStart();
+    summary.current_timer_wakes = activityStatsGetCurrentTimerWakeCount();
+    summary._reserved = 0;
+
+    pActivityStatsChar->setValue((uint8_t*)&summary, sizeof(summary));
+    pActivityStatsChar->notify();
+
+    BLE_DEBUG_F("Activity: Sent summary - motion=%d, backpack=%d, in_backpack=%d",
+                summary.motion_event_count, summary.backpack_session_count, summary.in_backpack_mode);
+}
+
+void bleSendMotionEventChunk(uint8_t chunkIndex) {
+    uint8_t totalEvents = activityStatsGetMotionEventCount();
+    uint8_t totalChunks = (totalEvents + MOTION_EVENTS_PER_CHUNK - 1) / MOTION_EVENTS_PER_CHUNK;
+
+    if (totalChunks == 0) totalChunks = 1;  // At least 1 chunk (empty)
+
+    if (chunkIndex >= totalChunks) {
+        BLE_DEBUG_F("Activity: Invalid motion chunk index %d (max %d)", chunkIndex, totalChunks - 1);
+        return;
+    }
+
+    // Get all events into temporary buffer
+    MotionWakeEvent allEvents[MOTION_WAKE_MAX_COUNT];
+    uint8_t count = activityStatsGetMotionEvents(allEvents, MOTION_WAKE_MAX_COUNT);
+
+    // Build chunk
+    BLE_MotionEventChunk chunk;
+    chunk.chunk_index = chunkIndex;
+    chunk.total_chunks = totalChunks;
+    chunk._reserved = 0;
+
+    // Calculate events for this chunk
+    uint8_t startIdx = chunkIndex * MOTION_EVENTS_PER_CHUNK;
+    uint8_t endIdx = min((uint8_t)(startIdx + MOTION_EVENTS_PER_CHUNK), count);
+    chunk.event_count = endIdx - startIdx;
+
+    // Copy events to chunk (convert from internal struct to BLE struct)
+    for (uint8_t i = 0; i < chunk.event_count; i++) {
+        chunk.events[i].timestamp = allEvents[startIdx + i].timestamp;
+        chunk.events[i].duration_sec = allEvents[startIdx + i].duration_sec;
+        chunk.events[i].wake_reason = allEvents[startIdx + i].wake_reason;
+        chunk.events[i].sleep_type = allEvents[startIdx + i].sleep_type;
+    }
+
+    // Calculate actual size (header + events)
+    size_t chunkSize = 4 + (chunk.event_count * sizeof(BLE_MotionWakeEvent));
+
+    pActivityStatsChar->setValue((uint8_t*)&chunk, chunkSize);
+    pActivityStatsChar->notify();
+
+    BLE_DEBUG_F("Activity: Sent motion chunk %d/%d with %d events",
+                chunkIndex + 1, totalChunks, chunk.event_count);
+}
+
+void bleSendBackpackSessionChunk(uint8_t chunkIndex) {
+    uint8_t totalSessions = activityStatsGetBackpackSessionCount();
+    uint8_t totalChunks = (totalSessions + BACKPACK_SESSIONS_PER_CHUNK - 1) / BACKPACK_SESSIONS_PER_CHUNK;
+
+    if (totalChunks == 0) totalChunks = 1;  // At least 1 chunk (empty)
+
+    if (chunkIndex >= totalChunks) {
+        BLE_DEBUG_F("Activity: Invalid backpack chunk index %d (max %d)", chunkIndex, totalChunks - 1);
+        return;
+    }
+
+    // Get all sessions into temporary buffer
+    BackpackSession allSessions[BACKPACK_SESSION_MAX_COUNT];
+    uint8_t count = activityStatsGetBackpackSessions(allSessions, BACKPACK_SESSION_MAX_COUNT);
+
+    // Build chunk
+    BLE_BackpackSessionChunk chunk;
+    chunk.chunk_index = chunkIndex;
+    chunk.total_chunks = totalChunks;
+    chunk._reserved = 0;
+
+    // Calculate sessions for this chunk
+    uint8_t startIdx = chunkIndex * BACKPACK_SESSIONS_PER_CHUNK;
+    uint8_t endIdx = min((uint8_t)(startIdx + BACKPACK_SESSIONS_PER_CHUNK), count);
+    chunk.session_count = endIdx - startIdx;
+
+    // Copy sessions to chunk (convert from internal struct to BLE struct)
+    for (uint8_t i = 0; i < chunk.session_count; i++) {
+        chunk.sessions[i].start_timestamp = allSessions[startIdx + i].start_timestamp;
+        chunk.sessions[i].duration_sec = allSessions[startIdx + i].duration_sec;
+        chunk.sessions[i].timer_wake_count = allSessions[startIdx + i].timer_wake_count;
+        chunk.sessions[i].exit_reason = allSessions[startIdx + i].exit_reason;
+        chunk.sessions[i].flags = allSessions[startIdx + i].flags;
+    }
+
+    // Calculate actual size (header + sessions)
+    size_t chunkSize = 4 + (chunk.session_count * sizeof(BLE_BackpackSession));
+
+    pActivityStatsChar->setValue((uint8_t*)&chunk, chunkSize);
+    pActivityStatsChar->notify();
+
+    BLE_DEBUG_F("Activity: Sent backpack chunk %d/%d with %d sessions",
+                chunkIndex + 1, totalChunks, chunk.session_count);
 }
 
 #endif // ENABLE_BLE

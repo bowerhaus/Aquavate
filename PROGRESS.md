@@ -1,7 +1,7 @@
 # Aquavate - Active Development Progress
 
 **Last Updated:** 2026-01-23
-**Current Branch:** `persist-daily-goal`
+**Current Branch:** `master`
 
 ---
 
@@ -12,6 +12,12 @@ None - ready for next task.
 ---
 
 ## Recently Completed
+
+- ✅ Activity & Sleep Mode Tracking (Issue #36) - [Plan 038](Plans/038-activity-sleep-tracking.md)
+  - Track individual wake events and backpack sessions for battery analysis
+  - Firmware: RTC buffer for 100 motion wakes + 20 backpack sessions
+  - iOS: Activity Stats view in Settings → Diagnostics section
+  - Enhancement: "Drink taken" flag shows water drop icon for wakes where drink was consumed
 
 - ✅ Persist Daily Goal When Disconnected (Issue #31) - [Plan 037](Plans/037-persist-daily-goal.md)
   - Fixed iOS app displaying hardcoded 2000 mL goal when disconnected

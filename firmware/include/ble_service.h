@@ -22,6 +22,7 @@
 #define AQUAVATE_DRINK_DATA_UUID        "6F75616B-7661-7465-2D00-000000000004"
 #define AQUAVATE_COMMAND_UUID           "6F75616B-7661-7465-2D00-000000000005"
 #define AQUAVATE_DEVICE_SETTINGS_UUID   "6F75616B-7661-7465-2D00-000000000006"
+#define AQUAVATE_ACTIVITY_STATS_UUID    "6F75616B-7661-7465-2D00-000000000007"
 
 // BLE advertising parameters
 #define BLE_ADV_INTERVAL_MS             1000    // 1 second (power-optimized)
@@ -102,6 +103,11 @@ struct __attribute__((packed)) BLE_Command {
 #define BLE_CMD_SET_DAILY_TOTAL     0x11  // DEPRECATED: Set daily total (use DELETE_DRINK_RECORD instead)
 #define BLE_CMD_DELETE_DRINK_RECORD 0x12  // Delete drink record (5 bytes: cmd + 4-byte record_id)
 
+// Activity Stats Commands
+#define BLE_CMD_GET_ACTIVITY_SUMMARY    0x21  // Request activity summary
+#define BLE_CMD_GET_MOTION_CHUNK        0x22  // Request motion event chunk (param1 = chunk index)
+#define BLE_CMD_GET_BACKPACK_CHUNK      0x23  // Request backpack session chunk (param1 = chunk index)
+
 // Device Settings Characteristic (4 bytes)
 struct __attribute__((packed)) BLE_DeviceSettings {
     uint8_t  flags;      // Device settings flags (see below)
@@ -116,6 +122,54 @@ struct __attribute__((packed)) BLE_DeviceSettings {
 struct __attribute__((packed)) BLE_SetTimeCommand {
     uint8_t  command;       // Always 0x10
     uint32_t timestamp;     // Unix timestamp (seconds since 1970)
+};
+
+// Activity Stats Summary (12 bytes) - first response to GET_ACTIVITY_SUMMARY
+struct __attribute__((packed)) BLE_ActivitySummary {
+    uint8_t  motion_event_count;      // Number of motion wake events stored
+    uint8_t  backpack_session_count;  // Number of backpack sessions stored
+    uint8_t  in_backpack_mode;        // 1 if currently in backpack mode
+    uint8_t  flags;                   // Bit 0: time_valid
+    uint32_t current_session_start;   // If in backpack mode, when it started
+    uint16_t current_timer_wakes;     // Timer wakes in current session
+    uint16_t _reserved;
+};
+
+// Motion Wake Event for BLE transfer (8 bytes)
+struct __attribute__((packed)) BLE_MotionWakeEvent {
+    uint32_t timestamp;        // Unix timestamp when wake occurred
+    uint16_t duration_sec;     // How long device stayed awake
+    uint8_t  wake_reason;      // 0=motion, 1=timer, 2=power_on
+    uint8_t  sleep_type;       // 0=normal, 1=extended (entered backpack mode)
+};
+
+// Backpack Session for BLE transfer (12 bytes)
+struct __attribute__((packed)) BLE_BackpackSession {
+    uint32_t start_timestamp;  // Unix timestamp when session started
+    uint32_t duration_sec;     // Total time in backpack mode
+    uint16_t timer_wake_count; // Number of timer wakes during session
+    uint8_t  exit_reason;      // 0=motion_detected, 1=still_active
+    uint8_t  flags;            // Reserved
+};
+
+// Motion Event Chunk (max 84 bytes = 4 + 10*8)
+#define MOTION_EVENTS_PER_CHUNK 10
+struct __attribute__((packed)) BLE_MotionEventChunk {
+    uint8_t  chunk_index;      // Current chunk (0-9 for 100 events)
+    uint8_t  total_chunks;     // Total chunks available
+    uint8_t  event_count;      // Events in this chunk (1-10)
+    uint8_t  _reserved;
+    BLE_MotionWakeEvent events[MOTION_EVENTS_PER_CHUNK];
+};
+
+// Backpack Session Chunk (max 64 bytes = 4 + 5*12)
+#define BACKPACK_SESSIONS_PER_CHUNK 5
+struct __attribute__((packed)) BLE_BackpackSessionChunk {
+    uint8_t  chunk_index;      // Current chunk (0-3 for 20 sessions)
+    uint8_t  total_chunks;     // Total chunks available
+    uint8_t  session_count;    // Sessions in this chunk (1-5)
+    uint8_t  _reserved;
+    BLE_BackpackSession sessions[BACKPACK_SESSIONS_PER_CHUNK];
 };
 
 // Public API
