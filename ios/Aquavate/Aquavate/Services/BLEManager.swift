@@ -109,7 +109,12 @@ class BLEManager: NSObject, ObservableObject {
     @Published private(set) var bottleCapacityMl: Int = 830
 
     /// Daily goal in ml (from config)
-    @Published private(set) var dailyGoalMl: Int = 2000
+    @Published private(set) var dailyGoalMl: Int = 2000 {
+        didSet {
+            // Persist to UserDefaults for offline display
+            UserDefaults.standard.set(dailyGoalMl, forKey: "lastKnownDailyGoalMl")
+        }
+    }
 
     // MARK: - Published Properties (Device Settings)
 
@@ -204,6 +209,11 @@ class BLEManager: NSObject, ObservableObject {
 
         // Load persisted last sync time
         lastSyncTime = UserDefaults.standard.object(forKey: "lastSyncTime") as? Date
+
+        // Load persisted daily goal (default 2000 if never synced)
+        if UserDefaults.standard.object(forKey: "lastKnownDailyGoalMl") != nil {
+            dailyGoalMl = UserDefaults.standard.integer(forKey: "lastKnownDailyGoalMl")
+        }
 
         let options: [String: Any] = [
             CBCentralManagerOptionRestoreIdentifierKey: BLEConstants.centralManagerRestoreIdentifier,
