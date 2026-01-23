@@ -57,6 +57,10 @@ enum BLEConstants {
     /// Contains: command, param1, param2
     static let commandUUID = CBUUID(string: "6F75616B-7661-7465-2D00-000000000005")
 
+    /// Device Settings (4 bytes) - READ/WRITE
+    /// Contains: flags (shake_to_empty_enabled, etc.), reserved bytes
+    static let deviceSettingsUUID = CBUUID(string: "6F75616B-7661-7465-2D00-000000000006")
+
     // MARK: - All Services to Discover
 
     /// Services to discover on connection
@@ -74,7 +78,8 @@ enum BLEConstants {
         bottleConfigUUID,
         syncControlUUID,
         drinkDataUUID,
-        commandUUID
+        commandUUID,
+        deviceSettingsUUID
     ]
 
     /// Battery characteristics to discover
@@ -110,6 +115,15 @@ enum BLEConstants {
         static let timeValid = StateFlags(rawValue: 0x01)
         static let calibrated = StateFlags(rawValue: 0x02)
         static let stable = StateFlags(rawValue: 0x04)
+    }
+
+    // MARK: - Device Settings Flags
+
+    struct DeviceSettingsFlags: OptionSet {
+        let rawValue: UInt8
+
+        /// Shake-to-empty gesture is enabled (default: enabled)
+        static let shakeToEmptyEnabled = DeviceSettingsFlags(rawValue: 0x01)
     }
 
     // MARK: - State Restoration

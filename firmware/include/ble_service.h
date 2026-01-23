@@ -21,6 +21,7 @@
 #define AQUAVATE_SYNC_CONTROL_UUID      "6F75616B-7661-7465-2D00-000000000003"
 #define AQUAVATE_DRINK_DATA_UUID        "6F75616B-7661-7465-2D00-000000000004"
 #define AQUAVATE_COMMAND_UUID           "6F75616B-7661-7465-2D00-000000000005"
+#define AQUAVATE_DEVICE_SETTINGS_UUID   "6F75616B-7661-7465-2D00-000000000006"
 
 // BLE advertising parameters
 #define BLE_ADV_INTERVAL_MS             1000    // 1 second (power-optimized)
@@ -100,6 +101,16 @@ struct __attribute__((packed)) BLE_Command {
 #define BLE_CMD_SET_TIME            0x10  // Set device time (5 bytes: cmd + 4-byte Unix timestamp)
 #define BLE_CMD_SET_DAILY_TOTAL     0x11  // DEPRECATED: Set daily total (use DELETE_DRINK_RECORD instead)
 #define BLE_CMD_DELETE_DRINK_RECORD 0x12  // Delete drink record (5 bytes: cmd + 4-byte record_id)
+
+// Device Settings Characteristic (4 bytes)
+struct __attribute__((packed)) BLE_DeviceSettings {
+    uint8_t  flags;      // Device settings flags (see below)
+    uint8_t  reserved1;  // Reserved for future use
+    uint16_t reserved2;  // Reserved for future use
+};
+
+// Device Settings flags
+#define DEVICE_SETTINGS_FLAG_SHAKE_EMPTY_ENABLED    0x01  // Bit 0: Shake-to-empty gesture enabled
 
 // Set Time Command (5 bytes) - different from standard 4-byte command
 struct __attribute__((packed)) BLE_SetTimeCommand {
@@ -189,6 +200,12 @@ uint16_t bleGetDailyGoalMl();
  * @return true if activity occurred since last check (one-shot)
  */
 bool bleCheckDataActivity();
+
+/**
+ * Check if shake-to-empty gesture is enabled
+ * @return true if enabled (default), false if disabled via iOS app
+ */
+bool bleGetShakeToEmptyEnabled();
 
 #endif // ENABLE_BLE
 

@@ -1,10 +1,11 @@
 # Aquavate iOS App - UX Product Requirements Document
 
-**Version:** 1.6
-**Date:** 2026-01-22
-**Status:** Approved and Tested (Settings Cleanup)
+**Version:** 1.7
+**Date:** 2026-01-23
+**Status:** Approved and Tested (Shake-to-Empty Toggle)
 
 **Changelog:**
+- **v1.7 (2026-01-23):** Added Gestures section to Settings with Shake-to-Empty toggle. Setting syncs to firmware via BLE Device Settings characteristic.
 - **v1.6 (2026-01-22):** Settings page cleanup - replaced static "Name" with live "Device" showing connected device name, removed unused "Use Ounces" toggle, removed Version row from About section.
 - **v1.5 (2026-01-21):** Added Apple HealthKit integration (Section 2.7). Drinks sync to Health app as water intake samples. Added day boundary documentation (4am vs midnight).
 - **v1.4 (2026-01-21):** Bidirectional drink record sync. Swipe-to-delete now requires bottle connection and uses pessimistic delete with firmware confirmation. HomeView shows ALL today's drinks (not just recent 5).
@@ -471,6 +472,13 @@ Sarah's Bluetooth is accidentally turned off. When she opens the app, she sees a
 │  │ 🔄 Reset Daily Total        ││
 │  ├─────────────────────────────┤│
 │  │ 🗑 Clear History     ⚠️     ││  ← Destructive (red text)
+│  └─────────────────────────────┘│
+│                                 │
+│  GESTURES                       │
+│  ┌─────────────────────────────┐│
+│  │ 👋 Shake to Empty    [ON]   ││  ← Toggle (default ON)
+│  │    Shake bottle while       ││  ← Description text
+│  │    inverted to reset level  ││
 │  └─────────────────────────────┘│
 │                                 │
 │  APPLE HEALTH                   │
@@ -1525,7 +1533,13 @@ struct CircularProgressView {
 
 This UX PRD defines the complete user experience for the Aquavate iOS app. Upon approval, Phase 4 implementation will begin following both this document and the technical plan in [Plans/014-ios-ble-coredata-integration.md](../Plans/014-ios-ble-coredata-integration.md).
 
-**Document Status:** Approved (v1.5)
+**Document Status:** Approved (v1.7)
+
+**Update Note (2026-01-23 - Shake-to-Empty Toggle):**
+- Added Gestures section to Settings screen (visible when connected)
+- Toggle to enable/disable shake-to-empty gesture
+- Setting syncs to firmware via new BLE Device Settings characteristic (UUID 0006)
+- Default: enabled (preserves existing behavior)
 
 **Update Note (2026-01-21 - HealthKit):**
 - Apple HealthKit integration implemented (Settings toggle, auto-sync)

@@ -1,6 +1,6 @@
 # Aquavate - Active Development Progress
 
-**Last Updated:** 2026-01-22
+**Last Updated:** 2026-01-23
 **Current Branch:** `watch-hydration-reminders`
 
 ---
@@ -121,6 +121,16 @@ Branch: watch-hydration-reminders
 ---
 
 ## Recently Completed
+
+- ✅ Persist Daily Goal When Disconnected (Issue #31) - [Plan 037](Plans/037-persist-daily-goal.md)
+  - Fixed iOS app displaying hardcoded 2000 mL goal when disconnected
+  - Added `didSet` observer to persist `dailyGoalMl` to UserDefaults
+  - Restored goal from UserDefaults on app launch
+  - Follows existing `lastSyncTime` persistence pattern
+
+- ✅ Shake-to-Empty Toggle Setting (Issue #32) - [Plan 036](Plans/036-shake-to-empty-toggle.md)
+  - Added toggle in iOS Settings to enable/disable shake-to-empty gesture
+  - Setting syncs to firmware via BLE and persists in NVS
 
 - ✅ Extended Awake Duration for Unsynced Records (Issue #24) - [Plan 035](Plans/035-extended-awake-unsynced.md)
   - Re-introduced 4-minute extended timeout when unsynced records exist

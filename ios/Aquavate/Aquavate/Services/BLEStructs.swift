@@ -397,3 +397,66 @@ struct BLECommand {
         return data
     }
 }
+
+// MARK: - Device Settings Characteristic (4 bytes)
+
+/// Device settings data (READ/WRITE)
+/// Matches firmware's BLE_DeviceSettings struct exactly
+struct BLEDeviceSettings {
+    let flags: UInt8                // Device settings flags (bit 0: shake_to_empty_enabled)
+    let reserved1: UInt8            // Reserved for future use
+    let reserved2: UInt16           // Reserved for future use
+
+    /// Size of the binary data (must be 4 bytes)
+    static let size = 4
+
+    // MARK: - Flag constants (matches firmware DEVICE_SETTINGS_FLAG_*)
+
+    /// Shake-to-empty enabled flag (bit 0)
+    static let flagShakeToEmptyEnabled: UInt8 = 0x01
+
+    // MARK: - Flag accessors
+
+    /// Check if shake-to-empty gesture is enabled
+    var isShakeToEmptyEnabled: Bool {
+        (flags & Self.flagShakeToEmptyEnabled) != 0
+    }
+
+    /// Parse from raw BLE data
+    static func parse(from data: Data) -> BLEDeviceSettings? {
+        guard data.count == size else {
+            return nil
+        }
+
+        return data.withUnsafeBytes { (ptr: UnsafeRawBufferPointer) -> BLEDeviceSettings? in
+            guard let baseAddress = ptr.baseAddress else { return nil }
+
+            return BLEDeviceSettings(
+                flags: baseAddress.load(as: UInt8.self),
+                reserved1: baseAddress.load(fromByteOffset: 1, as: UInt8.self),
+                reserved2: baseAddress.loadUnaligned(fromByteOffset: 2, as: UInt16.self)
+            )
+        }
+    }
+
+    /// Create with specific settings
+    static func create(shakeToEmptyEnabled: Bool) -> BLEDeviceSettings {
+        var flags: UInt8 = 0
+        if shakeToEmptyEnabled {
+            flags |= flagShakeToEmptyEnabled
+        }
+        return BLEDeviceSettings(flags: flags, reserved1: 0, reserved2: 0)
+    }
+
+    /// Serialize to binary data for BLE write
+    func toData() -> Data {
+        var data = Data(count: Self.size)
+        data.withUnsafeMutableBytes { ptr in
+            guard let baseAddress = ptr.baseAddress else { return }
+            baseAddress.storeBytes(of: flags, as: UInt8.self)
+            baseAddress.storeBytes(of: reserved1, toByteOffset: 1, as: UInt8.self)
+            baseAddress.storeBytes(of: reserved2, toByteOffset: 2, as: UInt16.self)
+        }
+        return data
+    }
+}

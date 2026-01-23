@@ -109,7 +109,17 @@ class BLEManager: NSObject, ObservableObject {
     @Published private(set) var bottleCapacityMl: Int = 830
 
     /// Daily goal in ml (from config)
-    @Published private(set) var dailyGoalMl: Int = 2000
+    @Published private(set) var dailyGoalMl: Int = 2000 {
+        didSet {
+            // Persist to UserDefaults for offline display
+            UserDefaults.standard.set(dailyGoalMl, forKey: "lastKnownDailyGoalMl")
+        }
+    }
+
+    // MARK: - Published Properties (Device Settings)
+
+    /// Whether shake-to-empty gesture is enabled (default: true)
+    @Published private(set) var isShakeToEmptyEnabled: Bool = true
 
     // MARK: - Published Properties (Sync - Phase 4.4)
 
@@ -202,6 +212,11 @@ class BLEManager: NSObject, ObservableObject {
 
         // Load persisted last sync time
         lastSyncTime = UserDefaults.standard.object(forKey: "lastSyncTime") as? Date
+
+        // Load persisted daily goal (default 2000 if never synced)
+        if UserDefaults.standard.object(forKey: "lastKnownDailyGoalMl") != nil {
+            dailyGoalMl = UserDefaults.standard.integer(forKey: "lastKnownDailyGoalMl")
+        }
 
         let options: [String: Any] = [
             CBCentralManagerOptionRestoreIdentifierKey: BLEConstants.centralManagerRestoreIdentifier,
@@ -867,6 +882,9 @@ extension BLEManager: CBPeripheralDelegate {
             case BLEConstants.syncControlUUID:
                 handleSyncControlUpdate(data)
 
+            case BLEConstants.deviceSettingsUUID:
+                handleDeviceSettingsUpdate(data)
+
             default:
                 logger.debug("Received data from unknown characteristic: \(characteristic.uuid)")
             }
@@ -904,7 +922,8 @@ extension BLEManager: CBPeripheralDelegate {
             BLEConstants.bottleConfigUUID,
             BLEConstants.syncControlUUID,
             BLEConstants.drinkDataUUID,
-            BLEConstants.commandUUID
+            BLEConstants.commandUUID,
+            BLEConstants.deviceSettingsUUID
         ]
 
         let hasAll = required.allSatisfy { characteristics[$0] != nil }
@@ -993,6 +1012,18 @@ extension BLEManager: CBPeripheralDelegate {
         dailyGoalMl = Int(config.dailyGoalMl)
 
         logger.info("Bottle Config: capacity=\(config.bottleCapacityMl)ml, goal=\(config.dailyGoalMl)ml, tare=\(config.tareWeightGrams)g, scale=\(config.scaleFactor)")
+    }
+
+    /// Parse and update Device Settings from BLE read
+    private func handleDeviceSettingsUpdate(_ data: Data) {
+        guard let settings = BLEDeviceSettings.parse(from: data) else {
+            logger.error("Failed to parse Device Settings (expected 4 bytes, got \(data.count))")
+            return
+        }
+
+        isShakeToEmptyEnabled = settings.isShakeToEmptyEnabled
+
+        logger.info("Device Settings: shakeToEmpty=\(settings.isShakeToEmptyEnabled)")
     }
 
     // MARK: - Sync Protocol (Phase 4.4)
@@ -1402,6 +1433,26 @@ extension BLEManager: CBPeripheralDelegate {
 
         peripheral.readValue(for: characteristic)
         logger.info("Requested bottle config read")
+    }
+
+    // MARK: - Device Settings
+
+    /// Set shake-to-empty gesture enabled/disabled
+    func setShakeToEmptyEnabled(_ enabled: Bool) {
+        guard let peripheral = connectedPeripheral,
+              let characteristic = characteristics[BLEConstants.deviceSettingsUUID] else {
+            logger.error("Cannot write device settings: peripheral or characteristic not available")
+            errorMessage = "Not connected to device"
+            return
+        }
+
+        let settings = BLEDeviceSettings.create(shakeToEmptyEnabled: enabled)
+        let data = settings.toData()
+        peripheral.writeValue(data, for: characteristic, type: .withResponse)
+        logger.info("Wrote device settings: shakeToEmpty=\(enabled)")
+
+        // Update local state
+        isShakeToEmptyEnabled = enabled
     }
 
     // MARK: - Pull-to-Refresh (Async API)
