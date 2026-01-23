@@ -123,4 +123,9 @@ See [PROGRESS.md](PROGRESS.md) for detailed status and next steps.
 
 ## License
 
-MIT
+This project is dual-licensed:
+
+- **Software** (firmware, iOS app): [PolyForm Noncommercial 1.0.0](licenses/POLYFORM-NONCOMMERCIAL-1.0.0.txt)
+- **Hardware & Documentation**: [CC BY-NC-SA 4.0](licenses/CC-BY-NC-SA-4.0.txt)
+
+See [LICENSE.md](LICENSE.md) for full details and commercial licensing inquiries.
