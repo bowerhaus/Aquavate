@@ -61,6 +61,10 @@ enum BLEConstants {
     /// Contains: flags (shake_to_empty_enabled, etc.), reserved bytes
     static let deviceSettingsUUID = CBUUID(string: "6F75616B-7661-7465-2D00-000000000006")
 
+    /// Activity Stats (variable) - READ/NOTIFY
+    /// Contains: summary, motion events, or backpack sessions depending on command
+    static let activityStatsUUID = CBUUID(string: "6F75616B-7661-7465-2D00-000000000007")
+
     // MARK: - All Services to Discover
 
     /// Services to discover on connection
@@ -79,7 +83,8 @@ enum BLEConstants {
         syncControlUUID,
         drinkDataUUID,
         commandUUID,
-        deviceSettingsUUID
+        deviceSettingsUUID,
+        activityStatsUUID
     ]
 
     /// Battery characteristics to discover
@@ -97,6 +102,10 @@ enum BLEConstants {
         case resetDaily = 0x05
         case clearHistory = 0x06
         case setTime = 0x10  // Time sync command
+        // Activity Stats Commands
+        case getActivitySummary = 0x21
+        case getMotionChunk = 0x22
+        case getBackpackChunk = 0x23
     }
 
     // MARK: - Sync Control Commands

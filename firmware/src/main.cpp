@@ -32,6 +32,9 @@
 // Display state tracking
 #include "display.h"
 
+// Activity stats tracking
+#include "activity_stats.h"
+
 // BLE service (conditional)
 #if ENABLE_BLE
 #include "ble_service.h"
@@ -366,10 +369,14 @@ void enterExtendedDeepSleep() {
     bleStopAdvertising();
 #endif
 
+    // Record entering extended sleep for activity tracking
+    activityStatsRecordExtendedSleep();
+
     // Save state to RTC memory before sleeping
     displaySaveToRTC();
     drinksSaveToRTC();
     extendedSleepSaveToRTC();
+    activityStatsSaveToRTC();
 
     Serial.flush();
 
@@ -383,10 +390,14 @@ void enterExtendedDeepSleep() {
 void enterDeepSleep() {
     Serial.println("Entering normal deep sleep (motion wake)...");
 
+    // Record entering normal sleep for activity tracking
+    activityStatsRecordNormalSleep();
+
     // Save state to RTC memory before sleeping
     displaySaveToRTC();
     drinksSaveToRTC();
     extendedSleepSaveToRTC();
+    activityStatsSaveToRTC();
 
     // CRITICAL FIX: Ensure ADXL343 interrupt is cleared before sleeping
     // Wait for bottle to return upright (|Y| > 0.81g) so interrupt clears
@@ -892,6 +903,7 @@ void setup() {
         // Attempt to restore display state from RTC memory
         bool display_restored = displayRestoreFromRTC();
         bool drinks_restored = drinksRestoreFromRTC();
+        bool activity_restored = activityStatsRestoreFromRTC();
 
         if (display_restored && drinks_restored) {
             Serial.println("State restored from RTC memory (wake from sleep)");
@@ -900,8 +912,18 @@ void setup() {
         } else {
             Serial.println("No valid RTC state (power cycle) - will force display update");
         }
+
+        // Record wake event for activity tracking
+        if (wakeup_reason == ESP_SLEEP_WAKEUP_EXT0) {
+            activityStatsRecordWakeStart(WAKE_REASON_MOTION);
+        } else if (wakeup_reason == ESP_SLEEP_WAKEUP_TIMER) {
+            activityStatsRecordTimerWake();
+        }
     } else {
         Serial.println("Display state tracking initialized (power on/reset)");
+        // Initialize fresh activity buffer on power cycle
+        activityStatsInit();
+        activityStatsRecordWakeStart(WAKE_REASON_POWER_ON);
     }
 
     // Note: Display will update on first stable check to ensure correct values shown
