@@ -547,13 +547,14 @@ private func startPeriodicEvaluation() {
 | `Services/WatchConnectivityManager.swift` | WCSession (iPhone side) |
 | `AquavateWatch/` | Entire Watch app target |
 
-### Modified Files (4)
+### Modified Files (5)
 | File | Changes |
 |------|---------|
-| `AquavateApp.swift` | Add new services, wire up |
+| `AquavateApp.swift` | Add services, BGAppRefreshTask registration, background task handler |
 | `BLEManager.swift` | Add reminder service ref, trigger after sync |
 | `SettingsView.swift` | Wire up notification toggle (line 373) |
 | `Aquavate.entitlements` | Add App Groups |
+| `Info.plist` | Add `fetch` background mode, BGTaskSchedulerPermittedIdentifiers |
 
 ---
 
@@ -618,6 +619,185 @@ Section("Developer") {
 
 ---
 
+## Phase 7: Background Notifications
+
+Enable notification delivery when the iPhone app is backgrounded using BGAppRefreshTask.
+
+### 7.1 Register Background Task
+
+**Modify:** `ios/Aquavate/Aquavate/AquavateApp.swift`
+
+```swift
+import BackgroundTasks
+
+struct AquavateApp: App {
+    static let hydrationCheckTaskIdentifier = "com.bowerhaus.Aquavate.hydrationCheck"
+
+    init() {
+        registerBackgroundTasks()
+    }
+
+    private func registerBackgroundTasks() {
+        BGTaskScheduler.shared.register(
+            forTaskWithIdentifier: Self.hydrationCheckTaskIdentifier,
+            using: nil
+        ) { task in
+            self.handleHydrationCheck(task: task as! BGAppRefreshTask)
+        }
+    }
+}
+```
+
+### 7.2 Schedule on App Background
+
+**Modify:** `AquavateApp.handleScenePhaseChange()`
+
+```swift
+case .background:
+    bleManager.appDidEnterBackground()
+    scheduleHydrationCheck()  // NEW
+
+private func scheduleHydrationCheck() {
+    let request = BGAppRefreshTaskRequest(identifier: Self.hydrationCheckTaskIdentifier)
+    request.earliestBeginDate = Date(timeIntervalSinceNow: 15 * 60)  // ~15 min
+    try? BGTaskScheduler.shared.submit(request)
+}
+```
+
+### 7.3 Handle Background Task
+
+```swift
+private func handleHydrationCheck(task: BGAppRefreshTask) {
+    // Schedule next check
+    scheduleHydrationCheck()
+
+    Task { @MainActor in
+        // Get state from CoreData
+        let todaysTotalMl = PersistenceController.shared.getTodaysTotalMl()
+        let dailyGoalMl = UserDefaults.standard.integer(forKey: "dailyGoalMl")
+        let effectiveGoal = dailyGoalMl > 0 ? dailyGoalMl : 2500
+
+        // Calculate deficit
+        let deficit = calculateDeficit(totalMl: todaysTotalMl, goalMl: effectiveGoal)
+
+        // Check goal reached first
+        if todaysTotalMl >= effectiveGoal && !goalNotificationSent {
+            notificationManager.scheduleGoalReachedNotification()
+            // ... mark sent
+        }
+        // Check if behind pace
+        else if shouldSendBackgroundNotification(...) {
+            notificationManager.scheduleHydrationReminder(urgency: urgency, deficitMl: deficit)
+        }
+
+        task.setTaskCompleted(success: true)
+    }
+}
+```
+
+### 7.4 Update Info.plist
+
+**Modify:** `ios/Aquavate/Info.plist`
+
+```xml
+<key>UIBackgroundModes</key>
+<array>
+    <string>bluetooth-central</string>
+    <string>fetch</string>  <!-- NEW -->
+</array>
+<key>BGTaskSchedulerPermittedIdentifiers</key>
+<array>
+    <string>com.bowerhaus.Aquavate.hydrationCheck</string>
+</array>
+```
+
+### Background Notification Behavior
+
+| Aspect | Behavior |
+|--------|----------|
+| Timing | iOS controls actual execution (could be 15 min to hours) |
+| Frequency | Based on app usage patterns |
+| Reschedule | Task reschedules itself before completing |
+| Data source | Reads from CoreData (may be stale if no BLE sync) |
+
+---
+
+## Phase 8: Goal Reached Notification
+
+Add a celebration notification when the daily goal is achieved.
+
+### 8.1 Add Notification Method
+
+**Modify:** `ios/Aquavate/Aquavate/Services/NotificationManager.swift`
+
+```swift
+func scheduleGoalReachedNotification() {
+    guard isEnabled && isAuthorized else { return }
+
+    let content = UNMutableNotificationContent()
+    content.title = "Goal Reached! 💧"
+    content.body = "Good job! You've hit your daily hydration goal."
+    content.sound = .default
+
+    let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
+    let request = UNNotificationRequest(
+        identifier: "hydration-goal-reached",
+        content: content,
+        trigger: trigger
+    )
+    notificationCenter.add(request)
+}
+```
+
+### 8.2 Track Goal Notification State
+
+**Modify:** `ios/Aquavate/Aquavate/Services/HydrationReminderService.swift`
+
+```swift
+@Published private(set) var goalNotificationSentToday: Bool = false {
+    didSet {
+        UserDefaults.standard.set(goalNotificationSentToday, forKey: "goalNotificationSentToday")
+    }
+}
+
+init() {
+    self.goalNotificationSentToday = UserDefaults.standard.bool(forKey: "goalNotificationSentToday")
+    // ...
+}
+
+func goalAchieved() {
+    lastNotifiedUrgency = nil
+    notificationManager?.cancelAllPendingReminders()
+
+    // Only send once per day
+    if !goalNotificationSentToday {
+        notificationManager?.scheduleGoalReachedNotification()
+        goalNotificationSentToday = true
+    }
+}
+
+func dailyReset() {
+    goalNotificationSentToday = false  // Reset for new day
+    // ...
+}
+```
+
+### 8.3 Background Task Goal Check
+
+**Modify:** `ios/Aquavate/Aquavate/AquavateApp.swift`
+
+In `handleHydrationCheck()`, check for goal reached before checking deficit:
+
+```swift
+let goalNotificationSent = UserDefaults.standard.bool(forKey: "goalNotificationSentToday")
+if todaysTotalMl >= effectiveGoal && !goalNotificationSent {
+    notificationManager.scheduleGoalReachedNotification()
+    UserDefaults.standard.set(true, forKey: "goalNotificationSentToday")
+}
+```
+
+---
+
 ## Verification
 
 1. **Pace tracking**: At 2pm with 0ml drunk, verify amber/red urgency (you're behind pace)
@@ -631,3 +811,6 @@ Section("Developer") {
 9. **Watch sync**: Take drink on bottle, verify watch updates within seconds
 10. **Initial sync**: Launch iPhone app, verify Watch receives current state immediately
 11. **Periodic sync**: Leave Watch app open for 2+ minutes, verify deficit increases as time passes (without any iPhone interaction)
+12. **Background notifications**: Background app, wait for iOS to schedule task, verify notification arrives
+13. **Goal notification**: Reach goal, verify "Goal Reached! 💧" notification appears
+14. **Goal notification once**: Drink more after goal, verify no duplicate notification
