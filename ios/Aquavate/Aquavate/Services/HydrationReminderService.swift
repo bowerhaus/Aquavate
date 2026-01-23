@@ -146,6 +146,13 @@ class HydrationReminderService: ObservableObject {
             notificationManager?.scheduleGoalReachedNotification()
             goalNotificationSentToday = true
             print("[HydrationReminder] Goal achieved - reminders cancelled, celebration sent")
+
+            // Also send to Watch for local notification + haptic
+            WatchConnectivityManager.shared.sendNotificationToWatch(
+                type: "goalReached",
+                title: "Goal Reached! 💧",
+                body: "Good job! You've hit your daily hydration goal."
+            )
         } else {
             print("[HydrationReminder] Goal achieved - reminders cancelled (notification already sent)")
         }
@@ -255,6 +262,14 @@ class HydrationReminderService: ObservableObject {
         notificationManager.scheduleHydrationReminder(urgency: currentUrgency, deficitMl: deficitMl)
         lastNotifiedUrgency = currentUrgency
         print("[HydrationReminder] Scheduled \(currentUrgency.description) reminder - deficit=\(deficitMl)ml")
+
+        // 9. Also send notification to Watch for local delivery + haptic
+        let deficitDisplay = deficitMl >= 1000 ? String(format: "%.1fL", Double(deficitMl) / 1000.0) : "\(deficitMl)ml"
+        let title = "Hydration Reminder"
+        let body = currentUrgency == .overdue
+            ? "You're falling behind! Drink \(deficitDisplay) to catch up."
+            : "Time to hydrate! You're \(deficitDisplay) behind pace."
+        WatchConnectivityManager.shared.sendNotificationToWatch(type: "reminder", title: title, body: body)
     }
 
     // MARK: - Current State

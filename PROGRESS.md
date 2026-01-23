@@ -68,19 +68,40 @@ Added celebration notification when daily goal is achieved:
 - Title: "Goal Reached! 💧"
 - Body: "Good job! You've hit your daily hydration goal."
 
+#### Phase 9: Watch Local Notifications - IMPLEMENTED ✅
+iPhone-triggered Watch local notifications for reliable delivery regardless of iPhone lock state:
+
+- [x] 9.1 Extend HydrationState with notification request fields (`shouldNotify`, `notificationType`, `notificationTitle`, `notificationBody`)
+- [x] 9.2 Add `sendNotificationToWatch()` to WatchConnectivityManager (uses transferUserInfo for guaranteed delivery)
+- [x] 9.3 Update HydrationReminderService to call Watch notification on reminder/goal
+- [x] 9.4 Create WatchNotificationManager.swift (schedule local notifications + haptic)
+- [x] 9.5 Update WatchSessionManager to handle notification requests
+- [x] 9.6 Request notification permission on Watch app init
+
+**How it works:**
+- iPhone calculates deficit and decides when to notify (single source of truth)
+- iPhone sends notification request to Watch via `transferUserInfo()` (guaranteed delivery)
+- Watch receives request, schedules local notification + plays haptic
+- Works regardless of iPhone lock state or Watch app foreground/background state
+
 #### Testing Status
 - [x] Test pace tracking - amber urgency showing correctly
 - [x] Test "Xml to catch up" display on Watch - working
+- [x] Test goal reached notification on iPhone - working
 - [ ] Test "On track ✓" when caught up
-- [ ] Test "Goal reached!" when goal achieved
+- [ ] Test "Goal reached!" display on Watch when goal achieved
 - [ ] Test periodic sync (deficit increases over time without iPhone interaction)
 - [ ] Test notifications with test mode
 - [ ] Test quiet hours
 - [ ] Test max 8 reminders
 - [ ] Test Watch complication color changes
 - [ ] Test background notifications (may need to wait for iOS to schedule)
+- [ ] Test Watch local notifications (Phase 9):
+  - [ ] Trigger reminder while iPhone unlocked - Watch should show notification + haptic
+  - [ ] Reach goal - Watch should show "Goal Reached!" notification + haptic
+  - [ ] Verify haptic feedback on Watch wrist tap
 
-### Current Status: Phase 8 (Goal Reached Notification) Implemented
+### Current Status: Phase 9 (Watch Local Notifications) Implemented - Ready to Test
 
 **Pace-Based Model Working:**
 - Urgency based on deficit from expected pace (not time since last drink)
@@ -104,21 +125,32 @@ Added celebration notification when daily goal is achieved:
   - Added `deficitMl: Int` field
   - Added custom decoder for backwards compatibility
   - Added memberwise initializer
+  - **Phase 9:** Added notification request fields (`shouldNotify`, `notificationType`, `notificationTitle`, `notificationBody`)
 - `ios/Aquavate/Aquavate/Services/HydrationReminderService.swift` - complete pace-based model:
   - Replaced time-based constants with pace-based (`activeHoursStart/End`, `attentionThreshold`)
   - Added `calculateExpectedIntake()` and `calculateDeficit()` methods
   - Updated `updateUrgency()` for deficit-based logic
   - Updated `buildHydrationState()` to include deficit
   - Updated periodic timer to also sync to Watch
+  - **Phase 9:** Added Watch notification triggers in `evaluateAndScheduleReminder()` and `goalAchieved()`
 - `ios/Aquavate/Aquavate/Services/NotificationManager.swift` - updated `scheduleHydrationReminder()` to use deficit instead of minutes
+- `ios/Aquavate/Aquavate/Services/WatchConnectivityManager.swift`:
+  - **Phase 9:** Added `sendNotificationToWatch()` method using `transferUserInfo()` for guaranteed delivery
 - `ios/Aquavate/AquavateWatch Watch App/AquavateWatch/ContentView.swift` - status text display, removed time since last drink
-- `ios/Aquavate/AquavateWatch Watch App/AquavateWatch/WatchSessionManager.swift` - check existing context on activation
+- `ios/Aquavate/AquavateWatch Watch App/AquavateWatch/WatchSessionManager.swift`:
+  - Check existing context on activation
+  - **Phase 9:** Handle notification requests from iPhone in `didReceiveUserInfo`
+- `ios/Aquavate/AquavateWatch Watch App/AquavateWatch/AquavateWatchApp.swift`:
+  - **Phase 9:** Request notification permission on init
 - `ios/Aquavate/Aquavate/AquavateApp.swift` - BGAppRefreshTask for background notifications:
   - Import BackgroundTasks framework
   - Register background task on init
   - Schedule hydration check when app enters background
   - Handle task: calculate deficit, send notification if behind pace
 - `ios/Aquavate/Info.plist` - added `fetch` background mode and `BGTaskSchedulerPermittedIdentifiers`
+
+### Files Created This Session
+- **Phase 9:** `ios/Aquavate/AquavateWatch Watch App/AquavateWatch/WatchNotificationManager.swift` - schedule local notifications + haptic
 
 **Note:** There are duplicate Watch files in two locations. The **actual running code** is in:
 - `ios/Aquavate/AquavateWatch Watch App/AquavateWatch/` (this is what runs on device)
@@ -145,8 +177,15 @@ Added celebration notification when daily goal is achieved:
 To resume from this progress file:
 ```
 Continue from PROGRESS.md - Issue #27 (Hydration Reminders + Apple Watch App).
-Phase 6 (pace-based urgency model) implemented and partially tested.
-Watch shows deficit correctly. Still need to test: on-track, goal reached, periodic sync, notifications.
+Phases 1-9 all implemented. Ready for testing.
+
+NEXT TASK: Test Watch local notifications:
+- Build and deploy to iPhone and Watch
+- Trigger a hydration reminder (wait for deficit or use test mode)
+- Verify Watch shows local notification with haptic
+- Test goal reached notification
+- Verify notifications work with iPhone unlocked (where iOS mirroring fails)
+
 IMPORTANT: Watch files are in TWO locations - actual code is in "AquavateWatch Watch App/AquavateWatch/"
 Plan: Plans/036-watch-hydration-reminders.md
 Branch: watch-hydration-reminders

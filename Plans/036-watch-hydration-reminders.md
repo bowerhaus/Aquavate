@@ -798,6 +798,232 @@ if todaysTotalMl >= effectiveGoal && !goalNotificationSent {
 
 ---
 
+## Phase 9: Watch Local Notifications (iPhone-Triggered)
+
+Add Watch-local notifications so the Watch always receives alerts regardless of iPhone screen state. Currently, iOS notification mirroring only works when the iPhone is locked.
+
+### Design Decision: iPhone-Triggered Approach
+
+Instead of the Watch running its own background tasks and calculating deficit (which would duplicate logic), the iPhone sends a "notify" flag via WatchConnectivity when a notification should be shown. The Watch then schedules a local notification.
+
+**Why this approach:**
+- Single source of truth (iPhone calculates everything)
+- No duplicated business logic on Watch
+- Simpler implementation (~50 lines)
+- Works whenever WatchConnectivity is active
+
+**Limitation:** If WatchConnectivity session is inactive (Watch out of range, Bluetooth off), the notification will be queued and delivered when session resumes.
+
+### 9.1 Extend HydrationState Model
+
+**Modify:** `ios/Aquavate/Aquavate/Models/HydrationState.swift`
+
+Add notification request fields:
+
+```swift
+struct HydrationState: Codable {
+    // Existing fields...
+    let dailyTotalMl: Int
+    let dailyGoalMl: Int
+    let lastDrinkTime: Date?
+    let urgency: HydrationUrgency
+    let deficitMl: Int
+    let timestamp: Date
+
+    // NEW: Notification request for Watch
+    let shouldNotify: Bool           // True if Watch should show notification
+    let notificationType: String?    // "reminder" or "goalReached"
+    let notificationTitle: String?   // e.g., "Hydration Reminder"
+    let notificationBody: String?    // e.g., "Time to hydrate! You're 350ml behind pace."
+}
+```
+
+Add backwards-compatible decoder and convenience initializers.
+
+### 9.2 Update iPhone WatchConnectivityManager
+
+**Modify:** `ios/Aquavate/Aquavate/Services/WatchConnectivityManager.swift`
+
+When sending state, include notification request if needed:
+
+```swift
+func sendHydrationStateWithNotification(
+    _ state: HydrationState,
+    notify: Bool,
+    type: String?,
+    title: String?,
+    body: String?
+) {
+    var context: [String: Any] = [
+        "dailyTotalMl": state.dailyTotalMl,
+        "dailyGoalMl": state.dailyGoalMl,
+        "urgency": state.urgency.rawValue,
+        "deficitMl": state.deficitMl,
+        "timestamp": state.timestamp.timeIntervalSince1970,
+        // Notification fields
+        "shouldNotify": notify,
+        "notificationType": type ?? "",
+        "notificationTitle": title ?? "",
+        "notificationBody": body ?? ""
+    ]
+    // ... send via updateApplicationContext or transferUserInfo
+}
+```
+
+### 9.3 Update HydrationReminderService
+
+**Modify:** `ios/Aquavate/Aquavate/Services/HydrationReminderService.swift`
+
+When scheduling a notification, also tell the Watch:
+
+```swift
+func evaluateAndScheduleReminder() {
+    // ... existing checks ...
+
+    if shouldNotify {
+        // Schedule iPhone notification
+        notificationManager.scheduleHydrationReminder(urgency: urgency, deficitMl: deficitMl)
+
+        // Also tell Watch to show notification
+        let title = "Hydration Reminder"
+        let body = urgency == .overdue
+            ? "You're falling behind! Drink \(deficitDisplay) to catch up."
+            : "Time to hydrate! You're \(deficitDisplay) behind pace."
+
+        WatchConnectivityManager.shared.sendNotificationToWatch(
+            type: "reminder",
+            title: title,
+            body: body
+        )
+    }
+}
+
+func goalAchieved() {
+    // ... existing code ...
+
+    if !goalNotificationSentToday {
+        notificationManager?.scheduleGoalReachedNotification()
+        goalNotificationSentToday = true
+
+        // Also tell Watch
+        WatchConnectivityManager.shared.sendNotificationToWatch(
+            type: "goalReached",
+            title: "Goal Reached! 💧",
+            body: "Good job! You've hit your daily hydration goal."
+        )
+    }
+}
+```
+
+### 9.4 Watch Notification Manager
+
+**New file:** `ios/Aquavate/AquavateWatch Watch App/AquavateWatch/WatchNotificationManager.swift`
+
+```swift
+import UserNotifications
+import WatchKit
+
+class WatchNotificationManager {
+    static let shared = WatchNotificationManager()
+
+    private let notificationCenter = UNUserNotificationCenter.current()
+
+    func requestAuthorization() async throws {
+        let granted = try await notificationCenter.requestAuthorization(options: [.alert, .sound])
+        print("[WatchNotification] Authorization \(granted ? "granted" : "denied")")
+    }
+
+    func scheduleNotification(type: String, title: String, body: String) {
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+
+        // Schedule immediately (1 second delay)
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
+        let identifier = "hydration-watch-\(type)-\(UUID().uuidString)"
+        let request = UNNotificationRequest(identifier: identifier, content: content, trigger: trigger)
+
+        notificationCenter.add(request) { error in
+            if let error = error {
+                print("[WatchNotification] Failed: \(error.localizedDescription)")
+            } else {
+                print("[WatchNotification] Scheduled: \(title)")
+                // Also play haptic
+                WKInterfaceDevice.current().play(.notification)
+            }
+        }
+    }
+}
+```
+
+### 9.5 Update Watch Session Manager
+
+**Modify:** `ios/Aquavate/AquavateWatch Watch App/AquavateWatch/WatchSessionManager.swift`
+
+Handle notification requests from iPhone:
+
+```swift
+func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String : Any]) {
+    DispatchQueue.main.async {
+        // Update hydration state (existing code)
+        self.updateHydrationState(from: applicationContext)
+
+        // Check for notification request (NEW)
+        if let shouldNotify = applicationContext["shouldNotify"] as? Bool, shouldNotify,
+           let type = applicationContext["notificationType"] as? String,
+           let title = applicationContext["notificationTitle"] as? String,
+           let body = applicationContext["notificationBody"] as? String {
+
+            WatchNotificationManager.shared.scheduleNotification(
+                type: type,
+                title: title,
+                body: body
+            )
+        }
+    }
+}
+```
+
+### 9.6 Request Notification Permission on Watch
+
+**Modify:** `ios/Aquavate/AquavateWatch Watch App/AquavateWatch/AquavateWatchApp.swift`
+
+```swift
+@main
+struct AquavateWatchApp: App {
+    init() {
+        Task {
+            try? await WatchNotificationManager.shared.requestAuthorization()
+        }
+    }
+    // ...
+}
+```
+
+### Watch Notification Behavior
+
+| Scenario | iPhone Notification | Watch Notification |
+|----------|--------------------|--------------------|
+| iPhone unlocked, Watch on wrist | ✅ Shows on iPhone | ✅ Shows on Watch (local) |
+| iPhone locked, Watch on wrist | ✅ Mirrors to Watch | ✅ Shows on Watch (local) |
+| iPhone in pocket, Watch on wrist | May not see | ✅ Shows on Watch (local) |
+
+**Key benefit:** Watch always shows notification with haptic regardless of iPhone state.
+
+### Files Summary for Phase 9
+
+| File | Changes |
+|------|---------|
+| `Models/HydrationState.swift` | Add notification request fields |
+| `Services/WatchConnectivityManager.swift` | Add `sendNotificationToWatch()` method |
+| `Services/HydrationReminderService.swift` | Call Watch notification on reminder/goal |
+| `AquavateWatch/WatchNotificationManager.swift` | **NEW** - Schedule local notifications |
+| `AquavateWatch/WatchSessionManager.swift` | Handle notification request from iPhone |
+| `AquavateWatch/AquavateWatchApp.swift` | Request notification permission |
+
+---
+
 ## Verification
 
 1. **Pace tracking**: At 2pm with 0ml drunk, verify amber/red urgency (you're behind pace)
@@ -814,3 +1040,5 @@ if todaysTotalMl >= effectiveGoal && !goalNotificationSent {
 12. **Background notifications**: Background app, wait for iOS to schedule task, verify notification arrives
 13. **Goal notification**: Reach goal, verify "Goal Reached! 💧" notification appears
 14. **Goal notification once**: Drink more after goal, verify no duplicate notification
+15. **Watch local notification**: With iPhone unlocked, trigger reminder, verify Watch shows notification with haptic
+16. **Watch haptic**: Verify Watch taps wrist when notification arrives

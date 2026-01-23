@@ -9,6 +9,13 @@ import SwiftUI
 
 @main
 struct AquavateWatchApp: App {
+    init() {
+        // Request notification permission for iPhone-triggered local notifications
+        Task {
+            try? await WatchNotificationManager.shared.requestAuthorization()
+        }
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()

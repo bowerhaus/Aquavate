@@ -105,7 +105,19 @@ extension WatchSessionManager: WCSessionDelegate {
 
     nonisolated func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any]) {
         Task { @MainActor in
-            print("[WatchSession] Received user info (complication update)")
+            print("[WatchSession] Received user info")
+
+            // Check for notification request
+            if let notificationRequest = userInfo["notificationRequest"] as? Bool, notificationRequest,
+               let type = userInfo["notificationType"] as? String,
+               let title = userInfo["notificationTitle"] as? String,
+               let body = userInfo["notificationBody"] as? String {
+                print("[WatchSession] Received notification request: \(type)")
+                WatchNotificationManager.shared.scheduleNotification(type: type, title: title, body: body)
+                return
+            }
+
+            // Otherwise handle as hydration state update (complication update)
             handleReceivedData(userInfo)
             reloadComplications()
         }

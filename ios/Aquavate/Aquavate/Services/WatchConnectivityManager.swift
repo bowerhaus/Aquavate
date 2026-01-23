@@ -115,6 +115,31 @@ class WatchConnectivityManager: NSObject, ObservableObject {
             print("[WatchConnectivity] Failed to send message: \(error)")
         }
     }
+
+    /// Send notification request to Watch (for local notification + haptic)
+    /// Uses transferUserInfo for guaranteed delivery even when Watch app is not active
+    func sendNotificationToWatch(type: String, title: String, body: String) {
+        guard let session = session, session.activationState == .activated else {
+            print("[WatchConnectivity] Session not activated for notification")
+            return
+        }
+
+        guard isWatchAppInstalled else {
+            print("[WatchConnectivity] Watch app not installed for notification")
+            return
+        }
+
+        let userInfo: [String: Any] = [
+            "notificationRequest": true,
+            "notificationType": type,
+            "notificationTitle": title,
+            "notificationBody": body
+        ]
+
+        // Use transferUserInfo for guaranteed delivery (queued if Watch not reachable)
+        session.transferUserInfo(userInfo)
+        print("[WatchConnectivity] Sent notification request to Watch: \(type)")
+    }
 }
 
 // MARK: - WCSessionDelegate
