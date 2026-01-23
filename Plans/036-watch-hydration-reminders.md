@@ -1024,10 +1024,145 @@ struct AquavateWatchApp: App {
 
 ---
 
+## Phase 10: Target Intake Visualization on HomeView
+
+Add visual pace tracking to the main iPhone app screen showing expected vs actual progress.
+
+### 10.1 Update HumanFigureProgressView
+
+**Modify:** `ios/Aquavate/Aquavate/Components/HumanFigureProgressView.swift`
+
+- Add `expectedCurrent: Int?` parameter for expected intake by now
+- Add `urgency: HydrationUrgency` parameter for color coding
+- Add second fill layer (behind actual) showing expected progress in urgency color
+- Add "X ml behind target" text below figure (colored by urgency)
+
+### 10.2 Update HomeView
+
+**Modify:** `ios/Aquavate/Aquavate/Views/HomeView.swift`
+
+- Add `@EnvironmentObject var hydrationReminderService`
+- Pass expected intake, deficit, and urgency to HumanFigureProgressView
+
+---
+
+## Phase 11: 50ml Rounding for Deficit Display
+
+Round deficit values to nearest 50ml for cleaner display and suppress notifications/display when below 50ml threshold.
+
+### Design Decision
+
+Small deficits (e.g., 23ml behind) are not actionable and create noise. Rounding to 50ml provides cleaner values and a natural threshold for suppression.
+
+### Rounding Formula
+
+```swift
+func roundToNearest50(_ value: Int) -> Int {
+    return ((value + 25) / 50) * 50
+}
+```
+
+**Examples:**
+- 23ml → 0ml (suppressed)
+- 49ml → 50ml
+- 73ml → 50ml
+- 127ml → 150ml
+- 1234ml → 1.2L (formatted for display)
+
+### 11.1 Update HydrationReminderService
+
+**Modify:** `ios/Aquavate/Aquavate/Services/HydrationReminderService.swift`
+
+```swift
+// Add constant
+static let minimumDeficitForNotification = 50
+
+// Add helper
+static func roundToNearest50(_ value: Int) -> Int {
+    return ((value + 25) / 50) * 50
+}
+
+// In evaluateAndScheduleReminder():
+// Change guard from: deficitMl > 0
+// To: deficitMl >= Self.minimumDeficitForNotification
+
+// Round deficit before passing to notifications:
+let roundedDeficit = Self.roundToNearest50(deficitMl)
+notificationManager.scheduleHydrationReminder(urgency: currentUrgency, deficitMl: roundedDeficit)
+```
+
+### 11.2 Update HumanFigureProgressView
+
+**Modify:** `ios/Aquavate/Aquavate/Components/HumanFigureProgressView.swift`
+
+```swift
+private func roundToNearest50(_ value: Int) -> Int {
+    return ((value + 25) / 50) * 50
+}
+
+private var roundedDeficitMl: Int {
+    roundToNearest50(deficitMl)
+}
+
+private var isBehindTarget: Bool {
+    roundedDeficitMl >= 50  // Only show if 50ml+ behind
+}
+
+// In body, use roundedDeficitMl for display
+Text("\(roundedDeficitMl) ml behind target")
+```
+
+### 11.3 Update Watch ContentView
+
+**Modify:** `ios/Aquavate/AquavateWatch Watch App/AquavateWatch/ContentView.swift`
+
+```swift
+private func roundToNearest50(_ value: Int) -> Int {
+    return ((value + 25) / 50) * 50
+}
+
+@ViewBuilder
+private var statusText: some View {
+    if let state = state {
+        if state.isGoalAchieved {
+            Text("Goal reached! 🎉")
+        } else {
+            let roundedDeficit = roundToNearest50(state.deficitMl)
+            if roundedDeficit >= 50 {
+                // Show rounded deficit
+                Text("\(roundedDeficit)ml to catch up")
+            } else {
+                Text("On track ✓")
+            }
+        }
+    }
+}
+```
+
+### Behavior Summary
+
+| Raw Deficit | Rounded | Display |
+|-------------|---------|---------|
+| 0-24ml | 0ml | "On track ✓" |
+| 25-74ml | 50ml | "50ml to catch up" |
+| 75-124ml | 100ml | "100ml to catch up" |
+| 125-174ml | 150ml | "150ml to catch up" |
+| 1000ml+ | Rounded | "1.0L to catch up" |
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `Services/HydrationReminderService.swift` | Add `roundToNearest50()`, `minimumDeficitForNotification`, round values in notifications |
+| `Components/HumanFigureProgressView.swift` | Add rounding, suppress "behind target" if < 50ml |
+| `AquavateWatch/ContentView.swift` | Add rounding, suppress "to catch up" if < 50ml |
+
+---
+
 ## Verification
 
 1. **Pace tracking**: At 2pm with 0ml drunk, verify amber/red urgency (you're behind pace)
-2. **Catch up display**: Watch shows "Xml to catch up" when behind
+2. **Catch up display**: Watch shows "Xml to catch up" when behind (rounded to 50ml)
 3. **On track display**: After catching up, Watch shows "On track ✓"
 4. **Quiet hours**: Set time to 11pm, verify no reminders scheduled
 5. **Max reminders**: Manually trigger 8, verify 9th is blocked
@@ -1042,3 +1177,6 @@ struct AquavateWatchApp: App {
 14. **Goal notification once**: Drink more after goal, verify no duplicate notification
 15. **Watch local notification**: With iPhone unlocked, trigger reminder, verify Watch shows notification with haptic
 16. **Watch haptic**: Verify Watch taps wrist when notification arrives
+17. **50ml rounding**: Verify deficit displays are rounded to nearest 50ml (e.g., 73ml shows as 50ml)
+18. **50ml threshold**: When deficit < 50ml, verify "On track ✓" is shown instead of "Xml behind"
+19. **No notification under 50ml**: When deficit < 50ml, verify no reminder notification is triggered

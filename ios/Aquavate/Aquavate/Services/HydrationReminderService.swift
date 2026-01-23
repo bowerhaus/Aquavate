@@ -76,6 +76,18 @@ class HydrationReminderService: ObservableObject {
         #endif
     }
 
+    // MARK: - Rounding Helpers
+
+    /// Minimum deficit to trigger notifications (below this, considered "on track")
+    static let minimumDeficitForNotification = 50
+
+    /// Round a value to the nearest 50ml
+    /// - Parameter value: The value to round
+    /// - Returns: Value rounded to nearest 50ml
+    static func roundToNearest50(_ value: Int) -> Int {
+        return ((value + 25) / 50) * 50
+    }
+
     // MARK: - Pace Calculations
 
     /// Calculate expected intake based on current time of day
@@ -244,9 +256,9 @@ class HydrationReminderService: ObservableObject {
         // 5. Calculate deficit and urgency
         updateUrgency()
 
-        // 6. Only notify if behind pace (deficit > 0) and not already notified at this level
-        guard deficitMl > 0 else {
-            print("[HydrationReminder] On pace - no reminder needed")
+        // 6. Only notify if behind pace by at least 50ml (below 50ml is considered "on track")
+        guard deficitMl >= Self.minimumDeficitForNotification else {
+            print("[HydrationReminder] On pace or deficit below 50ml - no reminder needed")
             return
         }
 
@@ -258,13 +270,14 @@ class HydrationReminderService: ObservableObject {
             }
         }
 
-        // 8. Schedule notification and update lastNotifiedUrgency
-        notificationManager.scheduleHydrationReminder(urgency: currentUrgency, deficitMl: deficitMl)
+        // 8. Schedule notification and update lastNotifiedUrgency (use rounded deficit for display)
+        let roundedDeficit = Self.roundToNearest50(deficitMl)
+        notificationManager.scheduleHydrationReminder(urgency: currentUrgency, deficitMl: roundedDeficit)
         lastNotifiedUrgency = currentUrgency
-        print("[HydrationReminder] Scheduled \(currentUrgency.description) reminder - deficit=\(deficitMl)ml")
+        print("[HydrationReminder] Scheduled \(currentUrgency.description) reminder - deficit=\(deficitMl)ml (rounded=\(roundedDeficit)ml)")
 
-        // 9. Also send notification to Watch for local delivery + haptic
-        let deficitDisplay = deficitMl >= 1000 ? String(format: "%.1fL", Double(deficitMl) / 1000.0) : "\(deficitMl)ml"
+        // 9. Also send notification to Watch for local delivery + haptic (use rounded deficit)
+        let deficitDisplay = roundedDeficit >= 1000 ? String(format: "%.1fL", Double(roundedDeficit) / 1000.0) : "\(roundedDeficit)ml"
         let title = "Hydration Reminder"
         let body = currentUrgency == .overdue
             ? "You're falling behind! Drink \(deficitDisplay) to catch up."
