@@ -1,17 +1,26 @@
 # Aquavate - Active Development Progress
 
 **Last Updated:** 2026-01-23
-**Current Branch:** `master`
+**Current Branch:** `enhanced-backpack-mode-display`
 
 ---
 
 ## Current Task
 
-None - ready for next task.
+None - ready for merge to master
 
 ---
 
 ## Recently Completed
+
+- ✅ Enhanced Backpack Mode Display (Issue #38) - [Plan 039](Plans/039-enhanced-backpack-mode-display.md)
+  - Backpack mode screen shows "In Backpack Mode" with wake instructions
+  - RTC flag prevents redundant display refreshes on re-entry
+  - Timer wake waits up to 5s for UPRIGHT_STABLE before deciding mode
+  - Display refreshes immediately when returning to normal mode
+  - Improved debug logging: shows mode [NORM/SYNC/EXT] and both timer countdowns
+  - Fixed sync timeout: only extends 4min for NEW drinks this wake session (not old unsynced)
+  - Added sanity check: sleep timeout of 0 auto-resets to 30s in IOS_MODE
 
 - ✅ Activity & Sleep Mode Tracking (Issue #36) - [Plan 038](Plans/038-activity-sleep-tracking.md)
   - Track individual wake events and backpack sessions for battery analysis

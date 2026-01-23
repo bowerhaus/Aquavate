@@ -35,6 +35,7 @@ void displayForceUpdate(float water_ml, uint16_t daily_total_ml,
                        uint8_t battery_percent, bool sleeping);
 DisplayState displayGetState();
 void drawMainScreen();
+void displayBackpackMode();  // Show backpack mode screen with wake instructions (Issue #38)
 
 // Mark display as initialized (used when waking from deep sleep - display image preserved)
 void displayMarkInitialized();

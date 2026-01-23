@@ -359,15 +359,7 @@ static void drawBatteryIcon(int x, int y, int percent) {
     }
 }
 
-// Helper: Draw sleep indicator (Zzzz.. text)
-static void drawSleepIndicator(int x, int y, bool sleeping) {
-    if (sleeping) {
-        g_display_ptr->setTextSize(1);
-        g_display_ptr->setTextColor(EPD_BLACK);
-        g_display_ptr->setCursor(x, y);
-        g_display_ptr->print("Zzzz..");
-    }
-}
+// Note: Zzzz sleep indicator removed - backpack mode screen replaces it (Issue #38)
 
 // Helper: Draw bottle graphic (exported for calibration UI)
 void drawBottleGraphic(int16_t x, int16_t y, float fill_percent, bool show_question_mark) {
@@ -674,6 +666,40 @@ bool displayRestoreFromRTC() {
     return true;
 }
 
+// Display backpack mode screen with user instructions (Issue #38)
+void displayBackpackMode() {
+    if (g_display_ptr == nullptr) return;
+
+    g_display_ptr->clearBuffer();
+    g_display_ptr->setTextColor(EPD_BLACK);
+
+    // Title: "Backpack Mode" centered, textSize=2
+    g_display_ptr->setTextSize(2);
+    const char* title = "Backpack Mode";
+    int title_width = strlen(title) * 12;  // 12px per char at textSize=2
+    g_display_ptr->setCursor((250 - title_width) / 2, 30);
+    g_display_ptr->print(title);
+
+    // Instructions: multi-line, textSize=1, centered
+    g_display_ptr->setTextSize(1);
+    const char* line1 = "Place me on a flat surface";
+    const char* line2 = "and I will wake up";
+    const char* line3 = "within a minute";
+
+    int w1 = strlen(line1) * 6;
+    int w2 = strlen(line2) * 6;
+    int w3 = strlen(line3) * 6;
+
+    g_display_ptr->setCursor((250 - w1) / 2, 60);
+    g_display_ptr->print(line1);
+    g_display_ptr->setCursor((250 - w2) / 2, 75);
+    g_display_ptr->print(line2);
+    g_display_ptr->setCursor((250 - w3) / 2, 90);
+    g_display_ptr->print(line3);
+
+    g_display_ptr->display();
+}
+
 #if defined(BOARD_ADAFRUIT_FEATHER)
 void drawMainScreen() {
     if (g_display_ptr == nullptr) return;
@@ -721,9 +747,6 @@ void drawMainScreen() {
 
     // Draw battery status in top-right corner
     drawBatteryIcon(220, 5, g_display_state.battery_percent);
-
-    // Draw sleep indicator in top-left corner
-    drawSleepIndicator(5, 5, g_display_state.sleeping);
 
     // Draw time centered at top
     char time_text[16];

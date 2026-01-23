@@ -68,6 +68,11 @@ bool g_force_display_clear_sleep = false;       // Flag to clear Zzzz indicator 
 RTC_DATA_ATTR uint32_t rtc_extended_sleep_magic = 0;
 RTC_DATA_ATTR bool rtc_in_extended_sleep_mode = false;
 RTC_DATA_ATTR unsigned long rtc_time_since_stable_start = 0;
+RTC_DATA_ATTR bool rtc_backpack_screen_shown = false;  // Track if backpack mode screen shown (Issue #38)
+
+// Sync timeout tracking - regular variable, set at wake time
+// Only extend timeout if NEW drinks recorded during this wake session
+uint16_t g_unsynced_at_wake = 0;
 
 // Magic number for validating RTC memory after deep sleep
 #define RTC_EXTENDED_SLEEP_MAGIC 0x45585400  // "EXT\0" in ASCII
@@ -300,47 +305,44 @@ bool extendedSleepRestoreFromRTC() {
 }
 
 // Check if device is still experiencing constant motion (backpack scenario)
+// Returns false (not moving) if UPRIGHT_STABLE detected within timeout
+// Returns true (still moving) if timeout expires without UPRIGHT_STABLE
 bool isStillMovingConstantly() {
     if (!adxlReady) {
-        Serial.println("Extended sleep: LIS3DH not ready, assuming stationary");
+        Serial.println("Extended sleep: Accelerometer not ready, assuming stationary");
         return false;
     }
 
-    Serial.println("Extended sleep: Checking motion state...");
+    Serial.println("Extended sleep: Waiting up to 5s for UPRIGHT_STABLE...");
 
-    // Sample accelerometer for brief period (~500ms)
-    GestureType initial_gesture = gesturesUpdate();
-    delay(500);
-    GestureType final_gesture = gesturesUpdate();
+    const unsigned long STABILITY_CHECK_TIMEOUT_MS = 5000;  // 5 seconds
+    const unsigned long POLL_INTERVAL_MS = 200;  // Check every 200ms
+    unsigned long start_time = millis();
 
-    // If gesture changed or is unstable (sideways tilt), still moving
-    bool still_moving = (initial_gesture != final_gesture ||
-                        initial_gesture == GESTURE_SIDEWAYS_TILT ||
-                        final_gesture == GESTURE_SIDEWAYS_TILT);
+    while ((millis() - start_time) < STABILITY_CHECK_TIMEOUT_MS) {
+        GestureType gesture = gesturesUpdate();
 
-    Serial.print("  Initial gesture: ");
-    switch (initial_gesture) {
-        case GESTURE_INVERTED_HOLD: Serial.print("INVERTED_HOLD"); break;
-        case GESTURE_UPRIGHT_STABLE: Serial.print("UPRIGHT_STABLE"); break;
-        case GESTURE_SIDEWAYS_TILT: Serial.print("SIDEWAYS_TILT"); break;
-        case GESTURE_UPRIGHT: Serial.print("UPRIGHT"); break;
-        case GESTURE_SHAKE_WHILE_INVERTED: Serial.print("SHAKE_WHILE_INVERTED"); break;
-        default: Serial.print("NONE"); break;
+        Serial.print("  Gesture: ");
+        switch (gesture) {
+            case GESTURE_INVERTED_HOLD: Serial.print("INVERTED_HOLD"); break;
+            case GESTURE_UPRIGHT_STABLE: Serial.print("UPRIGHT_STABLE"); break;
+            case GESTURE_SIDEWAYS_TILT: Serial.print("SIDEWAYS_TILT"); break;
+            case GESTURE_UPRIGHT: Serial.print("UPRIGHT"); break;
+            case GESTURE_SHAKE_WHILE_INVERTED: Serial.print("SHAKE_WHILE_INVERTED"); break;
+            default: Serial.print("NONE"); break;
+        }
+        Serial.printf(" (%.1fs elapsed)\n", (millis() - start_time) / 1000.0f);
+
+        if (gesture == GESTURE_UPRIGHT_STABLE) {
+            Serial.println("Extended sleep: UPRIGHT_STABLE detected - bottle is stationary");
+            return false;  // Not moving - return to normal mode
+        }
+
+        delay(POLL_INTERVAL_MS);
     }
-    Serial.print(", Final gesture: ");
-    switch (final_gesture) {
-        case GESTURE_INVERTED_HOLD: Serial.print("INVERTED_HOLD"); break;
-        case GESTURE_UPRIGHT_STABLE: Serial.print("UPRIGHT_STABLE"); break;
-        case GESTURE_SIDEWAYS_TILT: Serial.print("SIDEWAYS_TILT"); break;
-        case GESTURE_UPRIGHT: Serial.print("UPRIGHT"); break;
-        case GESTURE_SHAKE_WHILE_INVERTED: Serial.print("SHAKE_WHILE_INVERTED"); break;
-        default: Serial.print("NONE"); break;
-    }
-    Serial.println();
-    Serial.print("  Still moving: ");
-    Serial.println(still_moving ? "YES" : "NO");
 
-    return still_moving;
+    Serial.println("Extended sleep: Timeout - no UPRIGHT_STABLE detected, still moving");
+    return true;  // Still moving - continue extended sleep
 }
 
 // Enter extended deep sleep mode (timer wake instead of motion wake)
@@ -350,18 +352,15 @@ void enterExtendedDeepSleep() {
     Serial.println("s)...");
 
 #if EXTENDED_SLEEP_INDICATOR
-    // Show Zzzz indicator before sleeping (if enabled)
-    Serial.println("Displaying Zzzz indicator (extended sleep)...");
-
-    // Use last valid display state values
-    DisplayState last_state = displayGetState();
-
-    // Display with Zzzz indicator (sleeping = true)
-    displayUpdate(last_state.water_ml, last_state.daily_total_ml,
-                 last_state.hour, last_state.minute,
-                 last_state.battery_percent, true);
-
-    delay(1000); // Brief pause to ensure display updates
+    // Only show backpack mode screen on first entry (not on re-entry after timer wake)
+    if (!rtc_backpack_screen_shown) {
+        Serial.println("Displaying Backpack Mode screen...");
+        displayBackpackMode();
+        rtc_backpack_screen_shown = true;
+        delay(1000);  // Brief pause to ensure display updates
+    } else {
+        Serial.println("Backpack Mode screen already shown - skipping display refresh");
+    }
 #endif
 
     // Stop BLE advertising before sleep (Plan 034: awake = advertising, asleep = not)
@@ -588,10 +587,12 @@ void setup() {
         Serial.println("Extended sleep: Motion wake detected, returning to normal mode");
         g_in_extended_sleep_mode = false;
         g_time_since_stable_start = millis();
+        rtc_backpack_screen_shown = false;  // Reset for next backpack mode entry
     } else {
         // Power on/reset - initialize continuous awake tracking
         g_time_since_stable_start = millis();
         g_in_extended_sleep_mode = false;
+        rtc_backpack_screen_shown = false;  // Reset on power cycle
     }
 
     Serial.print("Aquavate v");
@@ -850,10 +851,11 @@ void setup() {
             Serial.println("Extended sleep: Motion stopped - returning to normal mode");
             g_in_extended_sleep_mode = false;
             g_time_since_stable_start = millis();  // Reset tracking
+            rtc_backpack_screen_shown = false;  // Reset for next backpack mode entry
 
-            // Set flag to force display update to clear Zzzz indicator
+            // Set flag to force display update to clear backpack mode screen
             g_force_display_clear_sleep = true;
-            Serial.println("Extended sleep: Will clear Zzzz indicator on first stable update");
+            Serial.println("Extended sleep: Will clear backpack screen on first stable update");
         }
     }
 
@@ -918,6 +920,39 @@ void setup() {
             activityStatsRecordWakeStart(WAKE_REASON_MOTION);
         } else if (wakeup_reason == ESP_SLEEP_WAKEUP_TIMER) {
             activityStatsRecordTimerWake();
+
+            // If returning from extended sleep to normal mode, immediately refresh display
+            // (We already detected UPRIGHT_STABLE in isStillMovingConstantly())
+            if (g_force_display_clear_sleep && nauReady) {
+                Serial.println("Extended sleep: Immediately refreshing display after returning to normal mode");
+                g_force_display_clear_sleep = false;
+
+                // Get current water level and daily total
+                int32_t raw_adc = weightReadRaw();
+                float water_ml = calibrationGetWaterWeight(raw_adc, g_calibration);
+                if (water_ml < 0) water_ml = 0;
+                if (water_ml > 830) water_ml = 830;
+                uint16_t daily_total = drinksGetDailyTotal();
+
+                // Get current time
+                uint8_t hour = 0, minute = 0;
+                if (g_time_valid) {
+                    struct timeval tv;
+                    gettimeofday(&tv, NULL);
+                    time_t now = tv.tv_sec + (g_timezone_offset * 3600);
+                    struct tm timeinfo;
+                    gmtime_r(&now, &timeinfo);
+                    hour = timeinfo.tm_hour;
+                    minute = timeinfo.tm_min;
+                }
+
+                // Get battery level
+                float voltage = getBatteryVoltage();
+                uint8_t battery_pct = getBatteryPercent(voltage);
+
+                // Force display update with current values (not sleeping)
+                displayForceUpdate(water_ml, daily_total, hour, minute, battery_pct, false);
+            }
         }
     } else {
         Serial.println("Display state tracking initialized (power on/reset)");
@@ -962,6 +997,12 @@ void setup() {
     } else {
         Serial.println("BLE initialization failed!");
     }
+
+    // Snapshot unsynced count at wake time
+    // Only extend timeout if NEW drinks recorded during this wake session
+    g_unsynced_at_wake = storageGetUnsyncedCount();
+    Serial.print("Unsynced records at wake: ");
+    Serial.println(g_unsynced_at_wake);
 #endif
 
     Serial.println("Setup complete!");
@@ -1478,16 +1519,54 @@ void loop() {
             Serial.print("  Cal State: ");
             Serial.print(calibrationGetStateName(cal_state));
 
-            // Only show sleep countdown if sleep is enabled
-            if (g_sleep_timeout_ms > 0) {
-                unsigned long elapsed = millis() - wakeTime;
-                if (elapsed < g_sleep_timeout_ms) {
-                    unsigned long remaining = (g_sleep_timeout_ms - elapsed) / 1000;
-                    Serial.print("  (sleep in ");
-                    Serial.print(remaining);
-                    Serial.print("s)");
+            // Show mode and both timer countdowns
+            // Modes: NORM=normal 30s, SYNC=waiting for NEW unsynced drinks 4min, EXT=backpack/timer wake
+            Serial.print("  [");
+#if ENABLE_BLE
+            uint16_t unsynced = storageGetUnsyncedCount();
+            bool has_new_unsynced = (unsynced > g_unsynced_at_wake);
+#else
+            uint16_t unsynced = 0;
+            bool has_new_unsynced = false;
+#endif
+            if (g_in_extended_sleep_mode) {
+                Serial.print("EXT");
+            } else if (has_new_unsynced) {
+                Serial.print("SYNC:");
+                Serial.print(unsynced - g_unsynced_at_wake);  // Show NEW unsynced count
+            } else {
+                Serial.print("NORM");
+                if (unsynced > 0) {
+                    Serial.print(":");
+                    Serial.print(unsynced);  // Show total unsynced (not extending timeout)
                 }
             }
+            Serial.print("]");
+
+            // Activity timeout countdown (normal sleep)
+            // Use the actual timeout that will be applied (extended only for NEW unsynced records)
+            uint32_t effective_timeout = g_sleep_timeout_ms;
+            if (has_new_unsynced) {
+                effective_timeout = ACTIVITY_TIMEOUT_EXTENDED_MS;
+            }
+            if (effective_timeout > 0) {
+                unsigned long elapsed = millis() - wakeTime;
+                if (elapsed < effective_timeout) {
+                    unsigned long remaining = (effective_timeout - elapsed) / 1000;
+                    Serial.print(" act:");
+                    Serial.print(remaining);
+                    Serial.print("s");
+                }
+            }
+
+            // Extended sleep timer countdown (time since last UPRIGHT_STABLE)
+            unsigned long time_since_stable = (millis() - g_time_since_stable_start) / 1000;
+            unsigned long ext_remaining = (time_since_stable < g_time_since_stable_threshold_sec)
+                ? (g_time_since_stable_threshold_sec - time_since_stable) : 0;
+            Serial.print(" ext:");
+            Serial.print(ext_remaining);
+            Serial.print("s");
+
             Serial.println();
         }
     }
@@ -1543,12 +1622,15 @@ void loop() {
     }
 
     // Check if activity timeout expired (only if sleep enabled)
-    // Plan 035: Use extended timeout when unsynced records exist to allow iOS background sync
+    // Plan 035: Use extended timeout for NEW unsynced records to allow iOS background sync
+    // Only extend if there are MORE unsynced records than when we last slept (new drinks)
+    // This prevents waiting 4 minutes on every wake when iOS app isn't running
     // BLE data activity resets the timeout via bleCheckDataActivity() above
     uint32_t timeout_ms = g_sleep_timeout_ms;
 #if ENABLE_BLE
     uint16_t unsynced = storageGetUnsyncedCount();
-    if (unsynced > 0) {
+    bool has_new_unsynced = (unsynced > g_unsynced_at_wake);
+    if (has_new_unsynced) {
         timeout_ms = ACTIVITY_TIMEOUT_EXTENDED_MS;
     }
 #endif
@@ -1610,6 +1692,7 @@ void loop() {
                 Serial.print("INT pin before sleep: ");
                 Serial.println(digitalRead(PIN_ACCEL_INT));
             }
+
             enterDeepSleep();
         }
     }

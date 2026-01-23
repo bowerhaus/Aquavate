@@ -254,6 +254,17 @@ uint32_t storageLoadSleepTimeout() {
     }
 
     uint32_t seconds = g_preferences.getUInt(KEY_SLEEP_TIMEOUT, 30); // Default 30 seconds
+
+    // Sanity check: sleep timeout of 0 (disabled) should only be used for debugging
+    // In IOS_MODE, always enforce a minimum sleep timeout to prevent battery drain
+#if IOS_MODE
+    if (seconds == 0) {
+        Serial.println("Storage: WARNING - sleep_timeout was 0 (disabled), resetting to 30s");
+        seconds = 30;
+        g_preferences.putUInt(KEY_SLEEP_TIMEOUT, seconds);  // Fix the stored value
+    }
+#endif
+
     Serial.print("Storage: Loaded sleep_timeout = ");
     Serial.print(seconds);
     Serial.println(" seconds");
@@ -301,11 +312,11 @@ bool storageSaveExtendedSleepThreshold(uint32_t seconds) {
 
 uint32_t storageLoadExtendedSleepThreshold() {
     if (!g_initialized) {
-        Serial.println("Storage: Not initialized, using default extended_sleep_threshold 120");
-        return 120; // Default 120 seconds
+        Serial.printf("Storage: Not initialized, using default extended_sleep_threshold %d\n", TIME_SINCE_STABLE_THRESHOLD_SEC);
+        return TIME_SINCE_STABLE_THRESHOLD_SEC;
     }
 
-    uint32_t seconds = g_preferences.getUInt(KEY_EXT_SLEEP_THR, 120); // Default 120 seconds
+    uint32_t seconds = g_preferences.getUInt(KEY_EXT_SLEEP_THR, TIME_SINCE_STABLE_THRESHOLD_SEC);
     Serial.print("Storage: Loaded extended_sleep_threshold = ");
     Serial.print(seconds);
     Serial.println(" seconds");
