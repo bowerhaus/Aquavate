@@ -10,7 +10,8 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject var bleManager: BLEManager
     @EnvironmentObject var healthKitManager: HealthKitManager
-    @State private var notificationsEnabled = true
+    @EnvironmentObject var notificationManager: NotificationManager
+    @EnvironmentObject var hydrationReminderService: HydrationReminderService
 
     private var connectionStatusColor: Color {
         switch bleManager.connectionState {
@@ -410,15 +411,70 @@ struct SettingsView: View {
                     }
                 }
 
-                // Preferences
-                Section("Preferences") {
-                    Toggle(isOn: $notificationsEnabled) {
+                // Hydration Reminders
+                Section("Hydration Reminders") {
+                    Toggle(isOn: $notificationManager.isEnabled) {
                         HStack {
                             Image(systemName: "bell.fill")
                                 .foregroundStyle(.purple)
-                            Text("Notifications")
+                            Text("Hydration Reminders")
                         }
                     }
+                    .onChange(of: notificationManager.isEnabled) { _, enabled in
+                        if enabled {
+                            Task { try? await notificationManager.requestAuthorization() }
+                        }
+                    }
+
+                    if notificationManager.isEnabled {
+                        HStack {
+                            Image(systemName: notificationManager.isAuthorized ? "checkmark.circle.fill" : "exclamationmark.circle")
+                                .foregroundStyle(notificationManager.isAuthorized ? .green : .orange)
+                            Text("Status")
+                            Spacer()
+                            Text(notificationManager.isAuthorized ? "Authorized" : "Not Authorized")
+                                .foregroundStyle(.secondary)
+                                .font(.subheadline)
+                        }
+
+                        HStack {
+                            Image(systemName: "drop.fill")
+                                .foregroundStyle(hydrationReminderService.currentUrgency.color)
+                            Text("Current Status")
+                            Spacer()
+                            Text(hydrationReminderService.currentUrgency.description)
+                                .foregroundStyle(.secondary)
+                                .font(.subheadline)
+                        }
+
+                        HStack {
+                            Image(systemName: "bell.badge")
+                                .foregroundStyle(.secondary)
+                            Text("Reminders Today")
+                            Spacer()
+                            Text("\(notificationManager.remindersSentToday)/\(NotificationManager.maxRemindersPerDay)")
+                                .foregroundStyle(.secondary)
+                                .font(.subheadline)
+                        }
+
+                        Toggle(isOn: $notificationManager.backOnTrackEnabled) {
+                            HStack {
+                                Image(systemName: "arrow.up.heart.fill")
+                                    .foregroundStyle(.green)
+                                Text("Back On Track Alerts")
+                            }
+                        }
+                    }
+
+                    #if DEBUG
+                    Toggle(isOn: $hydrationReminderService.testModeEnabled) {
+                        HStack {
+                            Image(systemName: "timer")
+                                .foregroundStyle(.orange)
+                            Text("Test Mode (Earlier Reminders)")
+                        }
+                    }
+                    #endif
                 }
 
                 // About
@@ -443,4 +499,6 @@ struct SettingsView: View {
     SettingsView()
         .environmentObject(BLEManager())
         .environmentObject(HealthKitManager())
+        .environmentObject(NotificationManager())
+        .environmentObject(HydrationReminderService())
 }

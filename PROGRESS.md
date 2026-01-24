@@ -1,17 +1,38 @@
 # Aquavate - Active Development Progress
 
-**Last Updated:** 2026-01-23
-**Current Branch:** `master`
+**Last Updated:** 2026-01-24
+**Current Branch:** `master` (after merge)
 
 ---
 
 ## Current Task
 
-None - ready for next task.
+No active task. Ready for next issue.
+
+---
+
+## Context Recovery
+
+To resume from this progress file:
+```
+Continue from PROGRESS.md.
+No active task - ready for next issue.
+```
 
 ---
 
 ## Recently Completed
+
+- ✅ Hydration Reminders + Apple Watch App (Issue #27) - [Plan 036](Plans/036-watch-hydration-reminders.md)
+  - Smart hydration reminders with pace-based urgency model
+  - Apple Watch companion app with complications
+  - Deficit tracking: "Xml to catch up" / "On track ✓" / "Goal reached!"
+  - Background notifications via BGAppRefreshTask
+  - Watch local notifications triggered by iPhone for reliable delivery
+  - Target intake visualization on HomeView
+  - 50ml rounding for deficit display
+  - Back On Track notification (optional)
+  - All 12 phases implemented and tested
 
 - ✅ Activity & Sleep Mode Tracking (Issue #36) - [Plan 038](Plans/038-activity-sleep-tracking.md)
   - Track individual wake events and backpack sessions for battery analysis
@@ -83,6 +104,7 @@ None - ready for next task.
 ## Branch Status
 
 - `master` - Stable baseline
+- `watch-hydration-reminders` - Current work (Issue #27)
 
 ---
 

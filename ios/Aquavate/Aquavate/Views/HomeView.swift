@@ -11,6 +11,7 @@ import CoreData
 struct HomeView: View {
     @EnvironmentObject var bleManager: BLEManager
     @EnvironmentObject var healthKitManager: HealthKitManager
+    @EnvironmentObject var hydrationReminderService: HydrationReminderService
     @Environment(\.managedObjectContext) private var viewContext
 
     // Alert state for pull-to-refresh and delete
@@ -228,7 +229,10 @@ struct HomeView: View {
                     current: displayDailyTotal,
                     total: displayGoal,
                     color: .blue,
-                    label: "of \(displayGoal)ml goal"
+                    label: "of \(displayGoal)ml goal",
+                    expectedCurrent: hydrationReminderService.calculateExpectedIntake(),
+                    deficitMl: hydrationReminderService.deficitMl,
+                    urgency: hydrationReminderService.currentUrgency
                 )
 
                 // Bottle level progress bar (SECONDARY)
@@ -403,4 +407,5 @@ struct StatusBadge: View {
     HomeView()
         .environmentObject(BLEManager())
         .environmentObject(HealthKitManager())
+        .environmentObject(HydrationReminderService())
 }

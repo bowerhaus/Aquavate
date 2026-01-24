@@ -12,12 +12,18 @@ struct HumanFigureProgressView: View {
     let total: Int
     let color: Color
     let label: String
+    let expectedCurrent: Int?
+    let deficitMl: Int
+    let urgency: HydrationUrgency
 
-    init(current: Int, total: Int, color: Color = .blue, label: String = "remaining") {
+    init(current: Int, total: Int, color: Color = .blue, label: String = "remaining", expectedCurrent: Int? = nil, deficitMl: Int = 0, urgency: HydrationUrgency = .onTrack) {
         self.current = current
         self.total = total
         self.color = color
         self.label = label
+        self.expectedCurrent = expectedCurrent
+        self.deficitMl = deficitMl
+        self.urgency = urgency
     }
 
     private var progress: Double {
@@ -25,10 +31,50 @@ struct HumanFigureProgressView: View {
         return min(1.0, Double(current) / Double(total))
     }
 
+    private var expectedProgress: Double {
+        guard total > 0, let expected = expectedCurrent else { return 0 }
+        return min(1.0, Double(expected) / Double(total))
+    }
+
+    /// Round a value to the nearest 50ml
+    private func roundToNearest50(_ value: Int) -> Int {
+        return ((value + 25) / 50) * 50
+    }
+
+    private var roundedDeficitMl: Int {
+        roundToNearest50(deficitMl)
+    }
+
+    private var isBehindTarget: Bool {
+        roundedDeficitMl >= 50
+    }
+
+    private var targetFillColor: Color {
+        urgency.color.opacity(0.3)
+    }
+
     var body: some View {
         VStack(spacing: 16) {
             ZStack {
-                // Progress fill from bottom using filled silhouette as mask
+                // Expected progress fill (urgency color, behind actual)
+                if expectedCurrent != nil && expectedProgress > progress {
+                    GeometryReader { geometry in
+                        VStack {
+                            Spacer()
+                            Rectangle()
+                                .fill(targetFillColor)
+                                .frame(height: geometry.size.height * expectedProgress)
+                        }
+                    }
+                    .mask(
+                        Image("HumanFigureFilled")
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                    )
+                    .animation(.easeInOut(duration: 0.5), value: expectedProgress)
+                }
+
+                // Actual progress fill from bottom using filled silhouette as mask
                 GeometryReader { geometry in
                     VStack {
                         Spacer()
@@ -60,6 +106,14 @@ struct HumanFigureProgressView: View {
                 Text(label)
                     .font(.system(size: 14, weight: .regular))
                     .foregroundColor(.secondary)
+
+                // Behind target indicator (only show if >= 50ml, rounded to nearest 50)
+                if isBehindTarget {
+                    Text("\(roundedDeficitMl) ml behind target")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(urgency.color)
+                        .padding(.top, 4)
+                }
             }
         }
     }
@@ -83,4 +137,40 @@ struct HumanFigureProgressView: View {
 
 #Preview("100%") {
     HumanFigureProgressView(current: 2000, total: 2000, color: .blue, label: "of 2000ml goal")
+}
+
+#Preview("Attention - 25% actual, 50% expected (amber)") {
+    HumanFigureProgressView(
+        current: 500,
+        total: 2000,
+        color: .blue,
+        label: "of 2000ml goal",
+        expectedCurrent: 1000,
+        deficitMl: 300,
+        urgency: .attention
+    )
+}
+
+#Preview("Overdue - 10% actual, 75% expected (red)") {
+    HumanFigureProgressView(
+        current: 200,
+        total: 2000,
+        color: .blue,
+        label: "of 2000ml goal",
+        expectedCurrent: 1500,
+        deficitMl: 500,
+        urgency: .overdue
+    )
+}
+
+#Preview("On Track - 60% actual, 50% expected") {
+    HumanFigureProgressView(
+        current: 1200,
+        total: 2000,
+        color: .blue,
+        label: "of 2000ml goal",
+        expectedCurrent: 1000,
+        deficitMl: 0,
+        urgency: .onTrack
+    )
 }
