@@ -22,6 +22,11 @@ Resume from PROGRESS.md.
 
 ## Recently Completed
 
+- ✅ Retry Button on "Bottle is Asleep" Alert (Issue #52) - [Plan 045](Plans/045-retry-bottle-asleep-alert.md)
+  - Added Retry/Cancel buttons to alert in HomeView and HistoryView
+  - Users can tap Retry after waking bottle instead of pulling down again
+  - Updated iOS-UX-PRD.md Section 2.4
+
 - ✅ Three-Color Stacked Human Figure Fill (Issue #50) - [Plan 044](Plans/044-three-color-stacked-fill.md)
   - Human figure now shows stacked blue/orange/red based on deficit thresholds
   - Orange: deficit up to 20% threshold
