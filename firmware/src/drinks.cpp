@@ -74,6 +74,39 @@ static uint32_t getTodayResetTimestamp() {
     return today_reset_timestamp;
 }
 
+// Calculate seconds until next 4am rollover
+// Used for timer wake scheduling in deep sleep
+// Returns 0 if time is not valid
+uint32_t getSecondsUntilRollover() {
+    if (!g_time_valid) {
+        return 0;  // No timer if time not set
+    }
+
+    uint32_t current_time = getCurrentUnixTime();
+    time_t current_t = current_time;
+    struct tm current_tm;
+    gmtime_r(&current_t, &current_tm);
+
+    // Calculate timestamp for next 4am
+    struct tm next_reset_tm = current_tm;
+    next_reset_tm.tm_hour = DRINK_DAILY_RESET_HOUR;
+    next_reset_tm.tm_min = 0;
+    next_reset_tm.tm_sec = 0;
+    uint32_t next_reset_timestamp = (uint32_t)mktime(&next_reset_tm);
+
+    // If we're at or past 4am today, target tomorrow's 4am
+    if (current_tm.tm_hour >= DRINK_DAILY_RESET_HOUR) {
+        next_reset_timestamp += 24 * 3600;  // Add 24 hours
+    }
+
+    // Calculate seconds until rollover
+    if (next_reset_timestamp > current_time) {
+        return next_reset_timestamp - current_time;
+    }
+
+    return 0;  // Safety fallback
+}
+
 // Helper: Recalculate daily totals from drink records
 // This is the authoritative calculation using the 4am boundary
 static void recalculateDailyTotals() {

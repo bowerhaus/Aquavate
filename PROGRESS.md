@@ -22,6 +22,12 @@ Resume from PROGRESS.md.
 
 ## Recently Completed
 
+- ✅ Daily Rollover Timer Wake - [Plan 046](Plans/046-daily-rollover-timer-wake.md)
+  - Wake bottle at 4am daily rollover to refresh display with reset daily total
+  - ESP32 timer wake source alongside motion wake (wakes on first to trigger)
+  - Returns to sleep immediately after display refresh (no BLE advertising)
+  - Updated PRD.md Section 2 Wake Triggers
+
 - ✅ Retry Button on "Bottle is Asleep" Alert (Issue #52) - [Plan 045](Plans/045-retry-bottle-asleep-alert.md)
   - Added Retry/Cancel buttons to alert in HomeView and HistoryView
   - Users can tap Retry after waking bottle instead of pulling down again
