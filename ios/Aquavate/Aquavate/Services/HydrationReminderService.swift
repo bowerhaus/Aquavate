@@ -15,10 +15,10 @@ class HydrationReminderService: ObservableObject {
     static let activeHoursEnd = 22            // 10pm - end of active hydration hours
     static let activeHoursDuration = 15       // hours of active hydration time
     static let attentionThreshold = 0.20      // 20% behind pace = red threshold
-    static let maxRemindersPerDay = 8
+    static let maxRemindersPerDay = 12
 
     #if DEBUG
-    static let testModeAttentionThreshold = 0.05  // 5% behind triggers amber/red in test mode
+    static let testModeMinimumDeficit = 10  // Lower notification threshold in test mode (10ml instead of 50ml)
     #endif
 
     // MARK: - Published Properties
@@ -66,20 +66,17 @@ class HydrationReminderService: ObservableObject {
         evaluationTimer?.invalidate()
     }
 
-    // MARK: - Pace-Based Configuration
-
-    private var attentionThreshold: Double {
-        #if DEBUG
-        return testModeEnabled ? Self.testModeAttentionThreshold : Self.attentionThreshold
-        #else
-        return Self.attentionThreshold
-        #endif
-    }
-
     // MARK: - Rounding Helpers
 
     /// Minimum deficit to trigger notifications (below this, considered "on track")
-    static let minimumDeficitForNotification = 50
+    /// In test mode, uses lower threshold to trigger notifications more easily
+    private var minimumDeficitForNotification: Int {
+        #if DEBUG
+        return testModeEnabled ? Self.testModeMinimumDeficit : 50
+        #else
+        return 50
+        #endif
+    }
 
     /// Round a value to the nearest 50ml
     /// - Parameter value: The value to round
@@ -140,8 +137,23 @@ class HydrationReminderService: ObservableObject {
         let previousUrgency = currentUrgency
         updateUrgency()
 
-        // Reset escalation tracking if urgency improved
-        if currentUrgency < previousUrgency {
+        // Check if back on track (was behind, now on track)
+        if previousUrgency > .onTrack && currentUrgency == .onTrack {
+            lastNotifiedUrgency = nil
+
+            // Send back-on-track notification if enabled
+            notificationManager?.scheduleBackOnTrackNotification()
+
+            // Also notify Watch
+            WatchConnectivityManager.shared.sendNotificationToWatch(
+                type: "backOnTrack",
+                title: "Back On Track!",
+                body: "Nice work catching up on your hydration."
+            )
+
+            print("[HydrationReminder] Back on track! Notification sent.")
+        } else if currentUrgency < previousUrgency {
+            // Urgency improved but not yet on track
             lastNotifiedUrgency = nil
         }
 
@@ -198,8 +210,8 @@ class HydrationReminderService: ObservableObject {
             return
         }
 
-        // Behind pace - check threshold
-        let redThresholdMl = Int(Double(dailyGoalMl) * attentionThreshold)
+        // Behind pace - check threshold (always 20%, not affected by test mode)
+        let redThresholdMl = Int(Double(dailyGoalMl) * Self.attentionThreshold)
         if deficit >= redThresholdMl {
             currentUrgency = .overdue    // 20%+ behind = red
         } else {
@@ -257,7 +269,7 @@ class HydrationReminderService: ObservableObject {
         updateUrgency()
 
         // 6. Only notify if behind pace by at least 50ml (below 50ml is considered "on track")
-        guard deficitMl >= Self.minimumDeficitForNotification else {
+        guard deficitMl >= minimumDeficitForNotification else {
             print("[HydrationReminder] On pace or deficit below 50ml - no reminder needed")
             return
         }

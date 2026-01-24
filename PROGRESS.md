@@ -1,233 +1,13 @@
 # Aquavate - Active Development Progress
 
-**Last Updated:** 2026-01-23
-**Current Branch:** `watch-hydration-reminders`
+**Last Updated:** 2026-01-24
+**Current Branch:** `master` (after merge)
 
 ---
 
 ## Current Task
 
-**Hydration Reminders + Apple Watch App (Issue #27)** - [Plan 036](Plans/036-watch-hydration-reminders.md)
-
-Smart hydration reminder notifications and Apple Watch companion app with complications.
-
-### Key Design Decisions
-- Max 8 reminders per day
-- Fixed quiet hours (10pm-7am) - also defines active hydration hours (7am-10pm)
-- **Pace-based urgency model** - tracks whether you're on schedule to meet daily goal
-- Stop reminders once daily goal achieved
-- Color-coded urgency: Blue (on-track) → Amber (attention) → Red (overdue)
-- Escalation model: Only notify when urgency increases (no repeated same-level notifications)
-- Watch: Complication + minimal app with large colored water drop + "Xml to catch up"
-- Haptic-only notifications (Watch only - iPhone bundled with sound)
-
-### Progress
-
-#### Phase 1-5: Complete ✅
-- All phases implemented and working
-- Watch app builds and runs on real device
-- Initial sync bug fixed (Watch was showing 0L)
-
-#### Phase 6: Pace-Based Urgency Model - IMPLEMENTED ✅
-Migrated from time-based urgency to pace-based urgency model:
-
-- [x] 6.1 Update `HydrationState.swift` - added `deficitMl: Int` field
-- [x] 6.2 Update `HydrationReminderService.swift`:
-  - Replaced time-based constants with pace-based (`activeHoursStart`, `activeHoursEnd`, `attentionThreshold`)
-  - Added `calculateExpectedIntake()` and `calculateDeficit()` methods
-  - Updated `updateUrgency()` for deficit-based logic
-  - Updated `buildHydrationState()` to include deficit
-- [x] 6.3 Update Watch `ContentView.swift` - shows "Xml to catch up" / "On track ✓" / "Goal reached!"
-- [x] 6.4 Initial sync on app launch (previously implemented)
-- [x] 6.5 Periodic Watch sync (every 60s) - timer now calls `updateUrgency()` + `syncStateToWatch()`
-
-#### Phase 7: Background Notifications - IMPLEMENTED ✅
-Added BGAppRefreshTask support for background notification delivery:
-
-- [x] 7.1 Register background task in `AquavateApp.init()`
-- [x] 7.2 Schedule task when app enters background
-- [x] 7.3 Handle task: check deficit, send notification if behind pace
-- [x] 7.4 Add `fetch` background mode and task identifier to Info.plist
-
-**How it works:**
-- When app backgrounds, schedules BGAppRefreshTask for ~15 minutes
-- iOS controls actual timing (may be 15 min to hours depending on usage)
-- Task wakes app briefly, calculates deficit from CoreData, sends notification if needed
-- Reschedules next check before completing
-
-#### Phase 8: Goal Reached Notification - IMPLEMENTED ✅
-Added celebration notification when daily goal is achieved:
-
-- [x] 8.1 Add `scheduleGoalReachedNotification()` to NotificationManager
-- [x] 8.2 Add `goalNotificationSentToday` flag to HydrationReminderService (persisted to UserDefaults)
-- [x] 8.3 Call notification from `goalAchieved()` (only once per day)
-- [x] 8.4 Reset flag in `dailyReset()`
-- [x] 8.5 Add goal reached check to background task handler
-
-**Notification:**
-- Title: "Goal Reached! 💧"
-- Body: "Good job! You've hit your daily hydration goal."
-
-#### Phase 9: Watch Local Notifications - IMPLEMENTED ✅
-iPhone-triggered Watch local notifications for reliable delivery regardless of iPhone lock state:
-
-- [x] 9.1 Extend HydrationState with notification request fields (`shouldNotify`, `notificationType`, `notificationTitle`, `notificationBody`)
-- [x] 9.2 Add `sendNotificationToWatch()` to WatchConnectivityManager (uses transferUserInfo for guaranteed delivery)
-- [x] 9.3 Update HydrationReminderService to call Watch notification on reminder/goal
-- [x] 9.4 Create WatchNotificationManager.swift (schedule local notifications + haptic)
-- [x] 9.5 Update WatchSessionManager to handle notification requests
-- [x] 9.6 Request notification permission on Watch app init
-
-**How it works:**
-- iPhone calculates deficit and decides when to notify (single source of truth)
-- iPhone sends notification request to Watch via `transferUserInfo()` (guaranteed delivery)
-- Watch receives request, schedules local notification + plays haptic
-- Works regardless of iPhone lock state or Watch app foreground/background state
-
-#### Phase 10: Target Intake Visualization on HomeView - IMPLEMENTED ✅
-Added visual pace tracking to the main iPhone app screen:
-
-- [x] 10.1 Update `HumanFigureProgressView.swift`:
-  - Added `expectedCurrent: Int?` parameter for expected intake by now
-  - Added `urgency: HydrationUrgency` parameter for color coding
-  - Added second fill layer (behind actual) showing expected progress
-  - Fill color matches urgency: amber (attention) or red (overdue)
-  - Added "X ml behind target" text below figure (colored by urgency)
-- [x] 10.2 Update `HomeView.swift`:
-  - Added `@EnvironmentObject var hydrationReminderService`
-  - Passes expected intake, deficit, and urgency to HumanFigureProgressView
-
-**Visual behavior:**
-- When on track: Shows just the blue fill (actual progress)
-- When behind target: Shows urgency-colored fill (amber/red) up to expected level, with blue fill showing actual. Gap indicates how much to catch up.
-- Text shows "X ml behind target" in matching urgency color
-
-#### Phase 11: 50ml Rounding for Deficit Display - IMPLEMENTED ✅
-Round deficit values to nearest 50ml and suppress notifications/display when below 50ml:
-
-- [x] 11.1 Update `HydrationReminderService.swift`:
-  - Added `roundToNearest50()` helper function
-  - Added `minimumDeficitForNotification = 50` constant
-  - Notifications only trigger if deficit ≥ 50ml
-  - Rounded deficit values passed to iOS and Watch notifications
-- [x] 11.2 Update `HumanFigureProgressView.swift`:
-  - Added `roundToNearest50()` helper
-  - "X ml behind target" text only shows if rounded deficit ≥ 50ml
-  - Display uses rounded value
-- [x] 11.3 Update Watch `ContentView.swift`:
-  - Added `roundToNearest50()` helper
-  - "Xml to catch up" only shows if rounded deficit ≥ 50ml
-  - Display uses rounded value
-
-**Behavior:**
-- Deficits below 50ml: No notification, shows "On track ✓"
-- Values rounded to nearest 50ml (e.g., 73ml → 50ml, 127ml → 150ml)
-
-#### Testing Status
-- [x] Test pace tracking - amber urgency showing correctly
-- [x] Test "Xml to catch up" display on Watch - working
-- [x] Test goal reached notification on iPhone - working
-- [ ] Test HomeView target visualization (Phase 10):
-  - [ ] Verify amber fill appears when slightly behind pace
-  - [ ] Verify red fill appears when 20%+ behind pace
-  - [ ] Verify "X ml behind target" text displays correctly
-  - [ ] Verify visualization updates as time passes
-- [ ] Test "On track ✓" when caught up
-- [ ] Test "Goal reached!" display on Watch when goal achieved
-- [ ] Test periodic sync (deficit increases over time without iPhone interaction)
-- [ ] Test notifications with test mode
-- [ ] Test quiet hours
-- [ ] Test max 8 reminders
-- [ ] Test Watch complication color changes
-- [ ] Test background notifications (may need to wait for iOS to schedule)
-- [ ] Test Watch local notifications (Phase 9):
-  - [ ] Trigger reminder while iPhone unlocked - Watch should show notification + haptic
-  - [ ] Reach goal - Watch should show "Goal Reached!" notification + haptic
-  - [ ] Verify haptic feedback on Watch wrist tap
-
-### Current Status: Phase 11 (50ml Rounding) Implemented - Ready to Test
-
-**Pace-Based Model Working:**
-- Urgency based on deficit from expected pace (not time since last drink)
-- Active hydration hours: 7am-10pm (15 hours)
-- Expected intake calculated proportionally through the day
-- Thresholds: On track (deficit ≤ 0) → Amber (1-19% behind) → Red (20%+ behind)
-
-**50ml Rounding (Phase 11):**
-- All deficit displays and notifications rounded to nearest 50ml
-- Deficits below 50ml suppressed (shows "On track ✓" instead)
-- Applies to: iOS notifications, Watch notifications, HomeView "X ml behind target", Watch "Xml to catch up"
-
-**Watch Display (Verified Working):**
-- Shows "Xml to catch up" when behind schedule (deficit ≥ 50ml, rounded) ✅
-- Shows "On track ✓" when on pace, ahead, or deficit < 50ml
-- Shows "Goal reached! 🎉" when daily goal achieved
-- Removed "time since last drink" (no longer relevant with pace model)
-
-**Bug Fixes Applied:**
-- Added backwards-compatible decoder for `deficitMl` field (old saved data was missing it)
-- Watch now checks `receivedApplicationContext` on session activation
-- Fixed duplicate Watch files issue - actual code is in `AquavateWatch Watch App/AquavateWatch/`
-
-### Files Modified This Session
-- `ios/Aquavate/Aquavate/Models/HydrationState.swift`:
-  - Added `deficitMl: Int` field
-  - Added custom decoder for backwards compatibility
-  - Added memberwise initializer
-  - **Phase 9:** Added notification request fields (`shouldNotify`, `notificationType`, `notificationTitle`, `notificationBody`)
-- `ios/Aquavate/Aquavate/Services/HydrationReminderService.swift` - complete pace-based model:
-  - Replaced time-based constants with pace-based (`activeHoursStart/End`, `attentionThreshold`)
-  - Added `calculateExpectedIntake()` and `calculateDeficit()` methods
-  - Updated `updateUrgency()` for deficit-based logic
-  - Updated `buildHydrationState()` to include deficit
-  - Updated periodic timer to also sync to Watch
-  - **Phase 9:** Added Watch notification triggers in `evaluateAndScheduleReminder()` and `goalAchieved()`
-  - **Phase 11:** Added `roundToNearest50()` helper, `minimumDeficitForNotification = 50`, notifications rounded to 50ml
-- `ios/Aquavate/Aquavate/Services/NotificationManager.swift` - updated `scheduleHydrationReminder()` to use deficit instead of minutes
-- `ios/Aquavate/Aquavate/Services/WatchConnectivityManager.swift`:
-  - **Phase 9:** Added `sendNotificationToWatch()` method using `transferUserInfo()` for guaranteed delivery
-- `ios/Aquavate/AquavateWatch Watch App/AquavateWatch/ContentView.swift` - status text display, removed time since last drink
-  - **Phase 11:** Added `roundToNearest50()`, deficit rounded to 50ml and suppressed if < 50ml
-- `ios/Aquavate/AquavateWatch Watch App/AquavateWatch/WatchSessionManager.swift`:
-  - Check existing context on activation
-  - **Phase 9:** Handle notification requests from iPhone in `didReceiveUserInfo`
-- `ios/Aquavate/AquavateWatch Watch App/AquavateWatch/AquavateWatchApp.swift`:
-  - **Phase 9:** Request notification permission on init
-- `ios/Aquavate/Aquavate/AquavateApp.swift` - BGAppRefreshTask for background notifications:
-  - Import BackgroundTasks framework
-  - Register background task on init
-  - Schedule hydration check when app enters background
-  - Handle task: calculate deficit, send notification if behind pace
-- `ios/Aquavate/Info.plist` - added `fetch` background mode and `BGTaskSchedulerPermittedIdentifiers`
-- **Phase 10:** `ios/Aquavate/Aquavate/Components/HumanFigureProgressView.swift`:
-  - Added `expectedCurrent: Int?` and `urgency: HydrationUrgency` parameters
-  - Added second fill layer showing expected progress (urgency-colored, behind actual)
-  - Added "X ml behind target" text with urgency color
-  - **Phase 11:** Added `roundToNearest50()`, deficit rounded to 50ml and suppressed if < 50ml
-- **Phase 10:** `ios/Aquavate/Aquavate/Views/HomeView.swift`:
-  - Added `@EnvironmentObject var hydrationReminderService`
-  - Passes expected intake, deficit, and urgency to HumanFigureProgressView
-
-### Files Created This Session
-- **Phase 9:** `ios/Aquavate/AquavateWatch Watch App/AquavateWatch/WatchNotificationManager.swift` - schedule local notifications + haptic
-
-**Note:** There are duplicate Watch files in two locations. The **actual running code** is in:
-- `ios/Aquavate/AquavateWatch Watch App/AquavateWatch/` (this is what runs on device)
-
-### Files Created (All on disk)
-**iPhone:**
-- `ios/Aquavate/Aquavate/Models/HydrationState.swift` ✅
-- `ios/Aquavate/Aquavate/Services/NotificationManager.swift` ✅
-- `ios/Aquavate/Aquavate/Services/HydrationReminderService.swift` ✅
-- `ios/Aquavate/Aquavate/Services/SharedDataManager.swift` ✅
-- `ios/Aquavate/Aquavate/Services/WatchConnectivityManager.swift` ✅
-
-**Watch (in `ios/Aquavate/AquavateWatch/`):**
-- `AquavateWatchApp.swift` ✅
-- `ContentView.swift` ✅
-- `ComplicationProvider.swift` ✅
-- `WatchSessionManager.swift` ✅
-- `AquavateWatch.entitlements` ✅
+No active task. Ready for next issue.
 
 ---
 
@@ -235,23 +15,24 @@ Round deficit values to nearest 50ml and suppress notifications/display when bel
 
 To resume from this progress file:
 ```
-Continue from PROGRESS.md - Issue #27 (Hydration Reminders + Apple Watch App).
-Phases 1-11 all implemented. Ready for testing.
-
-NEXT TASK: Test 50ml rounding (Phase 11):
-- Build and deploy to iPhone and Watch
-- Verify deficit values are rounded to nearest 50ml
-- Verify deficits < 50ml show "On track ✓" instead of "X ml behind target"
-- Verify notifications only trigger when deficit ≥ 50ml
-
-IMPORTANT: Watch files are in TWO locations - actual code is in "AquavateWatch Watch App/AquavateWatch/"
-Plan: Plans/036-watch-hydration-reminders.md
-Branch: watch-hydration-reminders
+Continue from PROGRESS.md.
+No active task - ready for next issue.
 ```
 
 ---
 
 ## Recently Completed
+
+- ✅ Hydration Reminders + Apple Watch App (Issue #27) - [Plan 036](Plans/036-watch-hydration-reminders.md)
+  - Smart hydration reminders with pace-based urgency model
+  - Apple Watch companion app with complications
+  - Deficit tracking: "Xml to catch up" / "On track ✓" / "Goal reached!"
+  - Background notifications via BGAppRefreshTask
+  - Watch local notifications triggered by iPhone for reliable delivery
+  - Target intake visualization on HomeView
+  - 50ml rounding for deficit display
+  - Back On Track notification (optional)
+  - All 12 phases implemented and tested
 
 - ✅ Activity & Sleep Mode Tracking (Issue #36) - [Plan 038](Plans/038-activity-sleep-tracking.md)
   - Track individual wake events and backpack sessions for battery analysis

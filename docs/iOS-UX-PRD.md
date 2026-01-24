@@ -1,10 +1,11 @@
 # Aquavate iOS App - UX Product Requirements Document
 
-**Version:** 1.8
-**Date:** 2026-01-23
-**Status:** Approved and Tested (Activity Stats)
+**Version:** 1.9
+**Date:** 2026-01-24
+**Status:** Approved and Tested (Hydration Reminders + Watch App)
 
 **Changelog:**
+- **v1.9 (2026-01-24):** Added Hydration Reminders with pace-based urgency model (Issue #27). Added Apple Watch companion app with complications. Added target intake visualization on HomeView. See Section 2.8 (Watch App) and Section 7 (Notification Strategy).
 - **v1.8 (2026-01-23):** Added Diagnostics section to Settings with Activity Stats view (Issue #36). Shows motion wake events and backpack sessions for battery analysis. Includes "drink taken" indicator (water drop icon) for wakes where user took a drink.
 - **v1.7 (2026-01-23):** Added Gestures section to Settings with Shake-to-Empty toggle. Setting syncs to firmware via BLE Device Settings characteristic.
 - **v1.6 (2026-01-22):** Settings page cleanup - replaced static "Name" with live "Device" showing connected device name, removed unused "Use Ounces" toggle, removed Version row from About section.
@@ -628,6 +629,100 @@ Aquavate uses a **4am daily reset** while Apple Health uses **midnight**. This m
 | No activity data | Shows "No activity recorded since last charge" |
 | Fetch error | Shows error message with retry option |
 | In backpack mode | Shows current session start time and timer wake count |
+
+---
+
+### 2.8 Apple Watch App (Issue #27)
+
+**Purpose:** Companion app showing hydration status with pace-based deficit tracking and complications
+
+**App Structure:**
+```
+ios/Aquavate/
+  AquavateWatch Watch App/
+    AquavateWatch/
+      AquavateWatchApp.swift
+      ContentView.swift
+      ComplicationProvider.swift
+      WatchSessionManager.swift
+      WatchNotificationManager.swift
+```
+
+**Watch Home View:**
+```
+┌─────────────────────────────────┐
+│                                 │
+│           💧                    │  ← Large water drop (colored by urgency)
+│                                 │
+│       1.2L / 2.5L               │  ← Daily progress
+│                                 │
+│     367ml to catch up           │  ← Status text (or "On track ✓")
+│                                 │
+└─────────────────────────────────┘
+```
+
+**Status Text Variants:**
+
+| Condition | Display |
+|-----------|---------|
+| Deficit ≥ 50ml | "{deficit}ml to catch up" |
+| Deficit < 50ml | "On track ✓" |
+| Goal achieved | "Goal reached! 🎉" |
+
+**Urgency Colors:**
+
+| Urgency | Color | Condition |
+|---------|-------|-----------|
+| On Track | Blue | deficit ≤ 0 |
+| Attention | Amber | 0 < deficit < 20% of goal |
+| Overdue | Red | deficit ≥ 20% of goal |
+
+**Complications:**
+- `graphicCircular` - Small water drop with progress ring
+- `graphicCorner` - Larger drop with percentage
+
+**Data Sync:**
+- Uses WatchConnectivity framework
+- iPhone sends state via `updateApplicationContext()` and `transferUserInfo()`
+- Updates on: app launch, BLE drink sync, periodic timer (60s)
+
+**Notifications:**
+- iPhone triggers local notifications on Watch via `transferUserInfo()`
+- Watch schedules notification + plays haptic
+- Works regardless of iPhone lock state
+
+---
+
+### 2.9 HomeView Target Visualization (Issue #27)
+
+**Purpose:** Visual pace tracking showing expected vs actual progress
+
+**Layout (HumanFigureProgressView):**
+```
+┌─────────────────────────────────┐
+│                                 │
+│      [Human figure graphic]     │
+│      ┌─────────────────────┐    │
+│      │  ████████░░░░░░░░░  │    │  ← Blue fill = actual
+│      │  ████████████░░░░░  │    │  ← Urgency fill = expected (behind)
+│      └─────────────────────┘    │
+│                                 │
+│      250 ml behind target       │  ← Text (urgency colored)
+│                                 │
+└─────────────────────────────────┘
+```
+
+**Visual Behavior:**
+
+| State | Visualization |
+|-------|--------------|
+| On track | Blue fill only (actual progress) |
+| Behind target | Urgency-colored fill (amber/red) showing expected level, blue fill showing actual. Gap indicates deficit. |
+
+**Text Display:**
+- Shows "X ml behind target" when rounded deficit ≥ 50ml
+- Text color matches urgency (amber or red)
+- Hidden when on track or deficit < 50ml
 
 ---
 
@@ -1284,18 +1379,68 @@ struct CircularProgressView {
 
 ## 7. Notification Strategy
 
-### Local Notifications
+### Hydration Reminders (Pace-Based Model) - Issue #27
+
+Smart reminders based on whether user is on pace to meet daily goal. Uses pace-based urgency rather than time since last drink.
+
+**Pace Calculation:**
+```
+Expected intake = (elapsed active hours / 15) × dailyGoalMl
+Deficit = expected - dailyTotalMl
+```
+
+**Urgency Levels:**
+
+| Urgency | Condition | Color | Notification |
+|---------|-----------|-------|--------------|
+| On Track | deficit ≤ 0 | Blue | None |
+| Attention | 0 < deficit < 20% of goal | Amber | "Time to hydrate! You're Xml behind pace." |
+| Overdue | deficit ≥ 20% of goal | Red | "You're falling behind! Drink Xml to catch up." |
+
+**Configuration:**
+- Active hours: 7am-10pm (15 hours)
+- Quiet hours: 10pm-7am (no reminders)
+- Max 12 reminders per day
+- 50ml rounding: Deficits rounded to nearest 50ml, suppressed if <50ml
+- Escalation model: Only notify when urgency increases (no repeated same-level notifications)
+
+**Notification Types:**
+
+| Trigger | Title | Body | Platform |
+|---------|-------|------|----------|
+| Behind pace (attention) | "Hydration Reminder" | "Time to hydrate! You're Xml behind pace." | iPhone + Watch |
+| Behind pace (overdue) | "Hydration Reminder" | "You're falling behind! Drink Xml to catch up." | iPhone + Watch |
+| Goal achieved | "Goal Reached! 💧" | "Good job! You've hit your daily hydration goal." | iPhone + Watch |
+| Back on track (optional) | "Back On Track! ✓" | "Nice work catching up on your hydration." | iPhone + Watch |
+| Low battery | "Bottle battery low" | "Aquavate at {X}%. Charge soon." | iPhone |
+
+**Settings (SettingsView):**
+- Hydration Reminders toggle (main on/off)
+- Back On Track Alerts toggle (optional, disabled by default)
+- Test Mode toggle (DEBUG only, lowers notification threshold)
+
+**Background Notifications:**
+- Uses BGAppRefreshTask for background delivery
+- Scheduled when app enters background (~15 min intervals)
+- iOS controls actual timing based on app usage patterns
+
+### Apple Watch Notifications
+
+Watch receives notifications via two mechanisms:
+1. **iOS mirroring** - Standard iOS notification mirroring (when iPhone locked)
+2. **Local notifications** - iPhone-triggered local notifications on Watch (always reliable)
+
+Watch notifications include haptic feedback via `WKInterfaceDevice.current().play(.notification)`.
+
+### Legacy Notifications
 
 | Trigger | Title | Body | Time | Action |
 |---------|-------|------|------|--------|
-| Goal reminder | "Time for water! 💧" | "You've had {X}ml today. Keep going!" | User-set (default 3 PM) | Open app |
-| Goal achieved | "Goal reached! 🎉" | "You hit your {goal}ml goal today!" | When daily_total ≥ goal | Open app |
 | Low battery | "Bottle battery low" | "Aquavate at {X}%. Charge soon." | When battery < 20% | Open app |
 | Sync reminder | "Sync your bottle" | "Haven't synced in 24 hours." | 24h since last sync | Open app |
 
 **Settings:**
 - All notifications can be disabled in Settings
-- Goal reminder time is configurable
 - Respects iOS notification permissions
 
 ### In-App Banners
@@ -1594,10 +1739,11 @@ struct CircularProgressView {
 | Splash Screen | ✅ Exists | - | No changes |
 | Pairing Screen | 🆕 New | 4.1 | Device scanning |
 | Calibration Wizard | 🔄 Updated | 4.7 | Two-point calibration (updated 2026-01-17) |
-| Home Screen | 🔄 Modify | 4.2-4.6 | Wire BLE data |
-| History Screen | 🔄 Modify | 4.3-4.4 | Wire CoreData |
-| Settings Screen | 🔄 Modify | 4.2-4.5 | Add "Calibrate Bottle" button, Diagnostics section |
+| Home Screen | ✅ Complete | 4.2-4.6 | Wire BLE data, target visualization (Issue #27) |
+| History Screen | ✅ Complete | 4.3-4.4 | Wire CoreData |
+| Settings Screen | ✅ Complete | 4.2-4.5 | Calibrate, Diagnostics, Hydration Reminders |
 | Activity Stats | ✅ Complete | - | Battery diagnostics (Issue #36, 2026-01-23) |
+| Watch App | ✅ Complete | - | Companion app + complications (Issue #27, 2026-01-24) |
 
 | Component | Status | Phase |
 |-----------|--------|-------|
@@ -1614,7 +1760,20 @@ struct CircularProgressView {
 
 This UX PRD defines the complete user experience for the Aquavate iOS app. Upon approval, Phase 4 implementation will begin following both this document and the technical plan in [Plans/014-ios-ble-coredata-integration.md](../Plans/014-ios-ble-coredata-integration.md).
 
-**Document Status:** Approved (v1.8)
+**Document Status:** Approved (v1.9)
+
+**Update Note (2026-01-24 - Hydration Reminders + Watch App):**
+- Added pace-based hydration reminder system (Issue #27)
+- Reminders based on deficit from expected intake, not time since last drink
+- Active hours: 7am-10pm, quiet hours: 10pm-7am, max 12 reminders/day
+- Urgency colors: Blue (on track) → Amber (attention) → Red (overdue)
+- 50ml rounding for deficit display (values <50ml suppressed)
+- Added Apple Watch companion app with complications
+- Watch shows large colored water drop + "Xml to catch up" / "On track ✓"
+- Watch local notifications triggered by iPhone for reliable delivery
+- Added target intake visualization to HomeView (shows expected vs actual)
+- Back On Track notification (optional, disabled by default)
+- Background notifications via BGAppRefreshTask
 
 **Update Note (2026-01-23 - Activity Stats):**
 - Added Diagnostics section to Settings screen
@@ -1657,5 +1816,6 @@ This UX PRD defines the complete user experience for the Aquavate iOS app. Upon 
 2. ✅ Pull-to-Refresh sync (Complete - 2026-01-18)
 3. ✅ Bidirectional drink sync (Complete - 2026-01-21)
 4. ✅ HealthKit integration (Complete - 2026-01-21)
-5. Phase 4.7 implementation (Calibration Wizard) - Optional/Future
-6. Begin Phase 5 (Advanced features)
+5. ✅ Hydration Reminders + Apple Watch App (Complete - 2026-01-24, Issue #27)
+6. Phase 4.7 implementation (Calibration Wizard) - Optional/Future
+7. Begin Phase 5 (Advanced features)

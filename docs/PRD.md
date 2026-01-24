@@ -387,10 +387,31 @@ For detailed screen specifications, layouts, and UX flows, see [iOS-UX-PRD.md](i
 This means daily totals may differ slightly for drinks taken between midnight and 4am. Individual drink timestamps are preserved correctly in HealthKit. This design prioritizes user experience (late-night drinks feel like "yesterday") over strict calendar alignment.
 
 ### 6. Notifications
-- Daily goal reminders (configurable times)
-- Goal achieved celebration
+
+#### Hydration Reminders (Pace-Based Model)
+Smart reminders based on whether user is on pace to meet daily goal:
+
+| Urgency | Condition | Notification |
+|---------|-----------|--------------|
+| On Track (Blue) | deficit ≤ 0 | No notification |
+| Attention (Amber) | 0 < deficit < 20% of goal | "Time to hydrate! You're Xml behind pace." |
+| Overdue (Red) | deficit ≥ 20% of goal | "You're falling behind! Drink Xml to catch up." |
+
+**Configuration:**
+- Active hours: 7am-10pm (15 hours)
+- Quiet hours: 10pm-7am (no reminders)
+- Max 12 reminders per day
+- Escalation model: Only notify when urgency increases
+- 50ml rounding: Deficits rounded to nearest 50ml, suppressed if <50ml
+
+**Notification Types:**
+- Hydration reminders (pace-based, during active hours)
+- Goal achieved celebration ("Goal Reached! 💧")
+- Back on track (optional, when user catches up after falling behind)
 - Low battery warning (from puck status)
 - Sync reminder if not connected for 24h
+
+See [Plans/036-watch-hydration-reminders.md](../Plans/036-watch-hydration-reminders.md) for full implementation details.
 
 ---
 
@@ -482,9 +503,11 @@ This means daily totals may differ slightly for drinks taken between midnight an
 
 ## Future Considerations
 
+### Implemented
+1. ✅ **Apple Watch companion app** (Issue #27) - Syncs via iPhone using WatchConnectivity. Shows today's intake, pace-based deficit ("Xml to catch up"), and goal progress complication. Includes local notifications with haptic feedback. See [Plans/036-watch-hydration-reminders.md](../Plans/036-watch-hydration-reminders.md).
+
 ### Low Complexity (Post-MVP)
-1. **Apple Watch companion app** (~2-3 days) - View-only app syncs via iPhone, shows today's intake, goal progress complication. Does NOT connect directly to puck.
-2. **iOS Home Screen Widget** - Quick glance at daily progress
+1. **iOS Home Screen Widget** - Quick glance at daily progress
 
 ### Medium Complexity
 3. **OTA firmware updates** via BLE (architecture prepared, implement post-MVP)

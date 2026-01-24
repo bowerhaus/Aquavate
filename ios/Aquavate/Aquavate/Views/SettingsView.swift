@@ -456,6 +456,14 @@ struct SettingsView: View {
                                 .foregroundStyle(.secondary)
                                 .font(.subheadline)
                         }
+
+                        Toggle(isOn: $notificationManager.backOnTrackEnabled) {
+                            HStack {
+                                Image(systemName: "arrow.up.heart.fill")
+                                    .foregroundStyle(.green)
+                                Text("Back On Track Alerts")
+                            }
+                        }
                     }
 
                     #if DEBUG
@@ -463,7 +471,7 @@ struct SettingsView: View {
                         HStack {
                             Image(systemName: "timer")
                                 .foregroundStyle(.orange)
-                            Text("Test Mode (Fast Reminders)")
+                            Text("Test Mode (Earlier Reminders)")
                         }
                     }
                     #endif

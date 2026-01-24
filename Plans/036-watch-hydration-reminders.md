@@ -1,5 +1,7 @@
 # Plan: Hydration Reminders + Apple Watch App (Issue #27)
 
+**Status: Complete** ✅
+
 ## Summary
 
 Add smart hydration reminder notifications and an Apple Watch companion app with complications.
@@ -1159,6 +1161,128 @@ private var statusText: some View {
 
 ---
 
+## Phase 12: Back On Track Notification (Optional)
+
+Add an optional notification when the user catches up after being behind pace. This provides positive reinforcement for good hydration behavior.
+
+### Design Decision
+
+- **Optional setting** - Disabled by default, user can enable in Settings
+- **Multiple per day** - Can fire each time user catches up (no daily limit)
+- **Natural spam protection** - Requires actual behind→caught-up cycle
+
+### Trigger Condition
+
+```swift
+previousUrgency > .onTrack && currentUrgency == .onTrack
+```
+
+The user must:
+1. Fall behind pace (urgency becomes `.attention` or `.overdue`)
+2. Drink enough to catch up (urgency returns to `.onTrack`)
+
+### 12.1 Add Setting to NotificationManager
+
+**Modify:** `ios/Aquavate/Aquavate/Services/NotificationManager.swift`
+
+```swift
+/// User preference for back-on-track notifications
+@Published var backOnTrackEnabled: Bool {
+    didSet {
+        UserDefaults.standard.set(backOnTrackEnabled, forKey: "backOnTrackNotificationsEnabled")
+    }
+}
+
+// In init():
+self.backOnTrackEnabled = UserDefaults.standard.bool(forKey: "backOnTrackNotificationsEnabled")
+```
+
+### 12.2 Add Notification Method
+
+**Modify:** `ios/Aquavate/Aquavate/Services/NotificationManager.swift`
+
+```swift
+/// Schedule a back-on-track celebration notification
+func scheduleBackOnTrackNotification() {
+    guard isEnabled && isAuthorized && backOnTrackEnabled else { return }
+
+    let content = UNMutableNotificationContent()
+    content.title = "Back On Track! ✓"
+    content.body = "Nice work catching up on your hydration."
+    content.sound = .default
+
+    let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
+    let request = UNNotificationRequest(
+        identifier: "hydration-back-on-track-\(UUID().uuidString)",
+        content: content,
+        trigger: trigger
+    )
+    notificationCenter.add(request)
+}
+```
+
+### 12.3 Trigger in HydrationReminderService
+
+**Modify:** `ios/Aquavate/Aquavate/Services/HydrationReminderService.swift`
+
+In `drinkRecorded()`, after detecting urgency improvement:
+
+```swift
+func drinkRecorded() {
+    lastDrinkTime = Date()
+
+    let previousUrgency = currentUrgency
+    updateUrgency()
+
+    // Check if back on track (was behind, now on track)
+    if previousUrgency > .onTrack && currentUrgency == .onTrack {
+        lastNotifiedUrgency = nil
+
+        // Send back-on-track notification if enabled
+        notificationManager?.scheduleBackOnTrackNotification()
+
+        // Also notify Watch
+        WatchConnectivityManager.shared.sendNotificationToWatch(
+            type: "backOnTrack",
+            title: "Back On Track! ✓",
+            body: "Nice work catching up on your hydration."
+        )
+    } else if currentUrgency < previousUrgency {
+        lastNotifiedUrgency = nil
+    }
+
+    print("[HydrationReminder] Drink recorded - deficit=\(deficitMl)ml, urgency=\(currentUrgency)")
+}
+```
+
+### 12.4 Add Toggle to SettingsView
+
+**Modify:** `ios/Aquavate/Aquavate/Views/SettingsView.swift`
+
+Add under the "Hydration Reminders" section, after the main toggle:
+
+```swift
+if notificationManager.isEnabled {
+    Toggle(isOn: $notificationManager.backOnTrackEnabled) {
+        HStack {
+            Image(systemName: "arrow.up.heart.fill")
+                .foregroundStyle(.green)
+            Text("Back On Track Alerts")
+        }
+    }
+}
+```
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `Services/NotificationManager.swift` | Add `backOnTrackEnabled` toggle, `scheduleBackOnTrackNotification()` method |
+| `Services/HydrationReminderService.swift` | Trigger notification in `drinkRecorded()` when catching up |
+| `Views/SettingsView.swift` | Add "Back On Track Alerts" toggle |
+
+---
+
 ## Verification
 
 1. **Pace tracking**: At 2pm with 0ml drunk, verify amber/red urgency (you're behind pace)
@@ -1180,3 +1304,5 @@ private var statusText: some View {
 17. **50ml rounding**: Verify deficit displays are rounded to nearest 50ml (e.g., 73ml shows as 50ml)
 18. **50ml threshold**: When deficit < 50ml, verify "On track ✓" is shown instead of "Xml behind"
 19. **No notification under 50ml**: When deficit < 50ml, verify no reminder notification is triggered
+20. **Back on track notification**: Enable setting, fall behind, drink to catch up, verify "Back On Track!" notification on iPhone and Watch
+21. **Back on track disabled**: With setting off, verify no notification when catching up

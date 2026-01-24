@@ -14,7 +14,7 @@ class NotificationManager: ObservableObject {
 
     static let quietHoursStart = 22  // 10pm
     static let quietHoursEnd = 7     // 7am
-    static let maxRemindersPerDay = 8
+    static let maxRemindersPerDay = 12
     static let dailyResetHour = 4    // 4am boundary (matches drink tracking)
 
     // MARK: - Published Properties
@@ -32,6 +32,13 @@ class NotificationManager: ObservableObject {
         }
     }
 
+    /// User preference for back-on-track notifications
+    @Published var backOnTrackEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(backOnTrackEnabled, forKey: "backOnTrackNotificationsEnabled")
+        }
+    }
+
     /// Number of reminders sent today (resets at 4am)
     @Published private(set) var remindersSentToday: Int = 0
 
@@ -44,6 +51,7 @@ class NotificationManager: ObservableObject {
 
     init() {
         self.isEnabled = UserDefaults.standard.bool(forKey: "hydrationRemindersEnabled")
+        self.backOnTrackEnabled = UserDefaults.standard.bool(forKey: "backOnTrackNotificationsEnabled")
         self.remindersSentToday = UserDefaults.standard.integer(forKey: "remindersSentToday")
         if let lastReset = UserDefaults.standard.object(forKey: "lastReminderResetDate") as? Date {
             self.lastResetDate = lastReset
@@ -217,6 +225,35 @@ class NotificationManager: ObservableObject {
                 print("[Notifications] Failed to schedule goal notification: \(error.localizedDescription)")
             } else {
                 print("[Notifications] Scheduled goal reached notification")
+            }
+        }
+    }
+
+    /// Schedule a back-on-track celebration notification
+    func scheduleBackOnTrackNotification() {
+        guard isEnabled && isAuthorized && backOnTrackEnabled else {
+            print("[Notifications] Cannot schedule back-on-track notification - enabled: \(isEnabled), authorized: \(isAuthorized), backOnTrack: \(backOnTrackEnabled)")
+            return
+        }
+
+        let content = UNMutableNotificationContent()
+        content.title = "Back On Track!"
+        content.body = "Nice work catching up on your hydration."
+        content.sound = .default
+
+        // Schedule immediately
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
+        let request = UNNotificationRequest(
+            identifier: "hydration-back-on-track-\(UUID().uuidString)",
+            content: content,
+            trigger: trigger
+        )
+
+        notificationCenter.add(request) { error in
+            if let error = error {
+                print("[Notifications] Failed to schedule back-on-track notification: \(error.localizedDescription)")
+            } else {
+                print("[Notifications] Scheduled back-on-track notification")
             }
         }
     }
