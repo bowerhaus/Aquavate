@@ -182,9 +182,14 @@ struct HistoryView: View {
                 Text("Please connect to your bottle before deleting drinks. This ensures both the app and bottle stay in sync.")
             }
             .alert("Bottle is Asleep", isPresented: $showBottleAsleepAlert) {
-                Button("OK", role: .cancel) { }
+                Button("Retry") {
+                    Task {
+                        await handleRefresh()
+                    }
+                }
+                Button("Cancel", role: .cancel) { }
             } message: {
-                Text("Tilt your bottle to wake it up, then pull down to try again.")
+                Text("Tilt your bottle to wake it up, then tap Retry.")
             }
             .alert("Sync Error", isPresented: $showErrorAlert) {
                 Button("OK", role: .cancel) { }

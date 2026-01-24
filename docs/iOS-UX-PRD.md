@@ -1,10 +1,11 @@
 # Aquavate iOS App - UX Product Requirements Document
 
-**Version:** 1.11
+**Version:** 1.12
 **Date:** 2026-01-24
-**Status:** Approved and Tested (Three-Color Stacked Fill)
+**Status:** Approved and Tested (Retry Bottle Asleep Alert)
 
 **Changelog:**
+- **v1.12 (2026-01-24):** Added Retry/Cancel buttons to "Bottle is Asleep" alert (Issue #52). Users can now tap Retry after waking bottle instead of manually pulling down again. See Section 2.4.
 - **v1.11 (2026-01-24):** Three-color stacked fill for human figure (Issue #50). When behind target, shows orange for deficit up to 20%, red for deficit beyond 20%. See Section 2.9.
 - **v1.10 (2026-01-24):** Activity Stats now persist in CoreData (Issue #36 Comment). Users can view cached data when disconnected with "Last synced X ago" timestamp. Diagnostics section accessible when disconnected.
 - **v1.9 (2026-01-24):** Added Hydration Reminders with pace-based urgency model (Issue #27). Added Apple Watch companion app with complications. Added target intake visualization on HomeView. See Section 2.8 (Watch App) and Section 7 (Notification Strategy).
@@ -337,7 +338,8 @@ Sarah's Bluetooth is accidentally turned off. When she opens the app, she sees a
 
 **Pull-to-Refresh Alerts:**
 - "Bottle is Asleep" alert if scan times out (~10s) with no devices found
-  - Message: "Tilt your bottle to wake it up, then pull down to try again."
+  - Message: "Tilt your bottle to wake it up, then tap Retry."
+  - Buttons: **Retry** (triggers new connection attempt) | **Cancel** (dismisses alert)
 - "Sync Error" alert if connection fails or sync interrupted
 - "Bluetooth is turned off" error if Bluetooth unavailable
 
