@@ -1,13 +1,34 @@
 # Aquavate - Active Development Progress
 
 **Last Updated:** 2026-01-24
-**Current Branch:** `master`
+**Current Branch:** `fix-homeview-refresh-alert`
 
 ---
 
 ## Current Task
 
-No active task. Ready for next issue.
+**Issue:** #44 - HomeView pull-to-refresh fails to show 'Bottle is Asleep' alert
+**Plan:** [041-fix-homeview-refresh-alert.md](Plans/041-fix-homeview-refresh-alert.md)
+**Branch:** `fix-homeview-refresh-alert`
+
+### Problem
+HomeView's pull-to-refresh sometimes fails to show the "Bottle is Asleep" alert when bottle can't be found. HistoryView correctly shows the alert in the same scenario. Issue appears after extended use; restarting fixes it.
+
+### Root Cause
+`stopScanning()` has a guard that returns early if `centralManager.isScanning` is false, leaving `connectionState` stuck as `.scanning` when iOS stops scanning externally.
+
+### Implementation Progress
+
+- [x] **Change 1:** Fix `stopScanning()` (Lines 325-336) - Always clean up state
+- [x] **Change 2:** Add defensive recovery in `startScanning()` (Lines 292-302)
+- [x] **Change 3:** Improve `handleScanTimeout()` robustness (Lines 598-606)
+- [x] **Change 4:** Add diagnostic logging to `attemptConnection()` (Lines 1775-1812)
+- [x] **Change 5:** Clean up scanning state on Bluetooth transitions (Lines 668-670)
+- [x] **Change 6:** Add direct scan timeout check in polling loop (bypass Timer Task race condition)
+- [x] **Build:** iOS app builds successfully
+
+### Files to Modify
+- `ios/Aquavate/Aquavate/Services/BLEManager.swift`
 
 ---
 
@@ -115,6 +136,7 @@ No active task - check GitHub issues for next work item.
 ## Branch Status
 
 - `master` - Stable baseline
+- `fix-homeview-refresh-alert` - Issue #44 (in progress)
 
 ---
 
