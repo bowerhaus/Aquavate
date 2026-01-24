@@ -1300,13 +1300,18 @@ extension BLEManager: CBPeripheralDelegate {
         syncProgress = 1.0
         lastSyncTime = Date()
 
-        // Notify hydration reminder service that drinks were synced
-        hydrationReminderService?.drinkRecorded()
+        // Capture previous urgency before updating state for back-on-track detection
+        let previousUrgency = hydrationReminderService?.currentUrgency
+
+        // Update hydration state (this recalculates urgency)
         hydrationReminderService?.updateState(
             totalMl: dailyTotalMl,
             goalMl: dailyGoalMl,
             lastDrink: Date()  // Use current time as last drink since we just synced
         )
+
+        // Check for back-on-track transition
+        hydrationReminderService?.checkBackOnTrack(previousUrgency: previousUrgency)
 
         // Check if goal achieved
         if dailyTotalMl >= dailyGoalMl {

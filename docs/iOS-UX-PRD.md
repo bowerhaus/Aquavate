@@ -1403,7 +1403,7 @@ Deficit = expected - dailyTotalMl
 **Configuration:**
 - Active hours: 7am-10pm (15 hours)
 - Quiet hours: 10pm-7am (no reminders)
-- Max 12 reminders per day
+- Max 12 reminders per day (configurable via "Limit Daily Reminders" toggle)
 - 50ml rounding: Deficits rounded to nearest 50ml, suppressed if <50ml
 - Escalation model: Only notify when urgency increases (no repeated same-level notifications)
 
@@ -1419,6 +1419,7 @@ Deficit = expected - dailyTotalMl
 
 **Settings (SettingsView):**
 - Hydration Reminders toggle (main on/off)
+- Limit Daily Reminders toggle (enforces 12/day max, enabled by default)
 - Back On Track Alerts toggle (optional, disabled by default)
 - Test Mode toggle (DEBUG only, lowers notification threshold)
 
@@ -1770,6 +1771,13 @@ This UX PRD defines the complete user experience for the Aquavate iOS app. Upon 
 - Users can view cached data when disconnected with "Last synced X ago" timestamp
 - Diagnostics section accessible when disconnected in SettingsView
 - Follows existing drink record persistence pattern
+
+**Update Note (2026-01-24 - Daily Reminder Limit Toggle):**
+- Added "Limit Daily Reminders" toggle to Settings → Hydration Reminders (Issue #45)
+- When enabled (default): enforces 12 reminders/day maximum
+- When disabled: allows unlimited reminders (respects quiet hours and escalation)
+- "Reminders Today" display shows "X/12" when limit enabled, just "X" when disabled
+- Fixed back-on-track notification timing bug (was using stale urgency data)
 
 **Update Note (2026-01-24 - Hydration Reminders + Watch App):**
 - Added pace-based hydration reminder system (Issue #27)

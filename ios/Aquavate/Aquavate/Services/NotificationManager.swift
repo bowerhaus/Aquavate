@@ -39,6 +39,13 @@ class NotificationManager: ObservableObject {
         }
     }
 
+    /// User preference for enforcing daily reminder limit
+    @Published var dailyLimitEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(dailyLimitEnabled, forKey: "dailyReminderLimitEnabled")
+        }
+    }
+
     /// Number of reminders sent today (resets at 4am)
     @Published private(set) var remindersSentToday: Int = 0
 
@@ -52,6 +59,7 @@ class NotificationManager: ObservableObject {
     init() {
         self.isEnabled = UserDefaults.standard.bool(forKey: "hydrationRemindersEnabled")
         self.backOnTrackEnabled = UserDefaults.standard.bool(forKey: "backOnTrackNotificationsEnabled")
+        self.dailyLimitEnabled = UserDefaults.standard.object(forKey: "dailyReminderLimitEnabled") as? Bool ?? true
         self.remindersSentToday = UserDefaults.standard.integer(forKey: "remindersSentToday")
         if let lastReset = UserDefaults.standard.object(forKey: "lastReminderResetDate") as? Date {
             self.lastResetDate = lastReset
@@ -138,6 +146,7 @@ class NotificationManager: ObservableObject {
     /// Check if we can send more reminders today
     var canSendReminder: Bool {
         checkDailyReset()
+        guard dailyLimitEnabled else { return true }
         return remindersSentToday < Self.maxRemindersPerDay
     }
 

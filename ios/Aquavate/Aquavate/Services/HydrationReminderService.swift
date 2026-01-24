@@ -129,13 +129,10 @@ class HydrationReminderService: ObservableObject {
         syncStateToWatch()
     }
 
-    /// Called after a drink is recorded (via BLE sync)
-    func drinkRecorded() {
-        lastDrinkTime = Date()
-
-        // Recalculate urgency - may still be behind pace even after drinking
-        let previousUrgency = currentUrgency
-        updateUrgency()
+    /// Check if we've transitioned back to on-track and send notification if so
+    /// - Parameter previousUrgency: The urgency level before the state update
+    func checkBackOnTrack(previousUrgency: HydrationUrgency?) {
+        guard let previousUrgency = previousUrgency else { return }
 
         // Check if back on track (was behind, now on track)
         if previousUrgency > .onTrack && currentUrgency == .onTrack {
