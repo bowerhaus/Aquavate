@@ -7,28 +7,7 @@
 
 ## Current Task
 
-**Issue:** #44 - HomeView pull-to-refresh fails to show 'Bottle is Asleep' alert
-**Plan:** [041-fix-homeview-refresh-alert.md](Plans/041-fix-homeview-refresh-alert.md)
-**Branch:** `fix-homeview-refresh-alert`
-
-### Problem
-HomeView's pull-to-refresh sometimes fails to show the "Bottle is Asleep" alert when bottle can't be found. HistoryView correctly shows the alert in the same scenario. Issue appears after extended use; restarting fixes it.
-
-### Root Cause
-`stopScanning()` has a guard that returns early if `centralManager.isScanning` is false, leaving `connectionState` stuck as `.scanning` when iOS stops scanning externally.
-
-### Implementation Progress
-
-- [x] **Change 1:** Fix `stopScanning()` (Lines 325-336) - Always clean up state
-- [x] **Change 2:** Add defensive recovery in `startScanning()` (Lines 292-302)
-- [x] **Change 3:** Improve `handleScanTimeout()` robustness (Lines 598-606)
-- [x] **Change 4:** Add diagnostic logging to `attemptConnection()` (Lines 1775-1812)
-- [x] **Change 5:** Clean up scanning state on Bluetooth transitions (Lines 668-670)
-- [x] **Change 6:** Add direct scan timeout check in polling loop (bypass Timer Task race condition)
-- [x] **Build:** iOS app builds successfully
-
-### Files to Modify
-- `ios/Aquavate/Aquavate/Services/BLEManager.swift`
+None - awaiting next issue.
 
 ---
 
@@ -37,12 +16,18 @@ HomeView's pull-to-refresh sometimes fails to show the "Bottle is Asleep" alert 
 To resume from this progress file:
 ```
 Resume from PROGRESS.md.
-No active task - check GitHub issues for next work item.
+Issue #44 fix complete - all tests pass. Ready to commit and create PR.
 ```
 
 ---
 
 ## Recently Completed
+
+- ✅ Fix HomeView Refresh Alert (Issue #44) - [Plan 041](Plans/041-fix-homeview-refresh-alert.md)
+  - Fixed race condition in BLEManager where `stopScanning()` guard caused corrupted state
+  - Refactored `attemptConnection()` to use elapsed time for `.bottleAsleep` detection
+  - Added defensive state recovery and cleanup on Bluetooth transitions
+  - Tested: All 5 verification scenarios pass consistently
 
 - ✅ Local Activity Stats Storage (Issue #36 Comment) - [Plan 040](Plans/040-local-activity-stats-storage.md)
   - Activity stats (motion wake events, backpack sessions) now persist in CoreData
@@ -136,7 +121,7 @@ No active task - check GitHub issues for next work item.
 ## Branch Status
 
 - `master` - Stable baseline
-- `fix-homeview-refresh-alert` - Issue #44 (in progress)
+- `fix-homeview-refresh-alert` - Issue #44 (PR pending)
 
 ---
 

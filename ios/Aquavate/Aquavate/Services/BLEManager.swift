@@ -611,15 +611,11 @@ class BLEManager: NSObject, ObservableObject {
     // MARK: - Private Methods
 
     private func handleScanTimeout() {
-        // Clean up even if state appears inconsistent
+        // Stop CoreBluetooth scan to save power
+        // Note: "bottle asleep" detection is done by elapsed time in attemptConnection()
         if connectionState == .scanning || centralManager.isScanning {
-            logger.info("Scan timeout - stopping scan")
+            logger.info("Scan timeout - stopping CoreBluetooth scan")
             stopScanning()
-
-            if discoveredDevices.isEmpty {
-                errorMessage = "No Aquavate devices found"
-                logger.warning("Scan timeout: no devices found")
-            }
         }
     }
 
@@ -1795,67 +1791,50 @@ extension BLEManager: CBPeripheralDelegate {
     }
 
     /// Attempt to connect to the bottle, returning success or failure result
-    /// Uses simple polling - same mechanism as Settings scan button
+    /// Uses elapsed time to detect conditions - no dependency on Timer callbacks
     private func attemptConnection() async -> ConnectionResult {
         // Already connected? Return success immediately
         if connectionState.isConnected {
-            logger.info("attemptConnection: already connected")
             return .success
         }
 
-        // Log current state before starting (helps diagnose issues)
-        logger.info("attemptConnection: starting (state=\(String(describing: self.connectionState)), isScanning=\(self.centralManager.isScanning), devices=\(self.discoveredDevices.count))")
-
-        // Start scanning (this triggers auto-connect when device found)
+        // Start scanning (Timer will stop CoreBluetooth scan after scanTimeout for power saving)
         startScanning()
 
-        // Poll connection state until connected, failed, or timeout
-        let timeout: TimeInterval = 15.0 // seconds
-        let scanTimeout = BLEConstants.scanTimeout
-        let pollInterval: UInt64 = 100_000_000 // 100ms in nanoseconds
+        let scanTimeout = BLEConstants.scanTimeout  // 10 seconds
+        let overallTimeout: TimeInterval = 15.0     // 15 seconds max
+        let pollInterval: UInt64 = 100_000_000      // 100ms
         let startTime = Date()
 
-        while Date().timeIntervalSince(startTime) < timeout {
-            // Check if connected
+        while true {
+            let elapsed = Date().timeIntervalSince(startTime)
+
+            // 1. Success: connected
             if connectionState.isConnected {
-                logger.info("attemptConnection: connected successfully")
                 return .success
             }
 
-            // Check if scan timed out with no devices (bottle asleep)
-            // This can be detected two ways:
-            // 1. handleScanTimeout() ran and set the error message
-            // 2. We've waited longer than scan timeout with no devices (direct check)
-            if connectionState == .disconnected {
-                if discoveredDevices.isEmpty && errorMessage?.contains("No Aquavate devices found") == true {
-                    logger.info("attemptConnection: bottle asleep (no devices found)")
-                    return .failure(.bottleAsleep)
-                }
-                if let error = errorMessage, error.contains("timeout") || error.contains("Failed") {
-                    logger.warning("attemptConnection: connection failed - \(error)")
+            // 2. Bottle asleep: past scan timeout with no devices discovered
+            if elapsed > scanTimeout && discoveredDevices.isEmpty && !connectionState.isConnected {
+                stopScanning()
+                return .failure(.bottleAsleep)
+            }
+
+            // 3. Connection error: device was found but connection failed
+            if connectionState == .disconnected && !discoveredDevices.isEmpty {
+                if let error = errorMessage {
                     return .failure(.connectionFailed(error))
                 }
             }
 
-            // Direct check: if we're past scan timeout and still scanning with no devices,
-            // the bottle is asleep (handleScanTimeout Task may not have run yet)
-            let elapsed = Date().timeIntervalSince(startTime)
-            if elapsed > scanTimeout + 0.5 && discoveredDevices.isEmpty {
-                if connectionState == .scanning || connectionState == .disconnected {
-                    logger.info("attemptConnection: bottle asleep (scan timeout, no devices)")
-                    stopScanning()
-                    return .failure(.bottleAsleep)
-                }
+            // 4. Overall timeout: something unexpected happened
+            if elapsed >= overallTimeout {
+                stopScanning()
+                return .failure(.connectionFailed("Connection timeout"))
             }
 
-            // Wait a bit before checking again
             try? await Task.sleep(nanoseconds: pollInterval)
         }
-
-        // Timeout - log state and stop scanning
-        logger.warning("attemptConnection: timeout (state=\(String(describing: self.connectionState)), isScanning=\(self.centralManager.isScanning), devices=\(self.discoveredDevices.count))")
-        stopScanning()
-        return .failure(.connectionFailed("Connection timeout"))
     }
 
     /// Perform sync when already connected, waiting for completion

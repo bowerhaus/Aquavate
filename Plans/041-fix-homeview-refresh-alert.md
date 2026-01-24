@@ -210,3 +210,27 @@ case .resetting:
 1. With bottle asleep, refresh on HomeView - note result
 2. Refresh on HistoryView - note result
 3. **Expected:** Both show identical "Bottle is Asleep" alert
+
+---
+
+## Completion
+
+**Status:** ✅ Complete (2026-01-24)
+
+**Implementation Summary:**
+All five changes implemented in BLEManager.swift:
+1. Fixed `stopScanning()` to always clean up state even when CoreBluetooth stopped externally
+2. Added defensive state recovery in `startScanning()` to detect/fix corrupted state
+3. Simplified `handleScanTimeout()` to just stop the scan (no error message dependency)
+4. Refactored `attemptConnection()` to use elapsed time for `.bottleAsleep` detection instead of Timer callbacks
+5. Added scanning state cleanup on Bluetooth `.resetting` transition
+
+**Tests Performed:**
+- ✅ Test 1: Basic refresh - connects and syncs successfully
+- ✅ Test 2: Bottle asleep alert - shows correctly after ~10 seconds
+- ✅ Test 3: State recovery after Bluetooth toggle - shows correct alert
+- ✅ Test 4: Extended use simulation - consistent behavior
+- ✅ Test 5: HomeView/HistoryView parity - identical behavior on both views
+
+**Key Insight:**
+The original design had a race condition where `attemptConnection()` relied on the Timer callback to set `errorMessage` before checking scan timeout. The refactored design uses elapsed time directly (`Date().timeIntervalSince(scanStart) > scanTimeout`) which is deterministic and doesn't depend on Timer scheduling.
