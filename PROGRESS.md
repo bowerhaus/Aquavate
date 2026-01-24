@@ -22,6 +22,11 @@ Resume from PROGRESS.md.
 
 ## Recently Completed
 
+- ✅ Orange Line Rounding Fix (Issue #48) - [Plan 043](Plans/043-orange-line-rounding-fix.md)
+  - Fixed orange overlay appearing when user is "on track" (small deficit < 25ml)
+  - Changed overlay condition to use `isBehindTarget` (50ml rounded threshold)
+  - Ensures visual overlay and "behind target" text appear/disappear together
+
 - ✅ Daily Reminder Limit Toggle (Issue #45) - [Plan 042](Plans/042-daily-reminder-limit-toggle.md)
   - Added "Limit Daily Reminders" toggle to Settings → Hydration Reminders
   - When disabled, allows unlimited reminders (respects quiet hours and escalation)

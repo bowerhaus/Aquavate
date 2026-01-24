@@ -57,7 +57,8 @@ struct HumanFigureProgressView: View {
         VStack(spacing: 16) {
             ZStack {
                 // Expected progress fill (urgency color, behind actual)
-                if expectedCurrent != nil && expectedProgress > progress {
+                // Only show when isBehindTarget (50ml rounded threshold) for consistency with text
+                if expectedCurrent != nil && isBehindTarget {
                     GeometryReader { geometry in
                         VStack {
                             Spacer()
