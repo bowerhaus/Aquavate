@@ -23,6 +23,12 @@ No active task - ready for next issue.
 
 ## Recently Completed
 
+- ✅ Fix Duplicate HealthKit Entries (Issue #37) - [Plan 039](Plans/039-fix-duplicate-healthkit-entries.md)
+  - Race condition in `syncDrinksToHealthKit()` caused multiple HealthKit entries
+  - Added boolean lock to prevent concurrent sync execution
+  - Added timestamp-based dedup check as defense in depth
+  - Tested: Single drink creates exactly one HealthKit entry
+
 - ✅ Hydration Reminders + Apple Watch App (Issue #27) - [Plan 036](Plans/036-watch-hydration-reminders.md)
   - Smart hydration reminders with pace-based urgency model
   - Apple Watch companion app with complications
@@ -104,7 +110,6 @@ No active task - ready for next issue.
 ## Branch Status
 
 - `master` - Stable baseline
-- `watch-hydration-reminders` - Current work (Issue #27)
 
 ---
 

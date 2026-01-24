@@ -180,6 +180,12 @@ class BLEManager: NSObject, ObservableObject {
 
     // MARK: - Private Properties
 
+    /// Whether HealthKit sync is currently in progress (prevents concurrent execution)
+    private var isHealthKitSyncInProgress = false
+
+    /// Whether a HealthKit sync was requested while one was already in progress
+    private var pendingHealthKitSync = false
+
     /// Buffer for drink records during sync
     private var syncBuffer: [BLEDrinkRecord] = []
 
@@ -1291,10 +1297,30 @@ extension BLEManager: CBPeripheralDelegate {
     }
 
     /// Sync any unsynced drinks to HealthKit
+    /// Uses a lock to prevent concurrent execution (Issue #37)
     private func syncDrinksToHealthKit() async {
+        // Prevent concurrent execution - if already syncing, queue a re-sync
+        guard !isHealthKitSyncInProgress else {
+            logger.info("[HealthKit] Sync already in progress, queuing re-sync")
+            pendingHealthKitSync = true
+            return
+        }
+
         guard let healthKitManager = healthKitManager,
               healthKitManager.isEnabled && healthKitManager.isAuthorized else {
             return
+        }
+
+        isHealthKitSyncInProgress = true
+        defer {
+            isHealthKitSyncInProgress = false
+            // Check if another sync was requested while we were syncing
+            if pendingHealthKitSync {
+                pendingHealthKitSync = false
+                Task {
+                    await self.syncDrinksToHealthKit()
+                }
+            }
         }
 
         let unsyncedDrinks = PersistenceController.shared.getUnsyncedDrinkRecords()
@@ -1308,6 +1334,12 @@ extension BLEManager: CBPeripheralDelegate {
         for drink in unsyncedDrinks {
             guard let drinkId = drink.id,
                   let timestamp = drink.timestamp else {
+                continue
+            }
+
+            // Defense in depth: check if sample already exists (handles crash recovery scenarios)
+            if await healthKitManager.waterSampleExists(for: timestamp) {
+                PersistenceController.shared.markDrinkSyncedToHealth(id: drinkId, healthKitUUID: UUID())
                 continue
             }
 
