@@ -141,9 +141,11 @@ After cutting, verify LED no longer illuminates when board is powered.
 
 ### 2. Measurement Logic
 
-#### Wake Trigger
-- LIS3DH interrupt on motion (>300mg threshold)
-- ESP32 wakes from deep sleep via GPIO 27
+#### Wake Triggers
+- **Motion wake:** LIS3DH interrupt on motion (>300mg threshold) via GPIO 27
+- **Rollover wake:** Timer-based wake at 4am daily reset to refresh display with 0ml daily total
+  - Ensures display shows correct daily total even if bottle sleeps through midnight
+  - Returns to sleep immediately after display refresh (no BLE advertising)
 
 #### Stability Detection (Both Combined)
 1. Detect vertical orientation: Z-axis dominant (>0.9g), X/Y near zero
