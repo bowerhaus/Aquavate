@@ -343,25 +343,26 @@ struct SettingsView: View {
                         }
                     }
 
-                    // Activity Stats (Battery Analysis)
-                    Section("Diagnostics") {
-                        NavigationLink {
-                            ActivityStatsView()
-                        } label: {
-                            HStack {
-                                Image(systemName: "moon.zzz")
-                                    .foregroundStyle(.purple)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("Sleep Mode Analysis")
-                                    Text("View wake events and backpack sessions")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                                Spacer()
-                                if bleManager.activityFetchState.isLoading {
-                                    ProgressView()
-                                        .scaleEffect(0.7)
-                                }
+                }
+
+                // Activity Stats (Battery Analysis) - Outside connected block for offline viewing
+                Section("Diagnostics") {
+                    NavigationLink {
+                        ActivityStatsView()
+                    } label: {
+                        HStack {
+                            Image(systemName: "moon.zzz")
+                                .foregroundStyle(.purple)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Sleep Mode Analysis")
+                                Text("View wake events and backpack sessions")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            if bleManager.activityFetchState.isLoading {
+                                ProgressView()
+                                    .scaleEffect(0.7)
                             }
                         }
                     }

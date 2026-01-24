@@ -1,10 +1,11 @@
 # Aquavate iOS App - UX Product Requirements Document
 
-**Version:** 1.9
+**Version:** 1.10
 **Date:** 2026-01-24
-**Status:** Approved and Tested (Hydration Reminders + Watch App)
+**Status:** Approved and Tested (Activity Stats Persistence)
 
 **Changelog:**
+- **v1.10 (2026-01-24):** Activity Stats now persist in CoreData (Issue #36 Comment). Users can view cached data when disconnected with "Last synced X ago" timestamp. Diagnostics section accessible when disconnected.
 - **v1.9 (2026-01-24):** Added Hydration Reminders with pace-based urgency model (Issue #27). Added Apple Watch companion app with complications. Added target intake visualization on HomeView. See Section 2.8 (Watch App) and Section 7 (Notification Strategy).
 - **v1.8 (2026-01-23):** Added Diagnostics section to Settings with Activity Stats view (Issue #36). Shows motion wake events and backpack sessions for battery analysis. Includes "drink taken" indicator (water drop icon) for wakes where user took a drink.
 - **v1.7 (2026-01-23):** Added Gestures section to Settings with Shake-to-Empty toggle. Setting syncs to firmware via BLE Device Settings characteristic.
@@ -617,16 +618,18 @@ Aquavate uses a **4am daily reset** while Apple Health uses **midnight**. This m
 
 **Behavior:**
 - **Lazy loading:** Data fetched only when view appears (not on app launch)
-- **Pull-to-refresh:** Re-fetches all activity data
-- **Disconnected state:** Shows "Connect to bottle to view activity stats" message
+- **Pull-to-refresh:** Re-fetches all activity data (requires connection)
+- **Disconnected state:** Shows cached data from CoreData with "Last synced X ago" timestamp
 - **Loading state:** Progress indicator while fetching chunks
+- **Persistence:** Data stored in CoreData entities (CDMotionWakeEvent, CDBackpackSession)
 
 **Edge Cases:**
 
 | Scenario | Behavior |
 |----------|----------|
-| Not connected | Shows connection required message |
-| No activity data | Shows "No activity recorded since last charge" |
+| Not connected (with cached data) | Shows cached data with "Last synced X ago" timestamp |
+| Not connected (no cached data) | Shows "No activity data. Connect to bottle to sync." |
+| No activity data (connected) | Shows "No activity recorded since last charge" |
 | Fetch error | Shows error message with retry option |
 | In backpack mode | Shows current session start time and timer wake count |
 
@@ -1742,7 +1745,7 @@ Watch notifications include haptic feedback via `WKInterfaceDevice.current().pla
 | Home Screen | ✅ Complete | 4.2-4.6 | Wire BLE data, target visualization (Issue #27) |
 | History Screen | ✅ Complete | 4.3-4.4 | Wire CoreData |
 | Settings Screen | ✅ Complete | 4.2-4.5 | Calibrate, Diagnostics, Hydration Reminders |
-| Activity Stats | ✅ Complete | - | Battery diagnostics (Issue #36, 2026-01-23) |
+| Activity Stats | ✅ Complete | - | Battery diagnostics with offline support (Issue #36, 2026-01-24) |
 | Watch App | ✅ Complete | - | Companion app + complications (Issue #27, 2026-01-24) |
 
 | Component | Status | Phase |
@@ -1760,7 +1763,13 @@ Watch notifications include haptic feedback via `WKInterfaceDevice.current().pla
 
 This UX PRD defines the complete user experience for the Aquavate iOS app. Upon approval, Phase 4 implementation will begin following both this document and the technical plan in [Plans/014-ios-ble-coredata-integration.md](../Plans/014-ios-ble-coredata-integration.md).
 
-**Document Status:** Approved (v1.9)
+**Document Status:** Approved (v1.10)
+
+**Update Note (2026-01-24 - Activity Stats Persistence):**
+- Activity stats now persist in CoreData (Issue #36 Comment)
+- Users can view cached data when disconnected with "Last synced X ago" timestamp
+- Diagnostics section accessible when disconnected in SettingsView
+- Follows existing drink record persistence pattern
 
 **Update Note (2026-01-24 - Hydration Reminders + Watch App):**
 - Added pace-based hydration reminder system (Issue #27)
@@ -1817,5 +1826,6 @@ This UX PRD defines the complete user experience for the Aquavate iOS app. Upon 
 3. ✅ Bidirectional drink sync (Complete - 2026-01-21)
 4. ✅ HealthKit integration (Complete - 2026-01-21)
 5. ✅ Hydration Reminders + Apple Watch App (Complete - 2026-01-24, Issue #27)
-6. Phase 4.7 implementation (Calibration Wizard) - Optional/Future
-7. Begin Phase 5 (Advanced features)
+6. ✅ Activity Stats Persistence (Complete - 2026-01-24, Issue #36 Comment)
+7. Phase 4.7 implementation (Calibration Wizard) - Optional/Future
+8. Begin Phase 5 (Advanced features)

@@ -69,6 +69,49 @@ struct PersistenceController {
             record.bottle = bottle
         }
 
+        // Create sample motion wake events
+        let sampleMotionEvents: [(minutesAgo: Int, durationSec: Int16, sleepType: Int16, drinkTaken: Bool)] = [
+            (5, 45, 0, true),      // 5 min ago, 45s awake, normal sleep, drink taken
+            (30, 30, 0, false),    // 30 min ago, 30s awake, normal sleep, no drink
+            (90, 60, 0, true),     // 1.5 hours ago, 60s awake, normal sleep, drink taken
+            (180, 25, 1, false),   // 3 hours ago, 25s awake, entered backpack mode
+            (360, 35, 0, true),    // 6 hours ago, 35s awake, normal sleep, drink taken
+            (480, 50, 0, false),   // 8 hours ago, 50s awake, normal sleep
+            (600, 40, 1, false),   // 10 hours ago, 40s awake, entered backpack mode
+        ]
+
+        for event in sampleMotionEvents {
+            let record = CDMotionWakeEvent(context: viewContext)
+            record.id = UUID()
+            record.timestamp = calendar.date(byAdding: .minute, value: -event.minutesAgo, to: now)
+            record.durationSec = event.durationSec
+            record.wakeReason = 0  // Motion wake
+            record.sleepType = event.sleepType
+            record.drinkTaken = event.drinkTaken
+            record.bottleId = bottle.id
+            record.bottle = bottle
+        }
+
+        // Create sample backpack sessions
+        let sampleBackpackSessions: [(hoursAgo: Int, durationMin: Int, timerWakes: Int16, exitReason: Int16)] = [
+            (3, 45, 3, 0),   // 3 hours ago, 45 min duration, 3 timer wakes, exited by motion
+            (12, 120, 8, 0), // 12 hours ago, 2 hour duration, 8 timer wakes, exited by motion
+        ]
+
+        for session in sampleBackpackSessions {
+            let record = CDBackpackSession(context: viewContext)
+            record.id = UUID()
+            record.startTimestamp = calendar.date(byAdding: .hour, value: -session.hoursAgo, to: now)
+            record.durationSec = Int32(session.durationMin * 60)
+            record.timerWakeCount = session.timerWakes
+            record.exitReason = session.exitReason
+            record.bottleId = bottle.id
+            record.bottle = bottle
+        }
+
+        // Set last activity sync date
+        bottle.lastActivitySyncDate = calendar.date(byAdding: .minute, value: -5, to: now)
+
         do {
             try viewContext.save()
         } catch {
@@ -332,6 +375,120 @@ struct PersistenceController {
         } catch {
             print("[CoreData] Error fetching unsynced drinks: \(error)")
             return []
+        }
+    }
+
+    // MARK: - Activity Stats Operations
+
+    /// Save motion wake events from BLE sync
+    func saveMotionWakeEvents(_ events: [BLEMotionWakeEvent], for bottleId: UUID) {
+        let context = viewContext
+
+        for event in events {
+            let record = CDMotionWakeEvent(context: context)
+            record.id = UUID()
+            record.timestamp = Date(timeIntervalSince1970: TimeInterval(event.timestamp))
+            record.durationSec = Int16(event.durationSec)
+            record.wakeReason = Int16(event.wakeReason)
+            record.sleepType = Int16(event.sleepType & 0x7F)  // Mask off drink taken flag
+            record.drinkTaken = event.drinkTaken
+            record.bottleId = bottleId
+        }
+
+        do {
+            try context.save()
+            print("[CoreData] Saved \(events.count) motion wake events for bottle \(bottleId)")
+            context.processPendingChanges()
+        } catch {
+            print("[CoreData] Save error for motion events: \(error)")
+            context.rollback()
+        }
+    }
+
+    /// Save backpack sessions from BLE sync
+    func saveBackpackSessions(_ sessions: [BLEBackpackSession], for bottleId: UUID) {
+        let context = viewContext
+
+        for session in sessions {
+            let record = CDBackpackSession(context: context)
+            record.id = UUID()
+            record.startTimestamp = Date(timeIntervalSince1970: TimeInterval(session.startTimestamp))
+            record.durationSec = Int32(session.durationSec)
+            record.timerWakeCount = Int16(session.timerWakeCount)
+            record.exitReason = Int16(session.exitReason)
+            record.bottleId = bottleId
+        }
+
+        do {
+            try context.save()
+            print("[CoreData] Saved \(sessions.count) backpack sessions for bottle \(bottleId)")
+            context.processPendingChanges()
+        } catch {
+            print("[CoreData] Save error for backpack sessions: \(error)")
+            context.rollback()
+        }
+    }
+
+    /// Clear all activity stats for a bottle (called before re-sync)
+    func clearActivityStats(for bottleId: UUID) {
+        let context = viewContext
+
+        // Delete motion wake events
+        let motionRequest: NSFetchRequest<CDMotionWakeEvent> = CDMotionWakeEvent.fetchRequest()
+        motionRequest.predicate = NSPredicate(format: "bottleId == %@", bottleId as CVarArg)
+
+        // Delete backpack sessions
+        let backpackRequest: NSFetchRequest<CDBackpackSession> = CDBackpackSession.fetchRequest()
+        backpackRequest.predicate = NSPredicate(format: "bottleId == %@", bottleId as CVarArg)
+
+        do {
+            let motionEvents = try context.fetch(motionRequest)
+            let backpackSessions = try context.fetch(backpackRequest)
+
+            for event in motionEvents {
+                context.delete(event)
+            }
+            for session in backpackSessions {
+                context.delete(session)
+            }
+
+            try context.save()
+            context.processPendingChanges()
+            print("[CoreData] Cleared \(motionEvents.count) motion events and \(backpackSessions.count) backpack sessions for bottle \(bottleId)")
+        } catch {
+            print("[CoreData] Error clearing activity stats: \(error)")
+            context.rollback()
+        }
+    }
+
+    /// Update last activity sync date for a bottle
+    func updateLastActivitySyncDate(for bottleId: UUID) {
+        let request: NSFetchRequest<CDBottle> = CDBottle.fetchRequest()
+        request.predicate = NSPredicate(format: "id == %@", bottleId as CVarArg)
+        request.fetchLimit = 1
+
+        do {
+            if let bottle = try viewContext.fetch(request).first {
+                bottle.lastActivitySyncDate = Date()
+                try viewContext.save()
+                print("[CoreData] Updated lastActivitySyncDate for bottle \(bottleId)")
+            }
+        } catch {
+            print("[CoreData] Error updating lastActivitySyncDate: \(error)")
+        }
+    }
+
+    /// Get last activity sync date for a bottle
+    func getLastActivitySyncDate(for bottleId: UUID) -> Date? {
+        let request: NSFetchRequest<CDBottle> = CDBottle.fetchRequest()
+        request.predicate = NSPredicate(format: "id == %@", bottleId as CVarArg)
+        request.fetchLimit = 1
+
+        do {
+            return try viewContext.fetch(request).first?.lastActivitySyncDate
+        } catch {
+            print("[CoreData] Error fetching lastActivitySyncDate: \(error)")
+            return nil
         }
     }
 }
