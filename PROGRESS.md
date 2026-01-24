@@ -22,6 +22,12 @@ Resume from PROGRESS.md.
 
 ## Recently Completed
 
+- ✅ Three-Color Stacked Human Figure Fill (Issue #50) - [Plan 044](Plans/044-three-color-stacked-fill.md)
+  - Human figure now shows stacked blue/orange/red based on deficit thresholds
+  - Orange: deficit up to 20% threshold
+  - Red: deficit beyond 20% (only when significantly behind)
+  - Updated iOS-UX-PRD.md Section 2.9
+
 - ✅ Orange Line Rounding Fix (Issue #48) - [Plan 043](Plans/043-orange-line-rounding-fix.md)
   - Fixed orange overlay appearing when user is "on track" (small deficit < 25ml)
   - Changed overlay condition to use `isBehindTarget` (50ml rounded threshold)
