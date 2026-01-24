@@ -1628,6 +1628,7 @@ extension BLEManager: CBPeripheralDelegate {
         } else {
             // No data to fetch
             activityFetchState = .complete
+            saveActivityStatsToCoreData()
             logger.info("Activity stats fetch complete (no events)")
         }
     }
@@ -1661,6 +1662,7 @@ extension BLEManager: CBPeripheralDelegate {
         } else {
             // All done
             activityFetchState = .complete
+            saveActivityStatsToCoreData()
             logger.info("Activity stats fetch complete (\(self.motionWakeEvents.count) motion events)")
         }
     }
@@ -1688,8 +1690,35 @@ extension BLEManager: CBPeripheralDelegate {
         } else {
             // All done
             activityFetchState = .complete
+            saveActivityStatsToCoreData()
             logger.info("Activity stats fetch complete (\(self.motionWakeEvents.count) motion events, \(self.backpackSessions.count) backpack sessions)")
         }
+    }
+
+    /// Save fetched activity stats to CoreData for offline viewing
+    private func saveActivityStatsToCoreData() {
+        guard let bottleId = currentBottleId else {
+            logger.warning("Cannot save activity stats: no bottle ID")
+            return
+        }
+
+        // Clear existing activity stats before saving new ones (fresh sync)
+        PersistenceController.shared.clearActivityStats(for: bottleId)
+
+        // Save motion wake events
+        if !motionWakeEvents.isEmpty {
+            PersistenceController.shared.saveMotionWakeEvents(motionWakeEvents, for: bottleId)
+        }
+
+        // Save backpack sessions
+        if !backpackSessions.isEmpty {
+            PersistenceController.shared.saveBackpackSessions(backpackSessions, for: bottleId)
+        }
+
+        // Update last activity sync date
+        PersistenceController.shared.updateLastActivitySyncDate(for: bottleId)
+
+        logger.info("Activity stats saved to CoreData for offline viewing")
     }
 
     // MARK: - Pull-to-Refresh (Async API)

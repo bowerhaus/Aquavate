@@ -1,7 +1,7 @@
 # Aquavate - Active Development Progress
 
 **Last Updated:** 2026-01-24
-**Current Branch:** `master` (after merge)
+**Current Branch:** `master`
 
 ---
 
@@ -15,13 +15,18 @@ No active task. Ready for next issue.
 
 To resume from this progress file:
 ```
-Continue from PROGRESS.md.
-No active task - ready for next issue.
+Resume from PROGRESS.md.
+No active task - check GitHub issues for next work item.
 ```
 
 ---
 
 ## Recently Completed
+
+- ✅ Local Activity Stats Storage (Issue #36 Comment) - [Plan 040](Plans/040-local-activity-stats-storage.md)
+  - Activity stats (motion wake events, backpack sessions) now persist in CoreData
+  - Users can view data even when disconnected with "Last synced X ago" timestamp
+  - Fixed: Diagnostics section accessible when disconnected in SettingsView
 
 - ✅ Fix Duplicate HealthKit Entries (Issue #37) - [Plan 039](Plans/039-fix-duplicate-healthkit-entries.md)
   - Race condition in `syncDrinksToHealthKit()` caused multiple HealthKit entries
