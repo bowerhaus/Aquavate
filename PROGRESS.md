@@ -1,13 +1,13 @@
 # Aquavate - Active Development Progress
 
 **Last Updated:** 2026-01-24
-**Current Branch:** `master`
+**Current Branch:** `fix-homeview-refresh-alert`
 
 ---
 
 ## Current Task
 
-No active task. Ready for next issue.
+None - awaiting next issue.
 
 ---
 
@@ -16,12 +16,18 @@ No active task. Ready for next issue.
 To resume from this progress file:
 ```
 Resume from PROGRESS.md.
-No active task - check GitHub issues for next work item.
+Issue #44 fix complete - all tests pass. Ready to commit and create PR.
 ```
 
 ---
 
 ## Recently Completed
+
+- ✅ Fix HomeView Refresh Alert (Issue #44) - [Plan 041](Plans/041-fix-homeview-refresh-alert.md)
+  - Fixed race condition in BLEManager where `stopScanning()` guard caused corrupted state
+  - Refactored `attemptConnection()` to use elapsed time for `.bottleAsleep` detection
+  - Added defensive state recovery and cleanup on Bluetooth transitions
+  - Tested: All 5 verification scenarios pass consistently
 
 - ✅ Local Activity Stats Storage (Issue #36 Comment) - [Plan 040](Plans/040-local-activity-stats-storage.md)
   - Activity stats (motion wake events, backpack sessions) now persist in CoreData
@@ -115,6 +121,7 @@ No active task - check GitHub issues for next work item.
 ## Branch Status
 
 - `master` - Stable baseline
+- `fix-homeview-refresh-alert` - Issue #44 (PR pending)
 
 ---
 
