@@ -49,21 +49,32 @@ struct HumanFigureProgressView: View {
         roundedDeficitMl >= 50
     }
 
-    private var targetFillColor: Color {
-        urgency.color.opacity(0.3)
+    /// Progress level at which overdue begins (80% of expected = 20% behind)
+    private var overdueThresholdProgress: Double {
+        expectedProgress * 0.8
+    }
+
+    /// Whether deficit exceeds the overdue threshold (20%+)
+    private var isOverdue: Bool {
+        progress < overdueThresholdProgress
+    }
+
+    /// Top of orange zone: up to overdue threshold, or expected if not overdue
+    private var orangeTopProgress: Double {
+        isOverdue ? overdueThresholdProgress : expectedProgress
     }
 
     var body: some View {
         VStack(spacing: 16) {
             ZStack {
-                // Expected progress fill (urgency color, behind actual)
+                // Red zone: from overdue threshold to expected (only when 20%+ behind)
                 // Only show when isBehindTarget (50ml rounded threshold) for consistency with text
-                if expectedCurrent != nil && isBehindTarget {
+                if expectedCurrent != nil && isBehindTarget && isOverdue {
                     GeometryReader { geometry in
                         VStack {
                             Spacer()
                             Rectangle()
-                                .fill(targetFillColor)
+                                .fill(Color.red.opacity(0.3))
                                 .frame(height: geometry.size.height * expectedProgress)
                         }
                     }
@@ -73,6 +84,25 @@ struct HumanFigureProgressView: View {
                             .aspectRatio(contentMode: .fit)
                     )
                     .animation(.easeInOut(duration: 0.5), value: expectedProgress)
+                }
+
+                // Orange zone: from actual to overdue threshold (or expected if not overdue)
+                // Only show when isBehindTarget (50ml rounded threshold) for consistency with text
+                if expectedCurrent != nil && isBehindTarget {
+                    GeometryReader { geometry in
+                        VStack {
+                            Spacer()
+                            Rectangle()
+                                .fill(Color.orange.opacity(0.3))
+                                .frame(height: geometry.size.height * orangeTopProgress)
+                        }
+                    }
+                    .mask(
+                        Image("HumanFigureFilled")
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                    )
+                    .animation(.easeInOut(duration: 0.5), value: orangeTopProgress)
                 }
 
                 // Actual progress fill from bottom using filled silhouette as mask
@@ -140,26 +170,30 @@ struct HumanFigureProgressView: View {
     HumanFigureProgressView(current: 2000, total: 2000, color: .blue, label: "of 2000ml goal")
 }
 
-#Preview("Attention - 25% actual, 50% expected (amber)") {
+#Preview("15% behind - orange only") {
+    // 850 actual vs 1000 expected = 15% behind (below 20% overdue threshold)
+    // Shows: blue (850) + orange (850 to 1000)
     HumanFigureProgressView(
-        current: 500,
+        current: 850,
+        total: 2000,
+        color: .blue,
+        label: "of 2000ml goal",
+        expectedCurrent: 1000,
+        deficitMl: 150,
+        urgency: .attention
+    )
+}
+
+#Preview("30% behind - orange + red") {
+    // 700 actual vs 1000 expected = 30% behind (exceeds 20% overdue threshold)
+    // Shows: blue (700) + orange (700 to 800) + red (800 to 1000)
+    HumanFigureProgressView(
+        current: 700,
         total: 2000,
         color: .blue,
         label: "of 2000ml goal",
         expectedCurrent: 1000,
         deficitMl: 300,
-        urgency: .attention
-    )
-}
-
-#Preview("Overdue - 10% actual, 75% expected (red)") {
-    HumanFigureProgressView(
-        current: 200,
-        total: 2000,
-        color: .blue,
-        label: "of 2000ml goal",
-        expectedCurrent: 1500,
-        deficitMl: 500,
         urgency: .overdue
     )
 }

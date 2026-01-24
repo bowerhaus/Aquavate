@@ -1,10 +1,11 @@
 # Aquavate iOS App - UX Product Requirements Document
 
-**Version:** 1.10
+**Version:** 1.11
 **Date:** 2026-01-24
-**Status:** Approved and Tested (Activity Stats Persistence)
+**Status:** Approved and Tested (Three-Color Stacked Fill)
 
 **Changelog:**
+- **v1.11 (2026-01-24):** Three-color stacked fill for human figure (Issue #50). When behind target, shows orange for deficit up to 20%, red for deficit beyond 20%. See Section 2.9.
 - **v1.10 (2026-01-24):** Activity Stats now persist in CoreData (Issue #36 Comment). Users can view cached data when disconnected with "Last synced X ago" timestamp. Diagnostics section accessible when disconnected.
 - **v1.9 (2026-01-24):** Added Hydration Reminders with pace-based urgency model (Issue #27). Added Apple Watch companion app with complications. Added target intake visualization on HomeView. See Section 2.8 (Watch App) and Section 7 (Notification Strategy).
 - **v1.8 (2026-01-23):** Added Diagnostics section to Settings with Activity Stats view (Issue #36). Shows motion wake events and backpack sessions for battery analysis. Includes "drink taken" indicator (water drop icon) for wakes where user took a drink.
@@ -720,7 +721,8 @@ ios/Aquavate/
 | State | Visualization |
 |-------|--------------|
 | On track | Blue fill only (actual progress) |
-| Behind target | Urgency-colored fill (amber/red) showing expected level, blue fill showing actual. Gap indicates deficit. |
+| Behind target (<20%) | Orange fill showing expected level, blue fill showing actual. Gap indicates deficit. |
+| Behind target (≥20%) | Stacked fill: red (beyond 20% threshold) + orange (up to 20% threshold) + blue (actual). Shows severity of deficit. |
 
 **Text Display:**
 - Shows "X ml behind target" when rounded deficit ≥ 50ml
