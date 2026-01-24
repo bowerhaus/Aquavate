@@ -1,7 +1,7 @@
 # Aquavate - Active Development Progress
 
 **Last Updated:** 2026-01-24
-**Current Branch:** `fix-homeview-refresh-alert`
+**Current Branch:** `master`
 
 ---
 
@@ -16,12 +16,16 @@ None - awaiting next issue.
 To resume from this progress file:
 ```
 Resume from PROGRESS.md.
-Issue #44 fix complete - all tests pass. Ready to commit and create PR.
 ```
 
 ---
 
 ## Recently Completed
+
+- ✅ Daily Reminder Limit Toggle (Issue #45) - [Plan 042](Plans/042-daily-reminder-limit-toggle.md)
+  - Added "Limit Daily Reminders" toggle to Settings → Hydration Reminders
+  - When disabled, allows unlimited reminders (respects quiet hours and escalation)
+  - Fixed back-on-track notification timing bug (was using stale urgency data)
 
 - ✅ Fix HomeView Refresh Alert (Issue #44) - [Plan 041](Plans/041-fix-homeview-refresh-alert.md)
   - Fixed race condition in BLEManager where `stopScanning()` guard caused corrupted state
@@ -121,7 +125,6 @@ Issue #44 fix complete - all tests pass. Ready to commit and create PR.
 ## Branch Status
 
 - `master` - Stable baseline
-- `fix-homeview-refresh-alert` - Issue #44 (PR pending)
 
 ---
 

@@ -453,9 +453,23 @@ struct SettingsView: View {
                                 .foregroundStyle(.secondary)
                             Text("Reminders Today")
                             Spacer()
-                            Text("\(notificationManager.remindersSentToday)/\(NotificationManager.maxRemindersPerDay)")
-                                .foregroundStyle(.secondary)
-                                .font(.subheadline)
+                            if notificationManager.dailyLimitEnabled {
+                                Text("\(notificationManager.remindersSentToday)/\(NotificationManager.maxRemindersPerDay)")
+                                    .foregroundStyle(.secondary)
+                                    .font(.subheadline)
+                            } else {
+                                Text("\(notificationManager.remindersSentToday)")
+                                    .foregroundStyle(.secondary)
+                                    .font(.subheadline)
+                            }
+                        }
+
+                        Toggle(isOn: $notificationManager.dailyLimitEnabled) {
+                            HStack {
+                                Image(systemName: "number.circle")
+                                    .foregroundStyle(.blue)
+                                Text("Limit Daily Reminders")
+                            }
                         }
 
                         Toggle(isOn: $notificationManager.backOnTrackEnabled) {
