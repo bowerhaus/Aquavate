@@ -72,7 +72,7 @@ struct HumanFigureProgressView: View {
                 if expectedCurrent != nil && isBehindTarget && isOverdue {
                     GeometryReader { geometry in
                         VStack {
-                            Spacer()
+                            Spacer(minLength: 0)
                             Rectangle()
                                 .fill(Color.red.opacity(0.3))
                                 .frame(height: geometry.size.height * expectedProgress)
@@ -91,7 +91,7 @@ struct HumanFigureProgressView: View {
                 if expectedCurrent != nil && isBehindTarget {
                     GeometryReader { geometry in
                         VStack {
-                            Spacer()
+                            Spacer(minLength: 0)
                             Rectangle()
                                 .fill(Color.orange.opacity(0.3))
                                 .frame(height: geometry.size.height * orangeTopProgress)
@@ -108,7 +108,7 @@ struct HumanFigureProgressView: View {
                 // Actual progress fill from bottom using filled silhouette as mask
                 GeometryReader { geometry in
                     VStack {
-                        Spacer()
+                        Spacer(minLength: 0)
                         Rectangle()
                             .fill(color)
                             .frame(height: geometry.size.height * progress)
