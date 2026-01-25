@@ -1,7 +1,7 @@
 # Aquavate - Active Development Progress
 
 **Last Updated:** 2026-01-25
-**Current Branch:** `master` (after merge)
+**Current Branch:** `foreground-notification-fix`
 
 ---
 
@@ -21,6 +21,12 @@ Resume from PROGRESS.md. Ready for next task.
 ---
 
 ## Recently Completed
+
+- ✅ Foreground Notification Fix (Issue #56) - [Plan 051](Plans/051-foreground-notification-fix.md)
+  - Fixed hydration reminders not appearing when app is in foreground
+  - Added UNUserNotificationCenterDelegate to NotificationManager
+  - Implemented willPresent delegate to return banner/sound/badge options
+  - Added didReceive delegate for handling notification taps
 
 - ✅ Single-Tap Wake for Normal Sleep (Issue #63) - [Plan 050](Plans/050-single-tap-wake.md)
   - Added single-tap detection alongside motion wake for normal sleep mode
