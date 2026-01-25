@@ -208,11 +208,12 @@ class NotificationManager: NSObject, ObservableObject, UNUserNotificationCenterD
             trigger: trigger
         )
 
-        notificationCenter.add(request) { error in
+        notificationCenter.add(request) { [weak self] error in
             if let error = error {
                 print("[Notifications] Failed to schedule: \(error.localizedDescription)")
             } else {
-                Task { @MainActor in
+                Task { @MainActor [weak self] in
+                    guard let self = self else { return }
                     self.remindersSentToday += 1
                     UserDefaults.standard.set(self.remindersSentToday, forKey: "remindersSentToday")
                     print("[Notifications] Scheduled \(urgency.description) reminder (\(self.remindersSentToday)/\(Self.maxRemindersPerDay) today)")

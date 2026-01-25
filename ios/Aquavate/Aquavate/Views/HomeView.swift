@@ -21,20 +21,15 @@ struct HomeView: View {
     @State private var showConnectionRequiredAlert = false
     @State private var isDeleting = false
 
-    // Fetch all drinks from CoreData, sorted by most recent first
-    // Filter to today's drinks in computed property to ensure dynamic date comparison
+    // Fetch today's drinks from CoreData, sorted by most recent first
+    // Predicate limits CoreData fetch to today's records only (reduces memory usage)
+    // Uses midnight boundary to match firmware DRINK_DAILY_RESET_HOUR
     @FetchRequest(
         sortDescriptors: [NSSortDescriptor(keyPath: \CDDrinkRecord.timestamp, ascending: false)],
+        predicate: NSPredicate(format: "timestamp >= %@", Calendar.current.startOfAquavateDay(for: Date()) as CVarArg),
         animation: .default
     )
-    private var allDrinksCD: FetchedResults<CDDrinkRecord>
-
-    // Filter to today's drinks dynamically (not at compile time)
-    // Uses 4am boundary to match firmware DRINK_DAILY_RESET_HOUR
-    private var todaysDrinksCD: [CDDrinkRecord] {
-        let startOfDay = Calendar.current.startOfAquavateDay(for: Date())
-        return allDrinksCD.filter { ($0.timestamp ?? .distantPast) >= startOfDay }
-    }
+    private var todaysDrinksCD: FetchedResults<CDDrinkRecord>
 
     // Convert CoreData records to display model
     private var todaysDrinks: [DrinkRecord] {

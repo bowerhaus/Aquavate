@@ -1,13 +1,40 @@
 # Aquavate - Active Development Progress
 
 **Last Updated:** 2026-01-25
-**Current Branch:** `foreground-notification-fix`
+**Current Branch:** `ios-memory-exhaustion-fix-v2`
 
 ---
 
 ## Current Task
 
-None - ready for next issue.
+**Fix iOS App Memory Exhaustion** - [Plan 052](Plans/052-ios-memory-exhaustion-fix.md) - GitHub Issue #28
+
+iOS app was being killed after ~31 minutes due to memory exhaustion. Fixed memory leaks from WatchConnectivity queue accumulation, CoreData @FetchRequest loading all records, NotificationManager strong self captures, and BLEManager delete task accumulation.
+
+### Progress
+
+- [x] Plan approved and copied to Plans/052-ios-memory-exhaustion-fix.md
+- [x] Created branch `ios-memory-exhaustion-fix-v2` from master
+- [x] Fix 1: Limit WatchConnectivity transferUserInfo queue size (max 5 pending)
+- [x] Fix 2: Add predicates to HomeView @FetchRequest (today's records only)
+- [x] Fix 3: Add predicates to HistoryView @FetchRequest (last 7 days only)
+- [x] Fix 4: Add weak self captures to NotificationManager callbacks
+- [x] Fix 5: Cancel previous delete timeout Task in BLEManager
+- [x] Fix 6: Optimize HistoryView to compute totals directly from CoreData (avoid intermediate objects)
+- [x] Build verified - compiles successfully
+- [x] Tested on device - 60+ minutes, persistent memory stable (~43 MiB), no crash
+
+### Status
+
+**READY FOR PR** - All fixes applied and tested. App ran 60+ minutes without memory exhaustion. Instruments confirmed persistent memory stable at ~43 MiB with only 0.31 MiB increase over the test period.
+
+### Files Modified
+
+1. `ios/Aquavate/Aquavate/Services/WatchConnectivityManager.swift` - Queue limit check (max 5 pending)
+2. `ios/Aquavate/Aquavate/Views/HomeView.swift` - @FetchRequest predicate (today only)
+3. `ios/Aquavate/Aquavate/Views/HistoryView.swift` - @FetchRequest predicate (7 days) + optimized totals
+4. `ios/Aquavate/Aquavate/Services/NotificationManager.swift` - Weak self captures
+5. `ios/Aquavate/Aquavate/Services/BLEManager.swift` - Cancel previous delete Task
 
 ---
 
@@ -15,7 +42,7 @@ None - ready for next issue.
 
 To resume from this progress file:
 ```
-Resume from PROGRESS.md. Ready for next task.
+Resume from PROGRESS.md. iOS memory exhaustion fix (Issue #28) is complete and tested. Ready for PR.
 ```
 
 ---
@@ -43,21 +70,12 @@ Resume from PROGRESS.md. Ready for next task.
   - Immediate "waking" feedback on tap detection
   - Removed dead code: `EXTENDED_SLEEP_TIMER_SEC` constant and variable
 
-- ✅ Midnight Rollover for HealthKit Alignment (Issue #47) - [Plan 049](Plans/049-midnight-rollover.md)
-  - Changed daily reset from 4am to midnight to align with Apple Health
-  - Updated firmware config.h and iOS BLEConstants.swift
-  - Updated PRD.md and IOS-UX-PRD.md documentation
-
-- ✅ Human Figure Fill Fix (Issue #59) - [Plan 048](Plans/048-human-figure-fill-fix.md)
-  - Fixed white gap at top of head when goal reached/exceeded
-  - SwiftUI `Spacer()` default minLength caused fill to not reach 100%
-  - Changed to `Spacer(minLength: 0)` in HumanFigureProgressView.swift
-
 ---
 
 ## Branch Status
 
 - `master` - Stable baseline
+- `ios-memory-exhaustion-fix-v2` - Ready to merge (Issue #28 fix)
 
 ---
 

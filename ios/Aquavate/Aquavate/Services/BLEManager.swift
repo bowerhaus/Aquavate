@@ -248,6 +248,7 @@ class BLEManager: NSObject, ObservableObject {
     /// Pending delete completion handler (for bidirectional sync)
     private var pendingDeleteCompletion: ((Bool) -> Void)?
     private var pendingDeleteRecordId: UInt32?
+    private var pendingDeleteTask: Task<Void, Never>?
 
     // MARK: - Auto-Reconnection Properties
 
@@ -1468,6 +1469,9 @@ extension BLEManager: CBPeripheralDelegate {
             return
         }
 
+        // Cancel any previous delete timeout task
+        pendingDeleteTask?.cancel()
+
         // Store completion handler for when Current State notification arrives
         pendingDeleteCompletion = completion
         pendingDeleteRecordId = firmwareRecordId
@@ -1477,8 +1481,9 @@ extension BLEManager: CBPeripheralDelegate {
         logger.info("Sent DELETE_DRINK_RECORD command for id=\(firmwareRecordId)")
 
         // Set a timeout in case we don't get a response
-        Task { @MainActor in
+        pendingDeleteTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 5_000_000_000) // 5 second timeout
+            guard !Task.isCancelled else { return }
             if let completion = self.pendingDeleteCompletion, self.pendingDeleteRecordId == firmwareRecordId {
                 self.logger.warning("Delete confirmation timeout for record \(firmwareRecordId)")
                 self.pendingDeleteCompletion = nil
