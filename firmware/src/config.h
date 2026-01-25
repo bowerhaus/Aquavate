@@ -130,15 +130,20 @@ extern uint8_t g_daily_intake_display_mode;
 
 // Timer 2: Extended deep sleep configuration (backpack mode)
 // When bottle hasn't been stable (UPRIGHT_STABLE) for threshold duration,
-// switch to timer-based wake instead of motion wake to conserve battery
-#define TIME_SINCE_STABLE_THRESHOLD_SEC 180     // 3 minutes without stability triggers extended sleep
-#define EXTENDED_SLEEP_TIMER_SEC        60      // 1 minute timer wake in extended mode
+// switch to tap-based wake instead of motion wake to conserve battery
+#define TIME_SINCE_STABLE_THRESHOLD_SEC 180     // 3 minutes without stability triggers backpack mode
 
 // Display "Zzzz" indicator before entering deep sleep
 // 0 = No display update before sleep (saves battery, no flash)
 // 1 = Show "Zzzz" indicator before sleep (visual feedback)
 #define DISPLAY_SLEEP_INDICATOR     0
 #define EXTENDED_SLEEP_INDICATOR    1           // Show "Zzzz" before extended sleep (1=enabled)
+
+// Tap detection for backpack mode wake (ADXL343 double-tap interrupt)
+#define TAP_WAKE_THRESHOLD          0x30    // 3.0g threshold (48 x 62.5mg/LSB) - firm tap required
+#define TAP_WAKE_DURATION           0x10    // 10ms max duration (16 x 625us/LSB) - short sharp tap
+#define TAP_WAKE_LATENT             0x50    // 100ms latency (80 x 1.25ms/LSB) - between taps
+#define TAP_WAKE_WINDOW             0xF0    // 300ms window (240 x 1.25ms/LSB) - for second tap
 
 // ==================== ADXL343 Accelerometer ====================
 

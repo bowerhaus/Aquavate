@@ -359,15 +359,7 @@ static void drawBatteryIcon(int x, int y, int percent) {
     }
 }
 
-// Helper: Draw sleep indicator (Zzzz.. text)
-static void drawSleepIndicator(int x, int y, bool sleeping) {
-    if (sleeping) {
-        g_display_ptr->setTextSize(1);
-        g_display_ptr->setTextColor(EPD_BLACK);
-        g_display_ptr->setCursor(x, y);
-        g_display_ptr->print("Zzzz..");
-    }
-}
+// Note: Zzzz sleep indicator removed - backpack mode screen replaces it (Issue #38)
 
 // Helper: Draw bottle graphic (exported for calibration UI)
 void drawBottleGraphic(int16_t x, int16_t y, float fill_percent, bool show_question_mark) {
@@ -674,6 +666,72 @@ bool displayRestoreFromRTC() {
     return true;
 }
 
+// Display backpack mode screen with user instructions (Issue #38)
+void displayBackpackMode() {
+    if (g_display_ptr == nullptr) return;
+
+    g_display_ptr->clearBuffer();
+    g_display_ptr->setTextColor(EPD_BLACK);
+
+    // Title: "backpack mode" centered, textSize=3 (larger for visibility)
+    g_display_ptr->setTextSize(3);
+    const char* title = "backpack mode";
+    int title_width = strlen(title) * 18;  // 18px per char at textSize=3
+    g_display_ptr->setCursor((250 - title_width) / 2, 15);
+    g_display_ptr->print(title);
+
+    // Instructions: multi-line, textSize=2 (larger for visibility), centered
+    g_display_ptr->setTextSize(2);
+    const char* line1 = "double-tap firmly";
+    const char* line2 = "to wake up";
+
+    int w1 = strlen(line1) * 12;  // 12px per char at textSize=2
+    int w2 = strlen(line2) * 12;
+
+    g_display_ptr->setCursor((250 - w1) / 2, 52);
+    g_display_ptr->print(line1);
+    g_display_ptr->setCursor((250 - w2) / 2, 75);
+    g_display_ptr->print(line2);
+
+    // Small note at bottom about wake time
+    g_display_ptr->setTextSize(1);
+    const char* note = "allow five seconds to wake";
+    int note_width = strlen(note) * 6;  // 6px per char at textSize=1
+    g_display_ptr->setCursor((250 - note_width) / 2, 105);
+    g_display_ptr->print(note);
+
+    g_display_ptr->display();
+}
+
+// Display immediate feedback when waking from tap (shows "waking" text)
+void displayTapWakeFeedback() {
+    if (g_display_ptr == nullptr) return;
+
+    // Show "waking" text centered with "please wait" below
+    g_display_ptr->clearBuffer();
+    g_display_ptr->setTextColor(EPD_BLACK);
+
+    // "waking" in large text
+    g_display_ptr->setTextSize(3);
+    const char* text = "waking";
+    int text_width = strlen(text) * 18;  // 18px per char at textSize=3
+    int text_x = (250 - text_width) / 2;
+    g_display_ptr->setCursor(text_x, 40);
+    g_display_ptr->print(text);
+
+    // "please wait" in smaller text below
+    g_display_ptr->setTextSize(1);
+    const char* subtext = "please wait";
+    int subtext_width = strlen(subtext) * 6;  // 6px per char at textSize=1
+    int subtext_x = (250 - subtext_width) / 2;
+    g_display_ptr->setCursor(subtext_x, 72);
+    g_display_ptr->print(subtext);
+
+    g_display_ptr->display();
+
+    Serial.println("Display: Tap wake feedback shown (waking)");
+}
+
 #if defined(BOARD_ADAFRUIT_FEATHER)
 void drawMainScreen() {
     if (g_display_ptr == nullptr) return;
@@ -721,9 +779,6 @@ void drawMainScreen() {
 
     // Draw battery status in top-right corner
     drawBatteryIcon(220, 5, g_display_state.battery_percent);
-
-    // Draw sleep indicator in top-left corner
-    drawSleepIndicator(5, 5, g_display_state.sleeping);
 
     // Draw time centered at top
     char time_text[16];
