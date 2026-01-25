@@ -9,7 +9,7 @@ import Foundation
 import UserNotifications
 
 @MainActor
-class NotificationManager: ObservableObject {
+class NotificationManager: NSObject, ObservableObject {
     // MARK: - Constants
 
     static let quietHoursStart = 22  // 10pm
@@ -56,7 +56,7 @@ class NotificationManager: ObservableObject {
 
     // MARK: - Initialization
 
-    init() {
+    override init() {
         self.isEnabled = UserDefaults.standard.bool(forKey: "hydrationRemindersEnabled")
         self.backOnTrackEnabled = UserDefaults.standard.bool(forKey: "backOnTrackNotificationsEnabled")
         self.dailyLimitEnabled = UserDefaults.standard.object(forKey: "dailyReminderLimitEnabled") as? Bool ?? true
@@ -64,6 +64,11 @@ class NotificationManager: ObservableObject {
         if let lastReset = UserDefaults.standard.object(forKey: "lastReminderResetDate") as? Date {
             self.lastResetDate = lastReset
         }
+        super.init()
+
+        // Set as delegate to show notifications when app is in foreground
+        notificationCenter.delegate = self
+
         checkAuthorizationStatus()
         checkDailyReset()
     }
@@ -281,5 +286,19 @@ class NotificationManager: ObservableObject {
     /// Reset the daily reminder count (called when goal achieved or new day)
     func resetReminderCount() {
         resetDailyCount()
+    }
+}
+
+// MARK: - UNUserNotificationCenterDelegate
+
+extension NotificationManager: UNUserNotificationCenterDelegate {
+    /// Show notifications even when app is in foreground
+    nonisolated func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        // Show banner and play sound even when app is in foreground
+        completionHandler([.banner, .sound])
     }
 }

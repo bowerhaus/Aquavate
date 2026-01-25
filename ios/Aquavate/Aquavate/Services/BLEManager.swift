@@ -1318,6 +1318,9 @@ extension BLEManager: CBPeripheralDelegate {
             hydrationReminderService?.goalAchieved()
         }
 
+        // Evaluate if a hydration reminder should be sent (Issue: notifications not triggering)
+        hydrationReminderService?.evaluateAndScheduleReminder()
+
         logger.info("Drink sync complete: \(recordCount) records synced")
     }
 

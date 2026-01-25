@@ -1,13 +1,25 @@
 # Aquavate - Active Development Progress
 
 **Last Updated:** 2026-01-24
-**Current Branch:** `master`
+**Current Branch:** `fix-missing-hydration-notifications`
 
 ---
 
 ## Current Task
 
-None - awaiting next issue.
+**Fix Missing Hydration Reminder Notifications (Issue #56)** - [Plan 047](Plans/047-fix-missing-hydration-notifications.md)
+
+### Problem
+User reports "50ml behind target" appears on display but no notification on phone. The reminders count increments but notifications aren't displayed.
+
+### Root Cause
+When drink sync completes, `completeSyncTransfer()` updates state but doesn't call `evaluateAndScheduleReminder()`. Notifications are only evaluated on a 60-second timer.
+
+### Implementation Steps
+- [x] Add `evaluateAndScheduleReminder()` call in `completeSyncTransfer()` after state update
+- [x] Add foreground notification support (UNUserNotificationCenterDelegate)
+- [ ] Build and test iOS app
+- [ ] Verify notification appears when behind pace after drink sync
 
 ---
 
