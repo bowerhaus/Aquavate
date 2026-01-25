@@ -18,7 +18,7 @@ class HydrationReminderService: ObservableObject {
     static let maxRemindersPerDay = 12
 
     #if DEBUG
-    static let testModeMinimumDeficit = 10  // Lower notification threshold in test mode (10ml instead of 50ml)
+    static let testModeMinimumDeficit = 50  // Lower notification threshold when early notifications enabled
     #endif
 
     // MARK: - Published Properties
@@ -69,12 +69,12 @@ class HydrationReminderService: ObservableObject {
     // MARK: - Rounding Helpers
 
     /// Minimum deficit to trigger notifications (below this, considered "on track")
-    /// In test mode, uses lower threshold to trigger notifications more easily
+    /// With early notifications enabled (DEBUG only), uses lower threshold (50ml vs 150ml)
     private var minimumDeficitForNotification: Int {
         #if DEBUG
-        return testModeEnabled ? Self.testModeMinimumDeficit : 50
+        return testModeEnabled ? Self.testModeMinimumDeficit : 150
         #else
-        return 50
+        return 150
         #endif
     }
 

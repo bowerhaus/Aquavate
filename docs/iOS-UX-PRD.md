@@ -1,10 +1,11 @@
 # Aquavate iOS App - UX Product Requirements Document
 
-**Version:** 1.14
+**Version:** 1.15
 **Date:** 2026-01-25
-**Status:** Approved and Tested (Single-Tap Wake)
+**Status:** Approved and Tested (Notification Threshold Adjustment)
 
 **Changelog:**
+- **v1.15 (2026-01-25):** Increased notification threshold from 50ml to 150ml behind pace (Issue #67). Early Notifications toggle (DEBUG only) lowers threshold to 50ml. See Section 7.
 - **v1.14 (2026-01-25):** Updated "Bottle is Asleep" alert message to reflect single-tap wake capability (Issue #63). Message now says "Tap or tilt your bottle to wake it up". See Section 2.4.
 - **v1.13 (2026-01-25):** Bottle level now shows last known value with "(recent)" indicator when disconnected (Issue #57). Section is hidden until first connection. See Section 2.4.
 - **v1.12 (2026-01-24):** Added Retry/Cancel buttons to "Bottle is Asleep" alert (Issue #52). Users can now tap Retry after waking bottle instead of manually pulling down again. See Section 2.4.
@@ -1414,7 +1415,7 @@ Deficit = expected - dailyTotalMl
 - Active hours: 7am-10pm (15 hours)
 - Quiet hours: 10pm-7am (no reminders)
 - Max 12 reminders per day (configurable via "Limit Daily Reminders" toggle)
-- 50ml rounding: Deficits rounded to nearest 50ml, suppressed if <50ml
+- 50ml rounding: Deficits rounded to nearest 50ml, suppressed if <150ml (50ml with Early Notifications)
 - Escalation model: Only notify when urgency increases (no repeated same-level notifications)
 
 **Notification Types:**
@@ -1431,7 +1432,7 @@ Deficit = expected - dailyTotalMl
 - Hydration Reminders toggle (main on/off)
 - Limit Daily Reminders toggle (enforces 12/day max, enabled by default)
 - Back On Track Alerts toggle (optional, disabled by default)
-- Test Mode toggle (DEBUG only, lowers notification threshold)
+- Early Notifications toggle (DEBUG only, lowers threshold from 150ml to 50ml)
 
 **Background Notifications:**
 - Uses BGAppRefreshTask for background delivery

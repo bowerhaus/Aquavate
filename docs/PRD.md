@@ -408,7 +408,7 @@ Smart reminders based on whether user is on pace to meet daily goal:
 - Quiet hours: 10pm-7am (no reminders)
 - Max 12 reminders per day
 - Escalation model: Only notify when urgency increases
-- 50ml rounding: Deficits rounded to nearest 50ml, suppressed if <50ml
+- 50ml rounding: Deficits rounded to nearest 50ml, suppressed if <150ml (50ml in DEBUG with Early Notifications enabled)
 
 **Notification Types:**
 - Hydration reminders (pace-based, during active hours)
