@@ -673,31 +673,63 @@ void displayBackpackMode() {
     g_display_ptr->clearBuffer();
     g_display_ptr->setTextColor(EPD_BLACK);
 
-    // Title: "Backpack Mode" centered, textSize=2
-    g_display_ptr->setTextSize(2);
-    const char* title = "Backpack Mode";
-    int title_width = strlen(title) * 12;  // 12px per char at textSize=2
-    g_display_ptr->setCursor((250 - title_width) / 2, 30);
+    // Title: "backpack mode" centered, textSize=3 (larger for visibility)
+    g_display_ptr->setTextSize(3);
+    const char* title = "backpack mode";
+    int title_width = strlen(title) * 18;  // 18px per char at textSize=3
+    g_display_ptr->setCursor((250 - title_width) / 2, 15);
     g_display_ptr->print(title);
 
-    // Instructions: multi-line, textSize=1, centered
-    g_display_ptr->setTextSize(1);
-    const char* line1 = "Place me on a flat surface";
-    const char* line2 = "and I will wake up";
-    const char* line3 = "within a minute";
+    // Instructions: multi-line, textSize=2 (larger for visibility), centered
+    g_display_ptr->setTextSize(2);
+    const char* line1 = "double-tap firmly";
+    const char* line2 = "to wake up";
 
-    int w1 = strlen(line1) * 6;
-    int w2 = strlen(line2) * 6;
-    int w3 = strlen(line3) * 6;
+    int w1 = strlen(line1) * 12;  // 12px per char at textSize=2
+    int w2 = strlen(line2) * 12;
 
-    g_display_ptr->setCursor((250 - w1) / 2, 60);
+    g_display_ptr->setCursor((250 - w1) / 2, 52);
     g_display_ptr->print(line1);
     g_display_ptr->setCursor((250 - w2) / 2, 75);
     g_display_ptr->print(line2);
-    g_display_ptr->setCursor((250 - w3) / 2, 90);
-    g_display_ptr->print(line3);
+
+    // Small note at bottom about wake time
+    g_display_ptr->setTextSize(1);
+    const char* note = "allow five seconds to wake";
+    int note_width = strlen(note) * 6;  // 6px per char at textSize=1
+    g_display_ptr->setCursor((250 - note_width) / 2, 105);
+    g_display_ptr->print(note);
 
     g_display_ptr->display();
+}
+
+// Display immediate feedback when waking from tap (shows "waking" text)
+void displayTapWakeFeedback() {
+    if (g_display_ptr == nullptr) return;
+
+    // Show "waking" text centered with "please wait" below
+    g_display_ptr->clearBuffer();
+    g_display_ptr->setTextColor(EPD_BLACK);
+
+    // "waking" in large text
+    g_display_ptr->setTextSize(3);
+    const char* text = "waking";
+    int text_width = strlen(text) * 18;  // 18px per char at textSize=3
+    int text_x = (250 - text_width) / 2;
+    g_display_ptr->setCursor(text_x, 40);
+    g_display_ptr->print(text);
+
+    // "please wait" in smaller text below
+    g_display_ptr->setTextSize(1);
+    const char* subtext = "please wait";
+    int subtext_width = strlen(subtext) * 6;  // 6px per char at textSize=1
+    int subtext_x = (250 - subtext_width) / 2;
+    g_display_ptr->setCursor(subtext_x, 72);
+    g_display_ptr->print(subtext);
+
+    g_display_ptr->display();
+
+    Serial.println("Display: Tap wake feedback shown (waking)");
 }
 
 #if defined(BOARD_ADAFRUIT_FEATHER)

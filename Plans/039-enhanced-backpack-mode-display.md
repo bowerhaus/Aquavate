@@ -1,7 +1,13 @@
 # Plan: Enhanced Backpack Mode Display (Issue #38)
 
+## Status: COMPLETE ✅
+
+**Completed:** 2026-01-25
+
 ## Summary
 Replace the simple "Zzzz.." indicator with a user-friendly "Backpack Mode" screen that explains how to wake the bottle. Optimize display refresh to avoid unnecessary updates when re-entering extended sleep.
+
+**Update (2026-01-25):** Replaced 60-second timer wake with double-tap detection for improved battery efficiency. See "Tap-to-Wake Enhancement" section below.
 
 ## Files to Modify
 
@@ -123,3 +129,66 @@ if (wakeup_reason != ESP_SLEEP_WAKEUP_TIMER) {
 3. **Test no refresh on re-entry**: Watch serial output - should see "skipping display refresh" on subsequent timer wakes while moving
 4. **Test return to normal**: Place bottle flat, wait ~1 minute, verify normal screen returns
 5. **Test power cycle**: Power off/on, then trigger backpack mode again - screen should appear (not skipped)
+
+---
+
+## Tap-to-Wake Enhancement (2026-01-25)
+
+### Why Double-Tap?
+The original implementation used 60-second timer wakes, which:
+- Consumed battery with periodic wakes
+- Required checking `isStillMovingConstantly()` each wake
+- Added complexity to wake handling
+
+Double-tap detection provides:
+- **Maximum battery savings** - no periodic wakes at all
+- **Simple implementation** - one wake source
+- **Clear user feedback** - display shows tap instructions
+- **Deliberate gesture** - won't trigger from backpack vibrations
+
+### Additional Files Modified
+
+| File | Changes |
+|------|---------|
+| [firmware/src/config.h](../firmware/src/config.h) | Add tap detection constants, remove `EXTENDED_SLEEP_TIMER_SEC` |
+| [firmware/src/main.cpp](../firmware/src/main.cpp) | Add `configureADXL343TapWake()`, modify wake handling |
+| [firmware/include/display.h](../firmware/include/display.h) | Add `displayTapWakeFeedback()` declaration |
+
+### Config Constants Added (config.h)
+```cpp
+#define TAP_WAKE_THRESHOLD          0x30    // 3.0g threshold (firm tap)
+#define TAP_WAKE_DURATION           0x10    // 10ms max duration
+#define TAP_WAKE_LATENT             0x50    // 100ms between taps
+#define TAP_WAKE_WINDOW             0xF0    // 300ms window for second tap
+```
+
+### Updated Display Text (display.cpp)
+The backpack mode screen now shows:
+- Title: "backpack mode" (textSize=3, lowercase)
+- Instructions: "double-tap firmly / to wake up" (textSize=2)
+- Note: "allow five seconds to wake" (textSize=1)
+
+### Tap Wake Feedback (display.cpp)
+New `displayTapWakeFeedback()` function shows "waking" immediately on tap detection, before sensor initialization completes.
+
+### RTC Variable Added (main.cpp)
+```cpp
+RTC_DATA_ATTR bool rtc_tap_wake_enabled = false;
+```
+
+### Wake Handling Logic
+- When entering backpack mode: configure ADXL343 for double-tap, set `rtc_tap_wake_enabled = true`
+- On EXT0 wake: check `rtc_tap_wake_enabled` to distinguish tap vs motion wake
+- After tap wake: restore motion detection, clear flag
+
+### Code Removed
+- `EXTENDED_SLEEP_TIMER_SEC` constant (dead code)
+- `g_extended_sleep_timer_sec` variable (dead code)
+- `isStillMovingConstantly()` function (no longer needed)
+- Timer wake in `enterExtendedDeepSleep()` (replaced by tap)
+
+### Updated Verification Steps
+1. **Test backpack mode entry**: Keep bottle moving for 3 minutes, display shows backpack instructions
+2. **Test tap wake**: Double-tap firmly, see "waking" feedback, then normal screen
+3. **Test false positive rejection**: Single taps, bumps, shaking should NOT wake
+4. **Test normal sleep regression**: Normal sleep still wakes on motion (not requiring tap)

@@ -60,7 +60,6 @@ unsigned long wakeTime = 0;
 // Extended deep sleep tracking (Plan 034: renamed for clarity)
 unsigned long g_time_since_stable_start = 0;    // When bottle last became NOT stable (for backpack detection)
 bool g_in_extended_sleep_mode = false;          // Currently using extended sleep
-uint32_t g_extended_sleep_timer_sec = EXTENDED_SLEEP_TIMER_SEC;       // Timer wake duration (default 60s)
 uint32_t g_time_since_stable_threshold_sec = TIME_SINCE_STABLE_THRESHOLD_SEC; // Time without stability before extended sleep (3 min)
 bool g_force_display_clear_sleep = false;       // Flag to clear Zzzz indicator on wake from extended sleep
 bool g_rollover_wake_pending = false;           // Flag to process 4am rollover after initialization
@@ -71,6 +70,7 @@ RTC_DATA_ATTR bool rtc_in_extended_sleep_mode = false;
 RTC_DATA_ATTR unsigned long rtc_time_since_stable_start = 0;
 RTC_DATA_ATTR bool rtc_backpack_screen_shown = false;  // Track if backpack mode screen shown (Issue #38)
 RTC_DATA_ATTR bool rtc_rollover_wake_pending = false;  // True if rollover timer was set for 4am wake
+RTC_DATA_ATTR bool rtc_tap_wake_enabled = false;       // True if in backpack mode expecting tap wake
 
 // Sync timeout tracking - regular variable, set at wake time
 // Only extend timeout if NEW drinks recorded during this wake session
@@ -276,6 +276,73 @@ void configureADXL343Interrupt() {
     Serial.println("Expected: Table/train vibrations ignored, requires deliberate shake/pick-up\n");
 }
 
+// Configure ADXL343 for double-tap detection (backpack mode wake)
+void configureADXL343TapWake() {
+    Serial.println("\n=== ADXL343 Tap Wake Configuration ===");
+
+    // Set interrupt pin mode
+    pinMode(PIN_ACCEL_INT, INPUT_PULLDOWN);  // Active-high interrupt
+
+    // ADXL343 Register Definitions for tap detection
+    const uint8_t THRESH_TAP = 0x1D;        // Tap threshold
+    const uint8_t DUR = 0x21;               // Tap duration
+    const uint8_t LATENT = 0x22;            // Latency for double-tap
+    const uint8_t WINDOW = 0x23;            // Window for double-tap
+    const uint8_t TAP_AXES = 0x2A;          // Axis participation
+    const uint8_t POWER_CTL = 0x2D;         // Power control
+    const uint8_t INT_ENABLE = 0x2E;        // Interrupt enable
+    const uint8_t INT_MAP = 0x2F;           // Interrupt mapping
+    const uint8_t DATA_FORMAT = 0x31;       // Data format
+    const uint8_t INT_SOURCE = 0x30;        // Interrupt source (read to clear)
+
+    // Step 1: Configure data format (±2g range)
+    writeAccelReg(DATA_FORMAT, 0x00);       // ±2g, 13-bit resolution
+    Serial.println("1. Data format: +/-2g range");
+
+    // Step 2: Set tap threshold
+    // Scale = 62.5 mg/LSB, 3.0g = 48 (0x30)
+    writeAccelReg(THRESH_TAP, TAP_WAKE_THRESHOLD);
+    Serial.printf("2. Tap threshold: 0x%02X (%.1fg)\n", TAP_WAKE_THRESHOLD, TAP_WAKE_THRESHOLD * 0.0625f);
+
+    // Step 3: Set tap duration (max time above threshold for valid tap)
+    // Scale = 625 us/LSB, 10ms = 16 (0x10)
+    writeAccelReg(DUR, TAP_WAKE_DURATION);
+    Serial.printf("3. Tap duration: 0x%02X (%.1fms)\n", TAP_WAKE_DURATION, TAP_WAKE_DURATION * 0.625f);
+
+    // Step 4: Set latency (wait after first tap before window opens)
+    // Scale = 1.25 ms/LSB, 100ms = 80 (0x50)
+    writeAccelReg(LATENT, TAP_WAKE_LATENT);
+    Serial.printf("4. Tap latency: 0x%02X (%.0fms)\n", TAP_WAKE_LATENT, TAP_WAKE_LATENT * 1.25f);
+
+    // Step 5: Set window (time for second tap after latency)
+    // Scale = 1.25 ms/LSB, 300ms = 240 (0xF0)
+    writeAccelReg(WINDOW, TAP_WAKE_WINDOW);
+    Serial.printf("5. Tap window: 0x%02X (%.0fms)\n", TAP_WAKE_WINDOW, TAP_WAKE_WINDOW * 1.25f);
+
+    // Step 6: Enable all tap axes (X, Y, Z participate)
+    writeAccelReg(TAP_AXES, 0x07);          // All three axes
+    Serial.println("6. Tap axes: X, Y, Z enabled");
+
+    // Step 7: Enable measurement mode
+    writeAccelReg(POWER_CTL, 0x08);         // Measurement mode (bit 3)
+    Serial.println("7. Power mode: measurement");
+
+    // Step 8: Enable double-tap interrupt only (bit 5)
+    writeAccelReg(INT_ENABLE, 0x20);        // Double-tap interrupt
+    Serial.println("8. Interrupt enable: double-tap");
+
+    // Step 9: Route double-tap to INT1 pin (bit 5 = 0 for INT1)
+    writeAccelReg(INT_MAP, 0x00);           // All interrupts to INT1
+    Serial.println("9. Interrupt routing: INT1");
+
+    // Step 10: Read INT_SOURCE to clear any pending interrupts
+    uint8_t int_source = readAccelReg(INT_SOURCE);
+    Serial.printf("10. Cleared INT_SOURCE: 0x%02X\n", int_source);
+
+    Serial.println("\n=== Tap Wake Configuration Complete ===");
+    Serial.println("Wake condition: Double-tap (firm tap, wait 100ms, tap again within 300ms)\n");
+}
+
 // Save extended sleep state to RTC memory
 void extendedSleepSaveToRTC() {
     rtc_extended_sleep_magic = RTC_EXTENDED_SLEEP_MAGIC;
@@ -306,55 +373,12 @@ bool extendedSleepRestoreFromRTC() {
     return true;
 }
 
-// Check if device is still experiencing constant motion (backpack scenario)
-// Returns false (not moving) if UPRIGHT_STABLE detected within timeout
-// Returns true (still moving) if timeout expires without UPRIGHT_STABLE
-bool isStillMovingConstantly() {
-    if (!adxlReady) {
-        Serial.println("Extended sleep: Accelerometer not ready, assuming stationary");
-        return false;
-    }
-
-    Serial.println("Extended sleep: Waiting up to 5s for UPRIGHT_STABLE...");
-
-    const unsigned long STABILITY_CHECK_TIMEOUT_MS = 5000;  // 5 seconds
-    const unsigned long POLL_INTERVAL_MS = 200;  // Check every 200ms
-    unsigned long start_time = millis();
-
-    while ((millis() - start_time) < STABILITY_CHECK_TIMEOUT_MS) {
-        GestureType gesture = gesturesUpdate();
-
-        Serial.print("  Gesture: ");
-        switch (gesture) {
-            case GESTURE_INVERTED_HOLD: Serial.print("INVERTED_HOLD"); break;
-            case GESTURE_UPRIGHT_STABLE: Serial.print("UPRIGHT_STABLE"); break;
-            case GESTURE_SIDEWAYS_TILT: Serial.print("SIDEWAYS_TILT"); break;
-            case GESTURE_UPRIGHT: Serial.print("UPRIGHT"); break;
-            case GESTURE_SHAKE_WHILE_INVERTED: Serial.print("SHAKE_WHILE_INVERTED"); break;
-            default: Serial.print("NONE"); break;
-        }
-        Serial.printf(" (%.1fs elapsed)\n", (millis() - start_time) / 1000.0f);
-
-        if (gesture == GESTURE_UPRIGHT_STABLE) {
-            Serial.println("Extended sleep: UPRIGHT_STABLE detected - bottle is stationary");
-            return false;  // Not moving - return to normal mode
-        }
-
-        delay(POLL_INTERVAL_MS);
-    }
-
-    Serial.println("Extended sleep: Timeout - no UPRIGHT_STABLE detected, still moving");
-    return true;  // Still moving - continue extended sleep
-}
-
-// Enter extended deep sleep mode (timer wake instead of motion wake)
+// Enter extended deep sleep mode (tap wake instead of motion wake)
 void enterExtendedDeepSleep() {
-    Serial.print("Entering extended deep sleep (timer wake: ");
-    Serial.print(g_extended_sleep_timer_sec);
-    Serial.println("s)...");
+    Serial.println("Entering extended deep sleep (double-tap wake)...");
 
 #if EXTENDED_SLEEP_INDICATOR
-    // Only show backpack mode screen on first entry (not on re-entry after timer wake)
+    // Only show backpack mode screen on first entry
     if (!rtc_backpack_screen_shown) {
         Serial.println("Displaying Backpack Mode screen...");
         displayBackpackMode();
@@ -379,10 +403,15 @@ void enterExtendedDeepSleep() {
     extendedSleepSaveToRTC();
     activityStatsSaveToRTC();
 
+    // Configure for tap wake (replaces timer wake for battery efficiency)
+    configureADXL343TapWake();
+    rtc_tap_wake_enabled = true;
+
+    Serial.println("Entering extended sleep - wake on double-tap only");
     Serial.flush();
 
-    // Configure timer wake (NO motion wake in extended mode)
-    esp_sleep_enable_timer_wakeup(g_extended_sleep_timer_sec * 1000000ULL);
+    // Configure tap interrupt as sole wake source
+    esp_sleep_enable_ext0_wakeup((gpio_num_t)PIN_ACCEL_INT, 1);  // Wake on HIGH
 
     // Enter deep sleep
     esp_deep_sleep_start();
@@ -595,21 +624,31 @@ void setup() {
     Serial.println("=================================");
 
     // Handle extended sleep mode wake logic
-    if (wakeup_reason == ESP_SLEEP_WAKEUP_TIMER) {
-        // Woke from timer - was in extended sleep mode
-        // Note: Will check motion state and decide mode after sensors initialized
-        Serial.println("Extended sleep: Timer wake detected, will check motion state after init");
-    } else if (wakeup_reason == ESP_SLEEP_WAKEUP_EXT0) {
-        // Woke from motion - was in normal sleep, return to normal mode
-        Serial.println("Extended sleep: Motion wake detected, returning to normal mode");
-        g_in_extended_sleep_mode = false;
-        g_time_since_stable_start = millis();
-        rtc_backpack_screen_shown = false;  // Reset for next backpack mode entry
+    if (wakeup_reason == ESP_SLEEP_WAKEUP_EXT0) {
+        if (rtc_tap_wake_enabled) {
+            // Woke from double-tap in backpack mode - exit backpack mode
+            Serial.println("=== TAP WAKE from backpack mode ===");
+            g_in_extended_sleep_mode = false;
+            g_time_since_stable_start = millis();
+            rtc_backpack_screen_shown = false;
+            g_force_display_clear_sleep = true;
+            // rtc_tap_wake_enabled cleared after accel reconfig below
+        } else {
+            // Woke from motion - was in normal sleep, return to normal mode
+            Serial.println("Motion wake detected, returning to normal mode");
+            g_in_extended_sleep_mode = false;
+            g_time_since_stable_start = millis();
+            rtc_backpack_screen_shown = false;
+        }
+    } else if (wakeup_reason == ESP_SLEEP_WAKEUP_TIMER) {
+        // Woke from timer - daily rollover wake (4am reset)
+        Serial.println("Timer wake detected (daily rollover)");
     } else {
         // Power on/reset - initialize continuous awake tracking
         g_time_since_stable_start = millis();
         g_in_extended_sleep_mode = false;
-        rtc_backpack_screen_shown = false;  // Reset on power cycle
+        rtc_backpack_screen_shown = false;
+        rtc_tap_wake_enabled = false;
     }
 
     Serial.print("Aquavate v");
@@ -635,6 +674,13 @@ void setup() {
     Serial.println("Initializing E-Paper display...");
     display.begin();
     display.setRotation(2);  // Rotate 180 degrees
+
+    // Immediate visual feedback for tap wake (clear backpack mode screen right away)
+    // This runs before sensor initialization to give instant user feedback
+    if (wakeup_reason == ESP_SLEEP_WAKEUP_EXT0 && rtc_tap_wake_enabled) {
+        displayInit(display);  // Initialize display module first
+        displayTapWakeFeedback();
+    }
 
     // Draw welcome screen only on power-on/reset (not on wake from sleep)
     if (wakeup_reason != ESP_SLEEP_WAKEUP_EXT0 && wakeup_reason != ESP_SLEEP_WAKEUP_TIMER) {
@@ -699,10 +745,17 @@ void setup() {
             Serial.println(" (cleared)");
         }
 
-        // Configure interrupt for wake-on-tilt
+        // Configure interrupt for wake-on-tilt (or restore after tap wake)
         configureADXL343Interrupt();
+
+        // Clear tap wake flag after restoring motion detection
+        if (rtc_tap_wake_enabled) {
+            Serial.println("Restored motion detection after tap wake");
+            rtc_tap_wake_enabled = false;
+        }
     } else {
         Serial.println("ADXL343 not found!");
+        rtc_tap_wake_enabled = false;  // Clear flag even if accel failed
     }
 
     // Initialize DS3231 RTC
@@ -781,12 +834,8 @@ void setup() {
             Serial.println(" seconds");
         }
 
-        // Load extended sleep settings from NVS
-        g_extended_sleep_timer_sec = storageLoadExtendedSleepTimer();
+        // Load extended sleep threshold from NVS (tap-to-wake replaced timer wake)
         g_time_since_stable_threshold_sec = storageLoadExtendedSleepThreshold();
-        Serial.print("Extended sleep timer: ");
-        Serial.print(g_extended_sleep_timer_sec);
-        Serial.println(" seconds");
         Serial.print("Extended sleep threshold: ");
         Serial.print(g_time_since_stable_threshold_sec);
         Serial.println(" seconds");
@@ -887,27 +936,12 @@ void setup() {
 
             // Set flag to force display update to clear backpack mode screen
             g_force_display_clear_sleep = true;
-            Serial.println("Extended sleep: Will clear backpack screen on first stable update");
+            Serial.println("Rollover wake: Will update display after init");
         } else {
-            // Extended sleep timer wake - check motion state
-            extendedSleepRestoreFromRTC();
-
-            if (isStillMovingConstantly()) {
-                // Continue extended sleep
-                Serial.println("Extended sleep: Still moving - re-entering extended sleep");
-                enterExtendedDeepSleep();
-                // Will not return from deep sleep
-            } else {
-                // Return to normal mode
-                Serial.println("Extended sleep: Motion stopped - returning to normal mode");
-                g_in_extended_sleep_mode = false;
-                g_time_since_stable_start = millis();  // Reset tracking
-                rtc_backpack_screen_shown = false;  // Reset for next backpack mode entry
-
-                // Set flag to force display update to clear Zzzz indicator
-                g_force_display_clear_sleep = true;
-                Serial.println("Extended sleep: Will clear Zzzz indicator on first stable update");
-            }
+            // Unexpected timer wake (not rollover) - just continue normally
+            Serial.println("Timer wake but not rollover - continuing normally");
+            g_in_extended_sleep_mode = false;
+            g_time_since_stable_start = millis();
         }
     }
 
@@ -970,13 +1004,10 @@ void setup() {
         // Record wake event for activity tracking
         if (wakeup_reason == ESP_SLEEP_WAKEUP_EXT0) {
             activityStatsRecordWakeStart(WAKE_REASON_MOTION);
-        } else if (wakeup_reason == ESP_SLEEP_WAKEUP_TIMER) {
-            activityStatsRecordTimerWake();
 
-            // If returning from extended sleep to normal mode, immediately refresh display
-            // (We already detected UPRIGHT_STABLE in isStillMovingConstantly())
+            // If returning from backpack mode via tap wake, immediately refresh display
             if (g_force_display_clear_sleep && nauReady) {
-                Serial.println("Extended sleep: Immediately refreshing display after returning to normal mode");
+                Serial.println("Tap wake: Immediately refreshing display after exiting backpack mode");
                 g_force_display_clear_sleep = false;
 
                 // Get current water level and daily total
@@ -1005,6 +1036,8 @@ void setup() {
                 // Force display update with current values (not sleeping)
                 displayForceUpdate(water_ml, daily_total, hour, minute, battery_pct, false);
             }
+        } else if (wakeup_reason == ESP_SLEEP_WAKEUP_TIMER) {
+            activityStatsRecordTimerWake();
         }
     } else {
         Serial.println("Display state tracking initialized (power on/reset)");

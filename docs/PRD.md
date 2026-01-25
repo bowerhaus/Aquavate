@@ -142,10 +142,20 @@ After cutting, verify LED no longer illuminates when board is powered.
 ### 2. Measurement Logic
 
 #### Wake Triggers
-- **Motion wake:** LIS3DH interrupt on motion (>300mg threshold) via GPIO 27
+- **Motion wake:** ADXL343 interrupt on motion (>3.0g threshold, sustained ~1.6s) via GPIO 33
 - **Rollover wake:** Timer-based wake at midnight daily reset to refresh display with 0ml daily total
   - Ensures display shows correct daily total even if bottle sleeps through rollover
   - Returns to sleep immediately after display refresh (no BLE advertising)
+- **Tap wake (backpack mode only):** ADXL343 double-tap interrupt for waking from extended sleep
+
+#### Backpack Mode (Extended Sleep)
+When the bottle hasn't been placed on a stable surface (UPRIGHT_STABLE) for 3 minutes, it enters "backpack mode":
+- Display shows "backpack mode" with instructions: "double-tap firmly to wake up"
+- ADXL343 reconfigured from motion detection to double-tap detection
+- No periodic timer wakes (maximum battery savings)
+- User double-taps bottle firmly to exit backpack mode
+- Immediate "waking" feedback shown before sensor initialization
+- After wake, ADXL343 restored to normal motion detection
 
 #### Stability Detection (Both Combined)
 1. Detect vertical orientation: Z-axis dominant (>0.9g), X/Y near zero
