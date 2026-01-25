@@ -3,7 +3,7 @@
  *
  * I2C devices (STEMMA QT / Qwiic):
  *   - NAU7802 ADC (load cell): 0x2A
- *   - LIS3DH accelerometer: 0x18 or 0x19
+ *   - ADXL343 accelerometer: 0x53
  *   - DS3231 RTC: 0x68
  *
  * E-Paper FeatherWing connects via SPI (directly stacked)

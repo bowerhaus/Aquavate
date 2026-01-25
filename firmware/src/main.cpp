@@ -228,8 +228,11 @@ void configureADXL343Interrupt() {
 
     // ADXL343 Register Definitions
     const uint8_t THRESH_ACT = 0x1C;        // Activity threshold
+    const uint8_t THRESH_TAP = 0x1D;        // Tap threshold
+    const uint8_t DUR = 0x21;               // Tap duration
     const uint8_t TIME_ACT = 0x22;          // Activity duration
     const uint8_t ACT_INACT_CTL = 0x27;     // Axis enable for activity/inactivity
+    const uint8_t TAP_AXES = 0x2A;          // Axis participation for tap
     const uint8_t POWER_CTL = 0x2D;         // Power control
     const uint8_t INT_ENABLE = 0x2E;        // Interrupt enable
     const uint8_t INT_MAP = 0x2F;           // Interrupt mapping
@@ -259,21 +262,39 @@ void configureADXL343Interrupt() {
     writeAccelReg(ACT_INACT_CTL, 0xF0);     // All axes activity enable (AC-coupled)
     Serial.println("4. Activity axes: X, Y, Z (AC-coupled)");
 
-    // Step 5: Enable measurement mode
+    // Step 5: Configure single-tap detection (additional wake method)
+    // Tap threshold: 3.0g (same as double-tap in backpack mode)
+    // Scale = 62.5 mg/LSB, 3.0g = 48 (0x30)
+    writeAccelReg(THRESH_TAP, TAP_WAKE_THRESHOLD);
+    Serial.printf("5. Tap threshold: 0x%02X (%.1fg)\n", TAP_WAKE_THRESHOLD, TAP_WAKE_THRESHOLD * 0.0625f);
+
+    // Step 6: Set tap duration (max time above threshold for valid tap)
+    // Scale = 625 us/LSB, 10ms = 16 (0x10)
+    writeAccelReg(DUR, TAP_WAKE_DURATION);
+    Serial.printf("6. Tap duration: 0x%02X (%.1fms)\n", TAP_WAKE_DURATION, TAP_WAKE_DURATION * 0.625f);
+
+    // Step 7: Enable all axes for tap detection
+    writeAccelReg(TAP_AXES, 0x07);          // X, Y, Z participate in tap
+    Serial.println("7. Tap axes: X, Y, Z enabled");
+
+    // Step 8: Enable measurement mode
     writeAccelReg(POWER_CTL, 0x08);         // Measurement mode (bit 3)
-    Serial.println("5. Power mode: measurement");
+    Serial.println("8. Power mode: measurement");
 
-    // Step 6: Enable activity interrupt
-    writeAccelReg(INT_ENABLE, 0x10);        // Activity interrupt (bit 4)
-    Serial.println("6. Interrupt enable: activity");
+    // Step 9: Enable activity AND single-tap interrupts
+    // Bit 4 = Activity (0x10)
+    // Bit 6 = Single-tap (0x40)
+    // Combined = 0x50
+    writeAccelReg(INT_ENABLE, 0x50);        // Activity + single-tap interrupts
+    Serial.println("9. Interrupt enable: activity + single-tap");
 
-    // Step 7: Route activity to INT1 pin (bit 4 = 0 for INT1)
+    // Step 10: Route all interrupts to INT1 pin
     writeAccelReg(INT_MAP, 0x00);           // All interrupts to INT1
-    Serial.println("7. Interrupt routing: INT1");
+    Serial.println("10. Interrupt routing: INT1");
 
     Serial.println("\n=== Configuration Complete ===");
-    Serial.println("Wake condition: Very strong sustained motion (>3.0g for >1.6sec, AC-coupled)");
-    Serial.println("Expected: Table/train vibrations ignored, requires deliberate shake/pick-up\n");
+    Serial.println("Wake condition: Single-tap OR sustained motion (>3.0g)");
+    Serial.println("Expected: Firm tap or deliberate shake wakes device\n");
 }
 
 // Configure ADXL343 for double-tap detection (backpack mode wake)

@@ -12,7 +12,7 @@ Aquavate is a smart water bottle tracking system consisting of a sensor "puck" t
 - **MCU:** Adafruit ESP32 Feather V2 (STEMMA QT)
 - **Display:** 2.13" Mono E-Paper FeatherWing (stacked)
 - **Load Cell ADC:** NAU7802 24-bit ADC (I2C 0x2A)
-- **Accelerometer:** LIS3DH (I2C 0x18) - wake-on-tilt + gesture detection
+- **Accelerometer:** ADXL343 (I2C 0x18) - wake-on-tilt + gesture detection
 - **Load Cell:** 1-5kg bar load cell (half-bridge or full-bridge)
 - **Power:** LiPo battery (500-1000mAh) via Feather charging circuit
 
@@ -32,7 +32,7 @@ Aquavate is a smart water bottle tracking system consisting of a sensor "puck" t
 | MCU | Adafruit ESP32 Feather V2 | Adafruit / Pimoroni | £20 |
 | Display | 2.13" Mono E-Paper FeatherWing | Adafruit / Pimoroni | £22 |
 | Load Cell ADC | Adafruit NAU7802 STEMMA QT | Adafruit / Pimoroni | £6 |
-| Accelerometer | Adafruit LIS3DH STEMMA QT | Adafruit / Pimoroni | £6 |
+| Accelerometer | Adafruit ADXL343 STEMMA QT | Adafruit / Pimoroni | £6 |
 | Load Cell | 1kg-5kg bar/disc load cell | Amazon / AliExpress | £5-10 |
 | Battery | 3.7V LiPo 500-1000mAh | Pimoroni | £8-12 |
 | Connectors | STEMMA QT cables (2x) | Adafruit | £3 |
@@ -45,12 +45,12 @@ Aquavate is a smart water bottle tracking system consisting of a sensor "puck" t
                     ┌─────────────────────┐
                     │  ESP32 Feather V2   │
                     │                     │
-                    │  3V ────────────────┼──► LIS3DH VIN (always-on power)
-                    │  GPIO27 ◄───────────┼─── LIS3DH INT1 (wake interrupt)
+                    │  3V ────────────────┼──► ADXL343 VIN (always-on power)
+                    │  GPIO27 ◄───────────┼─── ADXL343 INT1 (wake interrupt)
                     │                     │
                     │  STEMMA QT ◄────────┼─── NAU7802 (I2C: SDA, SCL, GND)
                     │      │              │        │
-                    │      └──────────────┼────────┴─► LIS3DH (daisy-chain I2C)
+                    │      └──────────────┼────────┴─► ADXL343 (daisy-chain I2C)
                     │                     │
                     │  [E-Paper Wing]     │ (stacked on headers)
                     │                     │
@@ -90,9 +90,9 @@ NAU7802 Load Cell Connections:
 #### Assembly Steps
 1. Stack E-Paper FeatherWing onto ESP32 Feather (headers)
 2. Connect NAU7802 to Feather via STEMMA QT cable
-3. Daisy-chain LIS3DH to NAU7802 via second STEMMA QT cable
-4. Wire LIS3DH VIN to Feather 3V pin (always-on power for wake)
-5. Wire LIS3DH INT1 to Feather GPIO27
+3. Daisy-chain ADXL343 to NAU7802 via second STEMMA QT cable
+4. Wire ADXL343 VIN to Feather 3V pin (always-on power for wake)
+5. Wire ADXL343 INT1 to Feather GPIO27
 6. Connect load cell wires to NAU7802 terminals
 7. Mount load cell in enclosure base
 8. Secure PCB stack in enclosure
@@ -100,15 +100,15 @@ NAU7802 Load Cell Connections:
 10. Close enclosure, test fit with bottle
 
 #### Power Considerations for Assembly
-- **LIS3DH must have always-on power** (Feather 3V, not STEMMA QT which powers down in deep sleep)
+- **ADXL343 must have always-on power** (Feather 3V, not STEMMA QT which powers down in deep sleep)
 - **Battery placement:** Away from load cell to avoid affecting weight readings
 
 **IMPORTANT - Disable LEDs on Breakout Boards:**
-Since we supply constant 3V power to the LIS3DH (and potentially NAU7802) during deep sleep, onboard LEDs will drain the battery continuously. Each LED draws ~1-2mA, which would reduce battery life from weeks to days.
+Since we supply constant 3V power to the ADXL343 (and potentially NAU7802) during deep sleep, onboard LEDs will drain the battery continuously. Each LED draws ~1-2mA, which would reduce battery life from weeks to days.
 
 | Board | LED Jumper Location | Action |
 |-------|---------------------|--------|
-| Adafruit LIS3DH | Back of board, trace labeled "LED" | Cut trace with hobby knife |
+| Adafruit ADXL343 | Back of board, trace labeled "LED" | Cut trace with hobby knife |
 | Adafruit NAU7802 | Back of board (if present) | Cut trace if LED exists |
 | ESP32 Feather V2 | CHG LED stays (only on when charging) | No action needed |
 
@@ -133,7 +133,7 @@ After cutting, verify LED no longer illuminates when board is powered.
 
 | State | Trigger | Behavior | Power |
 |-------|---------|----------|-------|
-| **Deep Sleep** | Default | MCU sleeping, LIS3DH monitoring motion | ~100µA |
+| **Deep Sleep** | Default | MCU sleeping, ADXL343 monitoring motion | ~100µA |
 | **Wake** | Tilt detected | Initialize sensors, start measurement cycle | ~50mA |
 | **Measuring** | Vertical + stable | Take weight readings, calculate drink | ~80mA |
 | **Advertising** | After measurement | BLE advertising for iOS connection | ~20mA |
@@ -142,11 +142,12 @@ After cutting, verify LED no longer illuminates when board is powered.
 ### 2. Measurement Logic
 
 #### Wake Triggers
-- **Motion wake:** ADXL343 interrupt on motion (>3.0g threshold, sustained ~1.6s) via GPIO 33
+- **Single-tap wake (normal sleep):** ADXL343 single-tap interrupt (>3.0g threshold, <10ms duration) - firm tap wakes device
+- **Motion wake (normal sleep):** ADXL343 activity interrupt (>3.0g threshold, sustained ~1.6s) - deliberate shake wakes device
 - **Rollover wake:** Timer-based wake at midnight daily reset to refresh display with 0ml daily total
   - Ensures display shows correct daily total even if bottle sleeps through rollover
   - Returns to sleep immediately after display refresh (no BLE advertising)
-- **Tap wake (backpack mode only):** ADXL343 double-tap interrupt for waking from extended sleep
+- **Double-tap wake (backpack mode only):** ADXL343 double-tap interrupt for waking from extended sleep
 
 #### Backpack Mode (Extended Sleep)
 When the bottle hasn't been placed on a stable surface (UPRIGHT_STABLE) for 3 minutes, it enters "backpack mode":
@@ -426,7 +427,7 @@ See [Plans/036-watch-hydration-reminders.md](../Plans/036-watch-hydration-remind
 **Files to modify/create:**
 - `firmware/src/main.cpp` - Refactor to state machine
 - `firmware/src/sensors/weight.cpp` - NAU7802 driver with calibration
-- `firmware/src/sensors/motion.cpp` - LIS3DH driver with gesture detection
+- `firmware/src/sensors/motion.cpp` - ADXL343 driver with gesture detection
 - `firmware/src/power/sleep.cpp` - Power state management
 
 **Deliverables:**

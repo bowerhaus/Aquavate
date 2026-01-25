@@ -1,10 +1,11 @@
 # Aquavate iOS App - UX Product Requirements Document
 
-**Version:** 1.13
+**Version:** 1.14
 **Date:** 2026-01-25
-**Status:** Approved and Tested (Bottle Level Recent Indicator)
+**Status:** Approved and Tested (Single-Tap Wake)
 
 **Changelog:**
+- **v1.14 (2026-01-25):** Updated "Bottle is Asleep" alert message to reflect single-tap wake capability (Issue #63). Message now says "Tap or tilt your bottle to wake it up". See Section 2.4.
 - **v1.13 (2026-01-25):** Bottle level now shows last known value with "(recent)" indicator when disconnected (Issue #57). Section is hidden until first connection. See Section 2.4.
 - **v1.12 (2026-01-24):** Added Retry/Cancel buttons to "Bottle is Asleep" alert (Issue #52). Users can now tap Retry after waking bottle instead of manually pulling down again. See Section 2.4.
 - **v1.11 (2026-01-24):** Three-color stacked fill for human figure (Issue #50). When behind target, shows orange for deficit up to 20%, red for deficit beyond 20%. See Section 2.9.
@@ -346,7 +347,7 @@ Sarah's Bluetooth is accidentally turned off. When she opens the app, she sees a
 
 **Pull-to-Refresh Alerts:**
 - "Bottle is Asleep" alert if scan times out (~10s) with no devices found
-  - Message: "Tilt your bottle to wake it up, then tap Retry."
+  - Message: "Tap or tilt your bottle to wake it up, then hit Retry."
   - Buttons: **Retry** (triggers new connection attempt) | **Cancel** (dismisses alert)
 - "Sync Error" alert if connection fails or sync interrupted
 - "Bluetooth is turned off" error if Bluetooth unavailable

@@ -22,6 +22,13 @@ Resume from PROGRESS.md. Ready for next task.
 
 ## Recently Completed
 
+- ✅ Single-Tap Wake for Normal Sleep (Issue #63) - [Plan 050](Plans/050-single-tap-wake.md)
+  - Added single-tap detection alongside motion wake for normal sleep mode
+  - INT_ENABLE changed from 0x10 (activity only) to 0x50 (activity + single-tap)
+  - Tap threshold: 3.0g (same as backpack mode double-tap)
+  - Updated iOS "Bottle is Asleep" alert: "Tap or tilt your bottle to wake it up"
+  - Fixed LIS3DH → ADXL343 references in documentation
+
 - ✅ Enhanced Backpack Mode with Tap-to-Wake (Issue #38) - [Plan 039](Plans/039-enhanced-backpack-mode-display.md)
   - Backpack mode screen shows "backpack mode" with "double-tap firmly to wake up" instructions
   - RTC flag prevents redundant display refreshes on re-entry
@@ -39,26 +46,6 @@ Resume from PROGRESS.md. Ready for next task.
   - Fixed white gap at top of head when goal reached/exceeded
   - SwiftUI `Spacer()` default minLength caused fill to not reach 100%
   - Changed to `Spacer(minLength: 0)` in HumanFigureProgressView.swift
-
-- ✅ Bottle Level Recent Indicator (Issue #57) - [Plan 047](Plans/047-bottle-level-recent-indicator.md)
-  - Shows last known bottle level with "(recent)" suffix when disconnected
-  - Hides bottle level section entirely until first connection
-  - Persists `bottleLevelMl` and `hasReceivedBottleData` to UserDefaults
-  - Updated IOS-UX-PRD.md Section 2.4
-
-- ✅ Daily Rollover Timer Wake - [Plan 046](Plans/046-daily-rollover-timer-wake.md)
-  - Wake bottle at midnight daily rollover to refresh display with reset daily total
-  - ESP32 timer wake source alongside motion wake (wakes on first to trigger)
-  - Returns to sleep immediately after display refresh (no BLE advertising)
-  - Updated PRD.md Section 2 Wake Triggers
-
----
-
-## Known Issues
-
-**Wake-on-tilt sensitivity (ADXL343):**
-- Requires deliberate shake (~2 seconds) due to aggressive filtering
-- Trade-off accepted for battery life benefits
 
 ---
 

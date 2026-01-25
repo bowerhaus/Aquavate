@@ -80,20 +80,20 @@ The bottle operates in one of three primary modes:
 
 **What the bottle does:**
 - ESP32 enters deep sleep mode
-- All peripherals powered down except LIS3DH accelerometer
+- All peripherals powered down except ADXL343 accelerometer
 - Waits for tilt interrupt
 
 **How to enter:**
 - After timeout with no activity (feature disabled for development)
 
 **How to exit:**
-- LIS3DH detects tilt (Z-axis < threshold) → Wake → Normal Operation
+- ADXL343 detects tilt (Z-axis < threshold) → Wake → Normal Operation
 
 ---
 
 ## Bottle Orientations (Gestures)
 
-The firmware recognizes four bottle orientations using the LIS3DH accelerometer:
+The firmware recognizes four bottle orientations using the ADXL343 accelerometer:
 
 ### INVERTED_HOLD
 - **Detection:** Z-axis < -0.8g held for 5 seconds
@@ -324,7 +324,7 @@ All errors display for 5 seconds then return to Normal Operation with previous c
                       │ Wait for tilt│
                       └──────┬───────┘
                              │
-                             │ LIS3DH tilt interrupt
+                             │ ADXL343 tilt interrupt
                              ↓
                       ┌──────────────┐
                       │  WAKE / BOOT │

@@ -20,7 +20,7 @@ Two prototype configurations are being evaluated:
 - Adafruit ESP32 Feather V2 (STEMMA QT)
 - 2.13" Mono E-Paper FeatherWing (stacks directly - no wiring)
 - NAU7802 24-bit ADC for load cell
-- LIS3DH accelerometer for wake-on-tilt
+- ADXL343 accelerometer for wake-on-tilt
 - UK BOM: [Plans/002-bom-adafruit-feather.md](Plans/002-bom-adafruit-feather.md)
 
 ### Option B: SparkFun Qwiic Ecosystem
@@ -37,7 +37,7 @@ Two prototype configurations are being evaluated:
 - **Libraries Integrated:**
   - Adafruit EPD (ThinkInk) - 2.13" e-paper display ✅
   - Adafruit NAU7802 - Load cell ADC ✅
-  - Adafruit LIS3DH - Accelerometer with wake interrupt ✅
+  - Adafruit ADXL343 - Accelerometer with wake interrupt ✅
   - NimBLE-Arduino - BLE communication (planned)
 
 ### iOS App - Skeleton Created
