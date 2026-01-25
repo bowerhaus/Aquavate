@@ -237,7 +237,7 @@ extern uint8_t g_daily_intake_display_mode;
 // Drink detection parameters
 #define DRINK_MIN_THRESHOLD_ML          30      // Minimum ml decrease to detect a drink
 #define DRINK_REFILL_THRESHOLD_ML       100     // Minimum ml increase to detect a refill
-#define DRINK_DAILY_RESET_HOUR          4       // Reset daily counter at 4am local time
+#define DRINK_DAILY_RESET_HOUR          0       // Reset daily counter at midnight (aligns with HealthKit)
 #define DRINK_DISPLAY_UPDATE_THRESHOLD_ML 50    // Only refresh display if daily total changed by ≥50ml
 #define DRINK_MAX_RECORDS               600     // Circular buffer capacity (30 days at 20 drinks/day)
 #define DRINK_DAILY_GOAL_ML             2500    // Hardcoded daily goal for MVP

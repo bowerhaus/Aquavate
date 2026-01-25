@@ -145,24 +145,23 @@ enum BLEConstants {
 
     // MARK: - Day Boundary
 
-    /// Hour at which daily totals reset (4am, matching firmware DRINK_DAILY_RESET_HOUR)
-    static let dailyResetHour = 4
+    /// Hour at which daily totals reset (midnight, matching firmware DRINK_DAILY_RESET_HOUR and HealthKit)
+    static let dailyResetHour = 0
 }
 
-// MARK: - Calendar Extension for 4am Day Boundary
+// MARK: - Calendar Extension for Midnight Day Boundary
 
 extension Calendar {
     /// Returns the start of the "Aquavate day" for the given date.
-    /// The Aquavate day starts at 4am, not midnight, to handle late-night drinking.
+    /// The Aquavate day starts at midnight, aligning with HealthKit's day boundaries.
     /// For example:
-    /// - 3:00am on Jan 15 → returns 4:00am on Jan 14 (still "yesterday")
-    /// - 4:00am on Jan 15 → returns 4:00am on Jan 15 (new day)
-    /// - 11:00pm on Jan 15 → returns 4:00am on Jan 15
+    /// - 11:00pm on Jan 15 → returns midnight on Jan 15
+    /// - 12:30am on Jan 16 → returns midnight on Jan 16 (new day)
     func startOfAquavateDay(for date: Date) -> Date {
         let components = self.dateComponents([.year, .month, .day, .hour], from: date)
         let hour = components.hour ?? 0
 
-        // If before 4am, we're still in "yesterday's" Aquavate day
+        // If before midnight (never true when dailyResetHour=0), we're still in "yesterday's" day
         var dayComponents = DateComponents()
         dayComponents.year = components.year
         dayComponents.month = components.month
@@ -172,7 +171,7 @@ extension Calendar {
         dayComponents.second = 0
 
         if hour < BLEConstants.dailyResetHour {
-            // Before 4am - go back one day
+            // Before reset hour - go back one day
             if let midnight = self.date(from: dayComponents) {
                 return self.date(byAdding: .day, value: -1, to: midnight) ?? midnight
             }
@@ -181,14 +180,14 @@ extension Calendar {
         return self.date(from: dayComponents) ?? date
     }
 
-    /// Returns true if the given date falls within today's Aquavate day (4am to 4am).
+    /// Returns true if the given date falls within today's Aquavate day (midnight to midnight).
     func isDateInAquavateToday(_ date: Date) -> Bool {
         let todayStart = startOfAquavateDay(for: Date())
         let dateStart = startOfAquavateDay(for: date)
         return todayStart == dateStart
     }
 
-    /// Returns true if two dates fall within the same Aquavate day (4am to 4am).
+    /// Returns true if two dates fall within the same Aquavate day (midnight to midnight).
     func isDate(_ date1: Date, inSameAquavateDayAs date2: Date) -> Bool {
         return startOfAquavateDay(for: date1) == startOfAquavateDay(for: date2)
     }

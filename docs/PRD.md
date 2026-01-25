@@ -143,8 +143,8 @@ After cutting, verify LED no longer illuminates when board is powered.
 
 #### Wake Triggers
 - **Motion wake:** LIS3DH interrupt on motion (>300mg threshold) via GPIO 27
-- **Rollover wake:** Timer-based wake at 4am daily reset to refresh display with 0ml daily total
-  - Ensures display shows correct daily total even if bottle sleeps through midnight
+- **Rollover wake:** Timer-based wake at midnight daily reset to refresh display with 0ml daily total
+  - Ensures display shows correct daily total even if bottle sleeps through rollover
   - Returns to sleep immediately after display refresh (no BLE advertising)
 
 #### Stability Detection (Both Combined)
@@ -377,16 +377,9 @@ For detailed screen specifications, layouts, and UX flows, see [iOS-UX-PRD.md](i
 - Store HealthKit sample UUID for deletion support
 - Request HealthKit authorization from Settings (opt-in)
 
-#### Day Boundary Difference
+#### Day Boundary Alignment
 
-**Important:** Aquavate uses a **4am daily reset boundary** while Apple HealthKit uses **midnight-to-midnight** days.
-
-| System | Day Boundary | Example: 2am drink |
-|--------|--------------|-------------------|
-| Aquavate (bottle + app) | 4:00 AM | Counts as "yesterday" |
-| Apple Health | 12:00 AM (midnight) | Counts as "today" |
-
-This means daily totals may differ slightly for drinks taken between midnight and 4am. Individual drink timestamps are preserved correctly in HealthKit. This design prioritizes user experience (late-night drinks feel like "yesterday") over strict calendar alignment.
+Aquavate uses **midnight** as the daily reset boundary, matching Apple HealthKit's day boundaries. Daily totals in Aquavate and Apple Health will align correctly.
 
 ### 6. Notifications
 
