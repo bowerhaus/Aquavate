@@ -22,6 +22,11 @@ Resume from PROGRESS.md.
 
 ## Recently Completed
 
+- ✅ Midnight Rollover for HealthKit Alignment (Issue #47) - [Plan 049](Plans/049-midnight-rollover.md)
+  - Changed daily reset from 4am to midnight to align with Apple Health
+  - Updated firmware config.h and iOS BLEConstants.swift
+  - Updated PRD.md and IOS-UX-PRD.md documentation
+
 - ✅ Human Figure Fill Fix (Issue #59) - [Plan 048](Plans/048-human-figure-fill-fix.md)
   - Fixed white gap at top of head when goal reached/exceeded
   - SwiftUI `Spacer()` default minLength caused fill to not reach 100%
