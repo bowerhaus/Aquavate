@@ -99,7 +99,19 @@ class BLEManager: NSObject, ObservableObject {
     @Published private(set) var currentWeightG: Int = 0
 
     /// Current water level in bottle (ml)
-    @Published private(set) var bottleLevelMl: Int = 0
+    @Published private(set) var bottleLevelMl: Int = 0 {
+        didSet {
+            // Persist to UserDefaults for offline display
+            UserDefaults.standard.set(bottleLevelMl, forKey: "lastKnownBottleLevelMl")
+        }
+    }
+
+    /// Whether we've ever received bottle data (for showing "(recent)" indicator)
+    @Published private(set) var hasReceivedBottleData: Bool = false {
+        didSet {
+            UserDefaults.standard.set(hasReceivedBottleData, forKey: "hasReceivedBottleData")
+        }
+    }
 
     /// Today's cumulative water intake (ml)
     @Published private(set) var dailyTotalMl: Int = 0
@@ -180,6 +192,12 @@ class BLEManager: NSObject, ObservableObject {
 
     // MARK: - Private Properties
 
+    /// Whether HealthKit sync is currently in progress (prevents concurrent execution)
+    private var isHealthKitSyncInProgress = false
+
+    /// Whether a HealthKit sync was requested while one was already in progress
+    private var pendingHealthKitSync = false
+
     /// Buffer for drink records during sync
     private var syncBuffer: [BLEDrinkRecord] = []
 
@@ -255,6 +273,9 @@ class BLEManager: NSObject, ObservableObject {
     /// Reference to HealthKitManager for syncing drinks (set by AquavateApp)
     weak var healthKitManager: HealthKitManager?
 
+    /// Reference to HydrationReminderService for triggering reminders (set by AquavateApp)
+    weak var hydrationReminderService: HydrationReminderService?
+
     // MARK: - Initialization
 
     override init() {
@@ -266,6 +287,12 @@ class BLEManager: NSObject, ObservableObject {
         // Load persisted daily goal (default 2000 if never synced)
         if UserDefaults.standard.object(forKey: "lastKnownDailyGoalMl") != nil {
             dailyGoalMl = UserDefaults.standard.integer(forKey: "lastKnownDailyGoalMl")
+        }
+
+        // Load persisted bottle level and connection history flag
+        if UserDefaults.standard.bool(forKey: "hasReceivedBottleData") {
+            hasReceivedBottleData = true
+            bottleLevelMl = UserDefaults.standard.integer(forKey: "lastKnownBottleLevelMl")
         }
 
         let options: [String: Any] = [
@@ -285,6 +312,15 @@ class BLEManager: NSObject, ObservableObject {
             errorMessage = "Bluetooth is not available"
             logger.warning("Cannot scan: Bluetooth not ready")
             return
+        }
+
+        // Defensive state recovery: if connectionState is .scanning but CoreBluetooth isn't,
+        // we have corrupted state - reset it
+        if connectionState == .scanning && !centralManager.isScanning {
+            logger.warning("Detected corrupted scanning state - recovering")
+            connectionState = .disconnected
+            scanTimer?.invalidate()
+            scanTimer = nil
         }
 
         guard connectionState == .disconnected else {
@@ -314,13 +350,19 @@ class BLEManager: NSObject, ObservableObject {
 
     /// Stop scanning for devices
     func stopScanning() {
-        guard centralManager.isScanning else { return }
-
-        logger.info("Stopping BLE scan")
-        centralManager.stopScan()
+        // Always clean up our state, even if CoreBluetooth stopped scanning externally
         scanTimer?.invalidate()
         scanTimer = nil
 
+        // Only call stopScan if actually scanning (avoids CoreBluetooth warning)
+        if centralManager.isScanning {
+            logger.info("Stopping BLE scan")
+            centralManager.stopScan()
+        } else if connectionState == .scanning {
+            logger.info("Cleaning up scanning state (CoreBluetooth already stopped)")
+        }
+
+        // Always reset connectionState if we were scanning
         if connectionState == .scanning {
             connectionState = .disconnected
         }
@@ -587,12 +629,11 @@ class BLEManager: NSObject, ObservableObject {
     // MARK: - Private Methods
 
     private func handleScanTimeout() {
-        if connectionState == .scanning {
+        // Stop CoreBluetooth scan to save power
+        // Note: "bottle asleep" detection is done by elapsed time in attemptConnection()
+        if connectionState == .scanning || centralManager.isScanning {
+            logger.info("Scan timeout - stopping CoreBluetooth scan")
             stopScanning()
-            if discoveredDevices.isEmpty {
-                errorMessage = "No Aquavate devices found"
-                logger.warning("Scan timeout: no devices found")
-            }
         }
     }
 
@@ -659,6 +700,12 @@ extension BLEManager: CBCentralManagerDelegate {
             case .resetting:
                 logger.warning("Bluetooth resetting")
                 isBluetoothReady = false
+                // Clean up timers during reset to prevent state corruption
+                scanTimer?.invalidate()
+                scanTimer = nil
+                if connectionState == .scanning {
+                    connectionState = .disconnected
+                }
 
             case .unknown:
                 logger.info("Bluetooth state unknown")
@@ -1015,6 +1062,7 @@ extension BLEManager: CBPeripheralDelegate {
         // Update published properties
         currentWeightG = Int(state.currentWeightG)
         bottleLevelMl = Int(state.bottleLevelMl)
+        hasReceivedBottleData = true
         dailyTotalMl = Int(state.dailyTotalMl)
         batteryPercent = Int(state.batteryPercent)
         isTimeValid = state.isTimeValid
@@ -1271,14 +1319,52 @@ extension BLEManager: CBPeripheralDelegate {
         syncProgress = 1.0
         lastSyncTime = Date()
 
+        // Capture previous urgency before updating state for back-on-track detection
+        let previousUrgency = hydrationReminderService?.currentUrgency
+
+        // Update hydration state (this recalculates urgency)
+        hydrationReminderService?.updateState(
+            totalMl: dailyTotalMl,
+            goalMl: dailyGoalMl,
+            lastDrink: Date()  // Use current time as last drink since we just synced
+        )
+
+        // Check for back-on-track transition
+        hydrationReminderService?.checkBackOnTrack(previousUrgency: previousUrgency)
+
+        // Check if goal achieved
+        if dailyTotalMl >= dailyGoalMl {
+            hydrationReminderService?.goalAchieved()
+        }
+
         logger.info("Drink sync complete: \(recordCount) records synced")
     }
 
     /// Sync any unsynced drinks to HealthKit
+    /// Uses a lock to prevent concurrent execution (Issue #37)
     private func syncDrinksToHealthKit() async {
+        // Prevent concurrent execution - if already syncing, queue a re-sync
+        guard !isHealthKitSyncInProgress else {
+            logger.info("[HealthKit] Sync already in progress, queuing re-sync")
+            pendingHealthKitSync = true
+            return
+        }
+
         guard let healthKitManager = healthKitManager,
               healthKitManager.isEnabled && healthKitManager.isAuthorized else {
             return
+        }
+
+        isHealthKitSyncInProgress = true
+        defer {
+            isHealthKitSyncInProgress = false
+            // Check if another sync was requested while we were syncing
+            if pendingHealthKitSync {
+                pendingHealthKitSync = false
+                Task {
+                    await self.syncDrinksToHealthKit()
+                }
+            }
         }
 
         let unsyncedDrinks = PersistenceController.shared.getUnsyncedDrinkRecords()
@@ -1292,6 +1378,12 @@ extension BLEManager: CBPeripheralDelegate {
         for drink in unsyncedDrinks {
             guard let drinkId = drink.id,
                   let timestamp = drink.timestamp else {
+                continue
+            }
+
+            // Defense in depth: check if sample already exists (handles crash recovery scenarios)
+            if await healthKitManager.waterSampleExists(for: timestamp) {
+                PersistenceController.shared.markDrinkSyncedToHealth(id: drinkId, healthKitUUID: UUID())
                 continue
             }
 
@@ -1580,6 +1672,7 @@ extension BLEManager: CBPeripheralDelegate {
         } else {
             // No data to fetch
             activityFetchState = .complete
+            saveActivityStatsToCoreData()
             logger.info("Activity stats fetch complete (no events)")
         }
     }
@@ -1613,6 +1706,7 @@ extension BLEManager: CBPeripheralDelegate {
         } else {
             // All done
             activityFetchState = .complete
+            saveActivityStatsToCoreData()
             logger.info("Activity stats fetch complete (\(self.motionWakeEvents.count) motion events)")
         }
     }
@@ -1640,8 +1734,35 @@ extension BLEManager: CBPeripheralDelegate {
         } else {
             // All done
             activityFetchState = .complete
+            saveActivityStatsToCoreData()
             logger.info("Activity stats fetch complete (\(self.motionWakeEvents.count) motion events, \(self.backpackSessions.count) backpack sessions)")
         }
+    }
+
+    /// Save fetched activity stats to CoreData for offline viewing
+    private func saveActivityStatsToCoreData() {
+        guard let bottleId = currentBottleId else {
+            logger.warning("Cannot save activity stats: no bottle ID")
+            return
+        }
+
+        // Clear existing activity stats before saving new ones (fresh sync)
+        PersistenceController.shared.clearActivityStats(for: bottleId)
+
+        // Save motion wake events
+        if !motionWakeEvents.isEmpty {
+            PersistenceController.shared.saveMotionWakeEvents(motionWakeEvents, for: bottleId)
+        }
+
+        // Save backpack sessions
+        if !backpackSessions.isEmpty {
+            PersistenceController.shared.saveBackpackSessions(backpackSessions, for: bottleId)
+        }
+
+        // Update last activity sync date
+        PersistenceController.shared.updateLastActivitySyncDate(for: bottleId)
+
+        logger.info("Activity stats saved to CoreData for offline viewing")
     }
 
     // MARK: - Pull-to-Refresh (Async API)
@@ -1694,44 +1815,50 @@ extension BLEManager: CBPeripheralDelegate {
     }
 
     /// Attempt to connect to the bottle, returning success or failure result
-    /// Uses simple polling - same mechanism as Settings scan button
+    /// Uses elapsed time to detect conditions - no dependency on Timer callbacks
     private func attemptConnection() async -> ConnectionResult {
         // Already connected? Return success immediately
         if connectionState.isConnected {
             return .success
         }
 
-        // Start scanning (this triggers auto-connect when device found)
+        // Start scanning (Timer will stop CoreBluetooth scan after scanTimeout for power saving)
         startScanning()
 
-        // Poll connection state until connected, failed, or timeout
-        let timeout: TimeInterval = 15.0 // seconds
-        let pollInterval: UInt64 = 100_000_000 // 100ms in nanoseconds
+        let scanTimeout = BLEConstants.scanTimeout  // 10 seconds
+        let overallTimeout: TimeInterval = 15.0     // 15 seconds max
+        let pollInterval: UInt64 = 100_000_000      // 100ms
         let startTime = Date()
 
-        while Date().timeIntervalSince(startTime) < timeout {
-            // Check if connected
+        while true {
+            let elapsed = Date().timeIntervalSince(startTime)
+
+            // 1. Success: connected
             if connectionState.isConnected {
                 return .success
             }
 
-            // Check if scan timed out with no devices (bottle asleep)
-            if connectionState == .disconnected {
-                if discoveredDevices.isEmpty && errorMessage?.contains("No Aquavate devices found") == true {
-                    return .failure(.bottleAsleep)
-                }
-                if let error = errorMessage, error.contains("timeout") || error.contains("Failed") {
+            // 2. Bottle asleep: past scan timeout with no devices discovered
+            if elapsed > scanTimeout && discoveredDevices.isEmpty && !connectionState.isConnected {
+                stopScanning()
+                return .failure(.bottleAsleep)
+            }
+
+            // 3. Connection error: device was found but connection failed
+            if connectionState == .disconnected && !discoveredDevices.isEmpty {
+                if let error = errorMessage {
                     return .failure(.connectionFailed(error))
                 }
             }
 
-            // Wait a bit before checking again
+            // 4. Overall timeout: something unexpected happened
+            if elapsed >= overallTimeout {
+                stopScanning()
+                return .failure(.connectionFailed("Connection timeout"))
+            }
+
             try? await Task.sleep(nanoseconds: pollInterval)
         }
-
-        // Timeout - stop scanning and return failure
-        stopScanning()
-        return .failure(.connectionFailed("Connection timeout"))
     }
 
     /// Perform sync when already connected, waiting for completion

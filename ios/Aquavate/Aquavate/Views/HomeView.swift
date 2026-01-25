@@ -11,6 +11,7 @@ import CoreData
 struct HomeView: View {
     @EnvironmentObject var bleManager: BLEManager
     @EnvironmentObject var healthKitManager: HealthKitManager
+    @EnvironmentObject var hydrationReminderService: HydrationReminderService
     @Environment(\.managedObjectContext) private var viewContext
 
     // Alert state for pull-to-refresh and delete
@@ -66,6 +67,16 @@ struct HomeView: View {
     private var bottleProgress: Double {
         guard displayCapacity > 0 else { return 0 }
         return min(1.0, Double(displayBottleLevel) / Double(displayCapacity))
+    }
+
+    /// Suffix to show when bottle level is from a previous session
+    private var bottleLevelSuffix: String {
+        if bleManager.connectionState.isConnected {
+            return ""
+        } else if bleManager.hasReceivedBottleData {
+            return " (recent)"
+        }
+        return ""
     }
 
     // Delete today's drinks at given offsets - requires bottle connection for bidirectional sync
@@ -228,34 +239,40 @@ struct HomeView: View {
                     current: displayDailyTotal,
                     total: displayGoal,
                     color: .blue,
-                    label: "of \(displayGoal)ml goal"
+                    label: "of \(displayGoal)ml goal",
+                    expectedCurrent: hydrationReminderService.calculateExpectedIntake(),
+                    deficitMl: hydrationReminderService.deficitMl,
+                    urgency: hydrationReminderService.currentUrgency
                 )
 
-                // Bottle level progress bar (SECONDARY)
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text("Bottle Level")
-                            .font(.headline)
-                        Spacer()
-                        Text("\(Int(bottleProgress * 100))%")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
+                // Bottle level progress bar (SECONDARY) - only show if we have data
+                if bleManager.hasReceivedBottleData || bleManager.connectionState.isConnected {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Bottle Level")
+                                .font(.headline)
+                            Spacer()
+                            Text("\(Int(bottleProgress * 100))%\(bottleLevelSuffix)")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
 
-                    ProgressView(value: bottleProgress)
-                        .tint(.blue)
+                        ProgressView(value: bottleProgress)
+                            .tint(.blue)
 
-                    HStack {
-                        Text("\(displayBottleLevel)ml")
-                            .font(.subheadline)
-                            .fontWeight(.medium)
-                        Text("/ \(displayCapacity)ml")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                        HStack {
+                            Text("\(displayBottleLevel)ml")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                            Text("/ \(displayCapacity)ml")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
                     }
+                    .padding(.horizontal)
                 }
-                .padding(.horizontal)
             }
+            .frame(maxWidth: .infinity)
             .padding(.vertical, 8)
             .background(Color(.systemGroupedBackground))
 
@@ -302,9 +319,14 @@ struct HomeView: View {
             }
         }
         .alert("Bottle is Asleep", isPresented: $showBottleAsleepAlert) {
-            Button("OK", role: .cancel) { }
+            Button("Retry") {
+                Task {
+                    await handleRefresh()
+                }
+            }
+            Button("Cancel", role: .cancel) { }
         } message: {
-            Text("Tilt your bottle to wake it up, then pull down to try again.")
+            Text("Tilt your bottle to wake it up, then tap Retry.")
         }
         .alert("Sync Error", isPresented: $showErrorAlert) {
             Button("OK", role: .cancel) { }
@@ -403,4 +425,5 @@ struct StatusBadge: View {
     HomeView()
         .environmentObject(BLEManager())
         .environmentObject(HealthKitManager())
+        .environmentObject(HydrationReminderService())
 }

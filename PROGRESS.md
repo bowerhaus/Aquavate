@@ -1,13 +1,22 @@
 # Aquavate - Active Development Progress
 
-**Last Updated:** 2026-01-23
-**Current Branch:** `enhanced-backpack-mode-display`
+**Last Updated:** 2026-01-25
+**Current Branch:** `master`
 
 ---
 
 ## Current Task
 
-None - ready for merge to master
+None - awaiting next issue.
+
+---
+
+## Context Recovery
+
+To resume from this progress file:
+```
+Resume from PROGRESS.md.
+```
 
 ---
 
@@ -21,6 +30,77 @@ None - ready for merge to master
   - Improved debug logging: shows mode [NORM/SYNC/EXT] and both timer countdowns
   - Fixed sync timeout: only extends 4min for NEW drinks this wake session (not old unsynced)
   - Added sanity check: sleep timeout of 0 auto-resets to 30s in IOS_MODE
+
+- ✅ Midnight Rollover for HealthKit Alignment (Issue #47) - [Plan 049](Plans/049-midnight-rollover.md)
+  - Changed daily reset from 4am to midnight to align with Apple Health
+  - Updated firmware config.h and iOS BLEConstants.swift
+  - Updated PRD.md and IOS-UX-PRD.md documentation
+
+- ✅ Human Figure Fill Fix (Issue #59) - [Plan 048](Plans/048-human-figure-fill-fix.md)
+  - Fixed white gap at top of head when goal reached/exceeded
+  - SwiftUI `Spacer()` default minLength caused fill to not reach 100%
+  - Changed to `Spacer(minLength: 0)` in HumanFigureProgressView.swift
+
+- ✅ Bottle Level Recent Indicator (Issue #57) - [Plan 047](Plans/047-bottle-level-recent-indicator.md)
+  - Shows last known bottle level with "(recent)" suffix when disconnected
+  - Hides bottle level section entirely until first connection
+  - Persists `bottleLevelMl` and `hasReceivedBottleData` to UserDefaults
+  - Updated IOS-UX-PRD.md Section 2.4
+
+- ✅ Daily Rollover Timer Wake - [Plan 046](Plans/046-daily-rollover-timer-wake.md)
+  - Wake bottle at 4am daily rollover to refresh display with reset daily total
+  - ESP32 timer wake source alongside motion wake (wakes on first to trigger)
+  - Returns to sleep immediately after display refresh (no BLE advertising)
+  - Updated PRD.md Section 2 Wake Triggers
+
+- ✅ Retry Button on "Bottle is Asleep" Alert (Issue #52) - [Plan 045](Plans/045-retry-bottle-asleep-alert.md)
+  - Added Retry/Cancel buttons to alert in HomeView and HistoryView
+  - Users can tap Retry after waking bottle instead of pulling down again
+  - Updated iOS-UX-PRD.md Section 2.4
+
+- ✅ Three-Color Stacked Human Figure Fill (Issue #50) - [Plan 044](Plans/044-three-color-stacked-fill.md)
+  - Human figure now shows stacked blue/orange/red based on deficit thresholds
+  - Orange: deficit up to 20% threshold
+  - Red: deficit beyond 20% (only when significantly behind)
+  - Updated iOS-UX-PRD.md Section 2.9
+
+- ✅ Orange Line Rounding Fix (Issue #48) - [Plan 043](Plans/043-orange-line-rounding-fix.md)
+  - Fixed orange overlay appearing when user is "on track" (small deficit < 25ml)
+  - Changed overlay condition to use `isBehindTarget` (50ml rounded threshold)
+  - Ensures visual overlay and "behind target" text appear/disappear together
+
+- ✅ Daily Reminder Limit Toggle (Issue #45) - [Plan 042](Plans/042-daily-reminder-limit-toggle.md)
+  - Added "Limit Daily Reminders" toggle to Settings → Hydration Reminders
+  - When disabled, allows unlimited reminders (respects quiet hours and escalation)
+  - Fixed back-on-track notification timing bug (was using stale urgency data)
+
+- ✅ Fix HomeView Refresh Alert (Issue #44) - [Plan 041](Plans/041-fix-homeview-refresh-alert.md)
+  - Fixed race condition in BLEManager where `stopScanning()` guard caused corrupted state
+  - Refactored `attemptConnection()` to use elapsed time for `.bottleAsleep` detection
+  - Added defensive state recovery and cleanup on Bluetooth transitions
+  - Tested: All 5 verification scenarios pass consistently
+
+- ✅ Local Activity Stats Storage (Issue #36 Comment) - [Plan 040](Plans/040-local-activity-stats-storage.md)
+  - Activity stats (motion wake events, backpack sessions) now persist in CoreData
+  - Users can view data even when disconnected with "Last synced X ago" timestamp
+  - Fixed: Diagnostics section accessible when disconnected in SettingsView
+
+- ✅ Fix Duplicate HealthKit Entries (Issue #37) - [Plan 039](Plans/039-fix-duplicate-healthkit-entries.md)
+  - Race condition in `syncDrinksToHealthKit()` caused multiple HealthKit entries
+  - Added boolean lock to prevent concurrent sync execution
+  - Added timestamp-based dedup check as defense in depth
+  - Tested: Single drink creates exactly one HealthKit entry
+
+- ✅ Hydration Reminders + Apple Watch App (Issue #27) - [Plan 036](Plans/036-watch-hydration-reminders.md)
+  - Smart hydration reminders with pace-based urgency model
+  - Apple Watch companion app with complications
+  - Deficit tracking: "Xml to catch up" / "On track ✓" / "Goal reached!"
+  - Background notifications via BGAppRefreshTask
+  - Watch local notifications triggered by iPhone for reliable delivery
+  - Target intake visualization on HomeView
+  - 50ml rounding for deficit display
+  - Back On Track notification (optional)
+  - All 12 phases implemented and tested
 
 - ✅ Activity & Sleep Mode Tracking (Issue #36) - [Plan 038](Plans/038-activity-sleep-tracking.md)
   - Track individual wake events and backpack sessions for battery analysis

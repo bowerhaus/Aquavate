@@ -63,12 +63,14 @@ bool g_in_extended_sleep_mode = false;          // Currently using extended slee
 uint32_t g_extended_sleep_timer_sec = EXTENDED_SLEEP_TIMER_SEC;       // Timer wake duration (default 60s)
 uint32_t g_time_since_stable_threshold_sec = TIME_SINCE_STABLE_THRESHOLD_SEC; // Time without stability before extended sleep (3 min)
 bool g_force_display_clear_sleep = false;       // Flag to clear Zzzz indicator on wake from extended sleep
+bool g_rollover_wake_pending = false;           // Flag to process 4am rollover after initialization
 
 // RTC memory persistence (survives deep sleep)
 RTC_DATA_ATTR uint32_t rtc_extended_sleep_magic = 0;
 RTC_DATA_ATTR bool rtc_in_extended_sleep_mode = false;
 RTC_DATA_ATTR unsigned long rtc_time_since_stable_start = 0;
 RTC_DATA_ATTR bool rtc_backpack_screen_shown = false;  // Track if backpack mode screen shown (Issue #38)
+RTC_DATA_ATTR bool rtc_rollover_wake_pending = false;  // True if rollover timer was set for 4am wake
 
 // Sync timeout tracking - regular variable, set at wake time
 // Only extend timeout if NEW drinks recorded during this wake session
@@ -435,6 +437,21 @@ void enterDeepSleep() {
     // Configure wake-up interrupt from ADXL343 INT1 pin
     // Wake on HIGH level (interrupt pin goes HIGH when tilted)
     esp_sleep_enable_ext0_wakeup((gpio_num_t)PIN_ACCEL_INT, 1);
+
+    // Configure timer wake for daily rollover (4am)
+    // ESP32 supports multiple wake sources - wakes on whichever triggers first
+    uint32_t seconds_until_rollover = getSecondsUntilRollover();
+    if (seconds_until_rollover > 0 && seconds_until_rollover < 24 * 3600) {
+        // Add 60-second buffer to ensure we're past the 4am boundary
+        uint64_t timer_us = (uint64_t)(seconds_until_rollover + 60) * 1000000ULL;
+        esp_sleep_enable_timer_wakeup(timer_us);
+        rtc_rollover_wake_pending = true;
+        Serial.printf("Rollover timer set: %lu seconds (%lu hours)\n",
+                      seconds_until_rollover + 60, (seconds_until_rollover + 60) / 3600);
+    } else {
+        rtc_rollover_wake_pending = false;
+        Serial.println("Rollover timer NOT set (time invalid or >24h away)");
+    }
 
     // Enter deep sleep
     esp_deep_sleep_start();
@@ -835,20 +852,35 @@ void setup() {
         Serial.println("Weight measurement initialized");
     }
 
-    // Handle timer wake from extended sleep (now that sensors are initialized)
+    // Handle timer wake (rollover or extended sleep)
     if (wakeup_reason == ESP_SLEEP_WAKEUP_TIMER) {
-        // Restore extended sleep state from RTC memory
-        extendedSleepRestoreFromRTC();
+        // Check if this is a rollover wake (4am daily reset)
+        bool is_rollover_wake = false;
+        if (rtc_rollover_wake_pending) {
+            rtc_rollover_wake_pending = false;  // Clear flag
 
-        // Check if still experiencing constant motion
-        if (isStillMovingConstantly()) {
-            // Continue extended sleep
-            Serial.println("Extended sleep: Still moving - re-entering extended sleep");
-            enterExtendedDeepSleep();
-            // Will not return from deep sleep
-        } else {
-            // Return to normal mode
-            Serial.println("Extended sleep: Motion stopped - returning to normal mode");
+            // Verify we're near 4am (within 10 minutes after rollover time)
+            if (g_time_valid) {
+                uint32_t current_time = getCurrentUnixTime();
+                time_t current_t = current_time;
+                struct tm current_tm;
+                gmtime_r(&current_t, &current_tm);
+
+                // Check if within 10 minutes after 4am
+                if (current_tm.tm_hour == DRINK_DAILY_RESET_HOUR && current_tm.tm_min <= 10) {
+                    is_rollover_wake = true;
+                    Serial.println("=== DAILY ROLLOVER WAKE ===");
+                    Serial.printf("Time: %02d:%02d - Refreshing display with reset daily total\n",
+                                  current_tm.tm_hour, current_tm.tm_min);
+                }
+            }
+        }
+
+        if (is_rollover_wake) {
+            // Rollover wake: refresh display and return to sleep
+            // Note: Display and drinks will be initialized below, then we handle rollover refresh
+            // Set flag to process rollover after all initialization is complete
+            g_rollover_wake_pending = true;
             g_in_extended_sleep_mode = false;
             g_time_since_stable_start = millis();  // Reset tracking
             rtc_backpack_screen_shown = false;  // Reset for next backpack mode entry
@@ -856,6 +888,26 @@ void setup() {
             // Set flag to force display update to clear backpack mode screen
             g_force_display_clear_sleep = true;
             Serial.println("Extended sleep: Will clear backpack screen on first stable update");
+        } else {
+            // Extended sleep timer wake - check motion state
+            extendedSleepRestoreFromRTC();
+
+            if (isStillMovingConstantly()) {
+                // Continue extended sleep
+                Serial.println("Extended sleep: Still moving - re-entering extended sleep");
+                enterExtendedDeepSleep();
+                // Will not return from deep sleep
+            } else {
+                // Return to normal mode
+                Serial.println("Extended sleep: Motion stopped - returning to normal mode");
+                g_in_extended_sleep_mode = false;
+                g_time_since_stable_start = millis();  // Reset tracking
+                rtc_backpack_screen_shown = false;  // Reset for next backpack mode entry
+
+                // Set flag to force display update to clear Zzzz indicator
+                g_force_display_clear_sleep = true;
+                Serial.println("Extended sleep: Will clear Zzzz indicator on first stable update");
+            }
         }
     }
 
@@ -1004,6 +1056,52 @@ void setup() {
     Serial.print("Unsynced records at wake: ");
     Serial.println(g_unsynced_at_wake);
 #endif
+
+    // Handle daily rollover wake (4am) - refresh display and return to sleep
+    if (g_rollover_wake_pending) {
+        g_rollover_wake_pending = false;
+
+        Serial.println("Processing rollover wake...");
+
+        // Recalculate daily totals (will be 0 after rollover)
+        drinksRecalculateTotals();
+        uint16_t daily_total = drinksGetDailyTotal();
+        Serial.printf("Daily total after rollover: %d ml\n", daily_total);
+
+#if defined(BOARD_ADAFRUIT_FEATHER)
+        // Get current time for display
+        uint8_t time_hour = DRINK_DAILY_RESET_HOUR;
+        uint8_t time_minute = 0;
+        if (g_time_valid) {
+            uint32_t current_time = getCurrentUnixTime();
+            time_t current_t = current_time;
+            struct tm current_tm;
+            gmtime_r(&current_t, &current_tm);
+            time_hour = current_tm.tm_hour;
+            time_minute = current_tm.tm_min;
+        }
+
+        // Get battery level
+        float batteryV = getBatteryVoltage();
+        int batteryPct = getBatteryPercent(batteryV);
+
+        // Get last water level from RTC state (bottle hasn't moved)
+        DisplayState last_state = displayGetState();
+        float water_ml = last_state.water_ml;
+
+        // Force display update showing reset daily total
+        Serial.printf("Updating display: water=%.0f ml, daily=%d ml, time=%02d:%02d, battery=%d%%\n",
+                      water_ml, daily_total, time_hour, time_minute, batteryPct);
+        displayUpdate(water_ml, daily_total, time_hour, time_minute, batteryPct, false);
+#endif
+
+        // Return to deep sleep immediately (no user activity, no BLE)
+        Serial.println("Rollover complete - returning to sleep");
+        Serial.flush();
+        delay(100);  // Ensure display update completes
+        enterDeepSleep();
+        // Will not return from deep sleep
+    }
 
     Serial.println("Setup complete!");
     Serial.print("Activity timeout: ");

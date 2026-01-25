@@ -1,14 +1,19 @@
 # Aquavate iOS App - UX Product Requirements Document
 
-**Version:** 1.8
-**Date:** 2026-01-23
-**Status:** Approved and Tested (Activity Stats)
+**Version:** 1.13
+**Date:** 2026-01-25
+**Status:** Approved and Tested (Bottle Level Recent Indicator)
 
 **Changelog:**
+- **v1.13 (2026-01-25):** Bottle level now shows last known value with "(recent)" indicator when disconnected (Issue #57). Section is hidden until first connection. See Section 2.4.
+- **v1.12 (2026-01-24):** Added Retry/Cancel buttons to "Bottle is Asleep" alert (Issue #52). Users can now tap Retry after waking bottle instead of manually pulling down again. See Section 2.4.
+- **v1.11 (2026-01-24):** Three-color stacked fill for human figure (Issue #50). When behind target, shows orange for deficit up to 20%, red for deficit beyond 20%. See Section 2.9.
+- **v1.10 (2026-01-24):** Activity Stats now persist in CoreData (Issue #36 Comment). Users can view cached data when disconnected with "Last synced X ago" timestamp. Diagnostics section accessible when disconnected.
+- **v1.9 (2026-01-24):** Added Hydration Reminders with pace-based urgency model (Issue #27). Added Apple Watch companion app with complications. Added target intake visualization on HomeView. See Section 2.8 (Watch App) and Section 7 (Notification Strategy).
 - **v1.8 (2026-01-23):** Added Diagnostics section to Settings with Activity Stats view (Issue #36). Shows motion wake events and backpack sessions for battery analysis. Includes "drink taken" indicator (water drop icon) for wakes where user took a drink.
 - **v1.7 (2026-01-23):** Added Gestures section to Settings with Shake-to-Empty toggle. Setting syncs to firmware via BLE Device Settings characteristic.
 - **v1.6 (2026-01-22):** Settings page cleanup - replaced static "Name" with live "Device" showing connected device name, removed unused "Use Ounces" toggle, removed Version row from About section.
-- **v1.5 (2026-01-21):** Added Apple HealthKit integration (Section 2.7). Drinks sync to Health app as water intake samples. Added day boundary documentation (4am vs midnight).
+- **v1.5 (2026-01-21):** Added Apple HealthKit integration (Section 2.7). Drinks sync to Health app as water intake samples.
 - **v1.4 (2026-01-21):** Bidirectional drink record sync. Swipe-to-delete now requires bottle connection and uses pessimistic delete with firmware confirmation. HomeView shows ALL today's drinks (not just recent 5).
 - **v1.3 (2026-01-20):** Added swipe-to-delete for drink records (Section 4 Gestures). Updated Reset Daily to also clear today's CoreData records.
 - **v1.2 (2026-01-18):** Added Pull-to-Refresh sync for Home screen (Section 2.4). Connection stays open 60s for real-time updates. Settings connection controls wrapped in `#if DEBUG` (Section 2.6).
@@ -318,10 +323,17 @@ Sarah's Bluetooth is accidentally turned off. When she opens the app, she sees a
 | Element | Source | Format |
 |---------|--------|--------|
 | Daily total (PRIMARY) | CoreData sum (always) | "{X} ml of {goal}ml goal" |
-| Bottle level (SECONDARY) | BLE Current State (real-time) | "{X}ml / {capacity}ml" |
+| Bottle level (SECONDARY) | BLE Current State (persisted) | "{X}ml / {capacity}ml" + optional "(recent)" |
 | Today's drinks | CoreData (ALL today's drinks) | Amount (bold), time, level after |
 | Sync status | Last BLE sync timestamp | "Last synced {X} ago" |
 | Connection dot | BLE connection state | Green/Orange/Gray |
+
+**Bottle Level Display States (Added 2026-01-25):**
+| State | Display |
+|-------|---------|
+| Never connected | Section hidden entirely |
+| Connected | Shows live value (e.g., "56%") |
+| Disconnected with previous data | Shows last known value with "(recent)" suffix (e.g., "56% (recent)") |
 
 **Pull-to-Refresh (Updated 2026-01-18):**
 - If disconnected: Scans and connects to bottle, syncs, stays connected 60s
@@ -334,7 +346,8 @@ Sarah's Bluetooth is accidentally turned off. When she opens the app, she sees a
 
 **Pull-to-Refresh Alerts:**
 - "Bottle is Asleep" alert if scan times out (~10s) with no devices found
-  - Message: "Tilt your bottle to wake it up, then pull down to try again."
+  - Message: "Tilt your bottle to wake it up, then tap Retry."
+  - Buttons: **Retry** (triggers new connection attempt) | **Cancel** (dismisses alert)
 - "Sync Error" alert if connection fails or sync interrupted
 - "Bluetooth is turned off" error if Bluetooth unavailable
 
@@ -550,10 +563,7 @@ If `time_valid` flag is false:
 - HealthKit sample UUID stored for deletion support
 
 **Day Boundary Note:**
-Aquavate uses a **4am daily reset** while Apple Health uses **midnight**. This means:
-- A drink at 2am shows as "yesterday" in Aquavate but "today" in Health app
-- Individual drink timestamps are accurate in both systems
-- Only daily totals may differ for late-night drinks (midnight-4am)
+Aquavate uses **midnight** as the daily reset, matching Apple Health. Daily totals align between both systems.
 
 ---
 
@@ -616,18 +626,115 @@ Aquavate uses a **4am daily reset** while Apple Health uses **midnight**. This m
 
 **Behavior:**
 - **Lazy loading:** Data fetched only when view appears (not on app launch)
-- **Pull-to-refresh:** Re-fetches all activity data
-- **Disconnected state:** Shows "Connect to bottle to view activity stats" message
+- **Pull-to-refresh:** Re-fetches all activity data (requires connection)
+- **Disconnected state:** Shows cached data from CoreData with "Last synced X ago" timestamp
 - **Loading state:** Progress indicator while fetching chunks
+- **Persistence:** Data stored in CoreData entities (CDMotionWakeEvent, CDBackpackSession)
 
 **Edge Cases:**
 
 | Scenario | Behavior |
 |----------|----------|
-| Not connected | Shows connection required message |
-| No activity data | Shows "No activity recorded since last charge" |
+| Not connected (with cached data) | Shows cached data with "Last synced X ago" timestamp |
+| Not connected (no cached data) | Shows "No activity data. Connect to bottle to sync." |
+| No activity data (connected) | Shows "No activity recorded since last charge" |
 | Fetch error | Shows error message with retry option |
 | In backpack mode | Shows current session start time and timer wake count |
+
+---
+
+### 2.8 Apple Watch App (Issue #27)
+
+**Purpose:** Companion app showing hydration status with pace-based deficit tracking and complications
+
+**App Structure:**
+```
+ios/Aquavate/
+  AquavateWatch Watch App/
+    AquavateWatch/
+      AquavateWatchApp.swift
+      ContentView.swift
+      ComplicationProvider.swift
+      WatchSessionManager.swift
+      WatchNotificationManager.swift
+```
+
+**Watch Home View:**
+```
+┌─────────────────────────────────┐
+│                                 │
+│           💧                    │  ← Large water drop (colored by urgency)
+│                                 │
+│       1.2L / 2.5L               │  ← Daily progress
+│                                 │
+│     367ml to catch up           │  ← Status text (or "On track ✓")
+│                                 │
+└─────────────────────────────────┘
+```
+
+**Status Text Variants:**
+
+| Condition | Display |
+|-----------|---------|
+| Deficit ≥ 50ml | "{deficit}ml to catch up" |
+| Deficit < 50ml | "On track ✓" |
+| Goal achieved | "Goal reached! 🎉" |
+
+**Urgency Colors:**
+
+| Urgency | Color | Condition |
+|---------|-------|-----------|
+| On Track | Blue | deficit ≤ 0 |
+| Attention | Amber | 0 < deficit < 20% of goal |
+| Overdue | Red | deficit ≥ 20% of goal |
+
+**Complications:**
+- `graphicCircular` - Small water drop with progress ring
+- `graphicCorner` - Larger drop with percentage
+
+**Data Sync:**
+- Uses WatchConnectivity framework
+- iPhone sends state via `updateApplicationContext()` and `transferUserInfo()`
+- Updates on: app launch, BLE drink sync, periodic timer (60s)
+
+**Notifications:**
+- iPhone triggers local notifications on Watch via `transferUserInfo()`
+- Watch schedules notification + plays haptic
+- Works regardless of iPhone lock state
+
+---
+
+### 2.9 HomeView Target Visualization (Issue #27)
+
+**Purpose:** Visual pace tracking showing expected vs actual progress
+
+**Layout (HumanFigureProgressView):**
+```
+┌─────────────────────────────────┐
+│                                 │
+│      [Human figure graphic]     │
+│      ┌─────────────────────┐    │
+│      │  ████████░░░░░░░░░  │    │  ← Blue fill = actual
+│      │  ████████████░░░░░  │    │  ← Urgency fill = expected (behind)
+│      └─────────────────────┘    │
+│                                 │
+│      250 ml behind target       │  ← Text (urgency colored)
+│                                 │
+└─────────────────────────────────┘
+```
+
+**Visual Behavior:**
+
+| State | Visualization |
+|-------|--------------|
+| On track | Blue fill only (actual progress) |
+| Behind target (<20%) | Orange fill showing expected level, blue fill showing actual. Gap indicates deficit. |
+| Behind target (≥20%) | Stacked fill: red (beyond 20% threshold) + orange (up to 20% threshold) + blue (actual). Shows severity of deficit. |
+
+**Text Display:**
+- Shows "X ml behind target" when rounded deficit ≥ 50ml
+- Text color matches urgency (amber or red)
+- Hidden when on track or deficit < 50ml
 
 ---
 
@@ -1284,18 +1391,69 @@ struct CircularProgressView {
 
 ## 7. Notification Strategy
 
-### Local Notifications
+### Hydration Reminders (Pace-Based Model) - Issue #27
+
+Smart reminders based on whether user is on pace to meet daily goal. Uses pace-based urgency rather than time since last drink.
+
+**Pace Calculation:**
+```
+Expected intake = (elapsed active hours / 15) × dailyGoalMl
+Deficit = expected - dailyTotalMl
+```
+
+**Urgency Levels:**
+
+| Urgency | Condition | Color | Notification |
+|---------|-----------|-------|--------------|
+| On Track | deficit ≤ 0 | Blue | None |
+| Attention | 0 < deficit < 20% of goal | Amber | "Time to hydrate! You're Xml behind pace." |
+| Overdue | deficit ≥ 20% of goal | Red | "You're falling behind! Drink Xml to catch up." |
+
+**Configuration:**
+- Active hours: 7am-10pm (15 hours)
+- Quiet hours: 10pm-7am (no reminders)
+- Max 12 reminders per day (configurable via "Limit Daily Reminders" toggle)
+- 50ml rounding: Deficits rounded to nearest 50ml, suppressed if <50ml
+- Escalation model: Only notify when urgency increases (no repeated same-level notifications)
+
+**Notification Types:**
+
+| Trigger | Title | Body | Platform |
+|---------|-------|------|----------|
+| Behind pace (attention) | "Hydration Reminder" | "Time to hydrate! You're Xml behind pace." | iPhone + Watch |
+| Behind pace (overdue) | "Hydration Reminder" | "You're falling behind! Drink Xml to catch up." | iPhone + Watch |
+| Goal achieved | "Goal Reached! 💧" | "Good job! You've hit your daily hydration goal." | iPhone + Watch |
+| Back on track (optional) | "Back On Track! ✓" | "Nice work catching up on your hydration." | iPhone + Watch |
+| Low battery | "Bottle battery low" | "Aquavate at {X}%. Charge soon." | iPhone |
+
+**Settings (SettingsView):**
+- Hydration Reminders toggle (main on/off)
+- Limit Daily Reminders toggle (enforces 12/day max, enabled by default)
+- Back On Track Alerts toggle (optional, disabled by default)
+- Test Mode toggle (DEBUG only, lowers notification threshold)
+
+**Background Notifications:**
+- Uses BGAppRefreshTask for background delivery
+- Scheduled when app enters background (~15 min intervals)
+- iOS controls actual timing based on app usage patterns
+
+### Apple Watch Notifications
+
+Watch receives notifications via two mechanisms:
+1. **iOS mirroring** - Standard iOS notification mirroring (when iPhone locked)
+2. **Local notifications** - iPhone-triggered local notifications on Watch (always reliable)
+
+Watch notifications include haptic feedback via `WKInterfaceDevice.current().play(.notification)`.
+
+### Legacy Notifications
 
 | Trigger | Title | Body | Time | Action |
 |---------|-------|------|------|--------|
-| Goal reminder | "Time for water! 💧" | "You've had {X}ml today. Keep going!" | User-set (default 3 PM) | Open app |
-| Goal achieved | "Goal reached! 🎉" | "You hit your {goal}ml goal today!" | When daily_total ≥ goal | Open app |
 | Low battery | "Bottle battery low" | "Aquavate at {X}%. Charge soon." | When battery < 20% | Open app |
 | Sync reminder | "Sync your bottle" | "Haven't synced in 24 hours." | 24h since last sync | Open app |
 
 **Settings:**
 - All notifications can be disabled in Settings
-- Goal reminder time is configurable
 - Respects iOS notification permissions
 
 ### In-App Banners
@@ -1594,10 +1752,11 @@ struct CircularProgressView {
 | Splash Screen | ✅ Exists | - | No changes |
 | Pairing Screen | 🆕 New | 4.1 | Device scanning |
 | Calibration Wizard | 🔄 Updated | 4.7 | Two-point calibration (updated 2026-01-17) |
-| Home Screen | 🔄 Modify | 4.2-4.6 | Wire BLE data |
-| History Screen | 🔄 Modify | 4.3-4.4 | Wire CoreData |
-| Settings Screen | 🔄 Modify | 4.2-4.5 | Add "Calibrate Bottle" button, Diagnostics section |
-| Activity Stats | ✅ Complete | - | Battery diagnostics (Issue #36, 2026-01-23) |
+| Home Screen | ✅ Complete | 4.2-4.6 | Wire BLE data, target visualization (Issue #27) |
+| History Screen | ✅ Complete | 4.3-4.4 | Wire CoreData |
+| Settings Screen | ✅ Complete | 4.2-4.5 | Calibrate, Diagnostics, Hydration Reminders |
+| Activity Stats | ✅ Complete | - | Battery diagnostics with offline support (Issue #36, 2026-01-24) |
+| Watch App | ✅ Complete | - | Companion app + complications (Issue #27, 2026-01-24) |
 
 | Component | Status | Phase |
 |-----------|--------|-------|
@@ -1614,7 +1773,33 @@ struct CircularProgressView {
 
 This UX PRD defines the complete user experience for the Aquavate iOS app. Upon approval, Phase 4 implementation will begin following both this document and the technical plan in [Plans/014-ios-ble-coredata-integration.md](../Plans/014-ios-ble-coredata-integration.md).
 
-**Document Status:** Approved (v1.8)
+**Document Status:** Approved (v1.10)
+
+**Update Note (2026-01-24 - Activity Stats Persistence):**
+- Activity stats now persist in CoreData (Issue #36 Comment)
+- Users can view cached data when disconnected with "Last synced X ago" timestamp
+- Diagnostics section accessible when disconnected in SettingsView
+- Follows existing drink record persistence pattern
+
+**Update Note (2026-01-24 - Daily Reminder Limit Toggle):**
+- Added "Limit Daily Reminders" toggle to Settings → Hydration Reminders (Issue #45)
+- When enabled (default): enforces 12 reminders/day maximum
+- When disabled: allows unlimited reminders (respects quiet hours and escalation)
+- "Reminders Today" display shows "X/12" when limit enabled, just "X" when disabled
+- Fixed back-on-track notification timing bug (was using stale urgency data)
+
+**Update Note (2026-01-24 - Hydration Reminders + Watch App):**
+- Added pace-based hydration reminder system (Issue #27)
+- Reminders based on deficit from expected intake, not time since last drink
+- Active hours: 7am-10pm, quiet hours: 10pm-7am, max 12 reminders/day
+- Urgency colors: Blue (on track) → Amber (attention) → Red (overdue)
+- 50ml rounding for deficit display (values <50ml suppressed)
+- Added Apple Watch companion app with complications
+- Watch shows large colored water drop + "Xml to catch up" / "On track ✓"
+- Watch local notifications triggered by iPhone for reliable delivery
+- Added target intake visualization to HomeView (shows expected vs actual)
+- Back On Track notification (optional, disabled by default)
+- Background notifications via BGAppRefreshTask
 
 **Update Note (2026-01-23 - Activity Stats):**
 - Added Diagnostics section to Settings screen
@@ -1632,7 +1817,7 @@ This UX PRD defines the complete user experience for the Aquavate iOS app. Upon 
 - Apple HealthKit integration implemented (Settings toggle, auto-sync)
 - Each drink creates a water intake sample in Health app
 - Deleting drinks removes corresponding HealthKit samples
-- Day boundary difference documented (4am vs midnight)
+- Day boundary now uses midnight (aligns with HealthKit)
 
 **Update Note (2026-01-21 - Bidirectional Sync):**
 - Bidirectional drink record sync implemented
@@ -1657,5 +1842,7 @@ This UX PRD defines the complete user experience for the Aquavate iOS app. Upon 
 2. ✅ Pull-to-Refresh sync (Complete - 2026-01-18)
 3. ✅ Bidirectional drink sync (Complete - 2026-01-21)
 4. ✅ HealthKit integration (Complete - 2026-01-21)
-5. Phase 4.7 implementation (Calibration Wizard) - Optional/Future
-6. Begin Phase 5 (Advanced features)
+5. ✅ Hydration Reminders + Apple Watch App (Complete - 2026-01-24, Issue #27)
+6. ✅ Activity Stats Persistence (Complete - 2026-01-24, Issue #36 Comment)
+7. Phase 4.7 implementation (Calibration Wizard) - Optional/Future
+8. Begin Phase 5 (Advanced features)

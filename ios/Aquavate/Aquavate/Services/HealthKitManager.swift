@@ -111,6 +111,35 @@ class HealthKitManager: ObservableObject {
         }
     }
 
+    /// Check if a water sample already exists for a specific timestamp (Issue #37 - defense in depth)
+    /// - Parameter date: The timestamp to check
+    /// - Returns: true if a water sample exists within 0.5 seconds of the given date
+    func waterSampleExists(for date: Date) async -> Bool {
+        guard isHealthKitAvailable else { return false }
+
+        // Check for samples within 1 second window centered on the timestamp
+        let startDate = date.addingTimeInterval(-0.5)
+        let endDate = date.addingTimeInterval(0.5)
+        let predicate = HKQuery.predicateForSamples(withStart: startDate, end: endDate, options: .strictStartDate)
+
+        return await withCheckedContinuation { continuation in
+            let query = HKSampleQuery(
+                sampleType: waterType,
+                predicate: predicate,
+                limit: 1,
+                sortDescriptors: nil
+            ) { _, samples, error in
+                // On error, assume sample doesn't exist to allow sync attempt
+                if error != nil {
+                    continuation.resume(returning: false)
+                    return
+                }
+                continuation.resume(returning: !(samples?.isEmpty ?? true))
+            }
+            healthStore.execute(query)
+        }
+    }
+
     // MARK: - Error Types
 
     enum HealthKitError: LocalizedError {

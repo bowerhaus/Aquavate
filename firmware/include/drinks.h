@@ -53,6 +53,14 @@ bool drinksUpdate(int32_t current_adc, const CalibrationData& cal);
 uint32_t getCurrentUnixTime();
 
 /**
+ * Calculate seconds until next daily rollover (4am)
+ * Used for timer wake scheduling in deep sleep
+ *
+ * @return Seconds until next 4am rollover, 0 if time invalid
+ */
+uint32_t getSecondsUntilRollover();
+
+/**
  * Get current daily state (for debugging/display)
  *
  * @param state Output parameter for current state
