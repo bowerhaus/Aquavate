@@ -326,7 +326,7 @@ struct HomeView: View {
             }
             Button("Cancel", role: .cancel) { }
         } message: {
-            Text("Tilt your bottle to wake it up, then tap Retry.")
+            Text("Tap or tilt your bottle to wake it up, then hit Retry.")
         }
         .alert("Sync Error", isPresented: $showErrorAlert) {
             Button("OK", role: .cancel) { }

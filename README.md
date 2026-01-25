@@ -66,7 +66,7 @@ Pin definitions are automatically selected based on these flags.
 
 ### Implemented
 - ✅ Weight-based water tracking via NAU7802 load cell ADC
-- ✅ Wake-on-tilt using LIS3DH accelerometer interrupt (0.80g threshold)
+- ✅ Wake-on-tilt using ADXL343 accelerometer interrupt (single-tap or motion)
 - ✅ E-paper display with battery status, time, and bottle graphic
 - ✅ Deep sleep with dual modes for 1-2 week battery life:
   - Normal sleep: 30s timeout with motion wake (EXT0 interrupt)

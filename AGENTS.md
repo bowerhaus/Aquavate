@@ -42,8 +42,8 @@ pio device monitor         # Serial monitor
 ```
 
 **Important Implementation Details:**
-- LIS3DH INT1 pin must be wired to ESP32 GPIO 27 (not just I2C)
-- LIS3DH needs always-on 3V power (not STEMMA QT which powers down)
+- ADXL343 INT1 pin must be wired to ESP32 GPIO 27 (not just I2C)
+- ADXL343 needs always-on 3V power (not STEMMA QT which powers down)
 - Wake-on-tilt threshold: 0.80g (0x32)
 - Deep sleep: Dual modes (normal 30s with motion wake, extended 60s with timer wake)
 - RTC memory: Used for display state and drink baseline persistence across sleep
@@ -111,7 +111,7 @@ The firmware supports comprehensive serial commands for configuration and testin
 
 **Debug Control:**
 - `0-4`, `9` - Set debug level (0=OFF, 1=Events, 2=+Gestures, 3=+Weight, 4=+Accel, 9=All)
-- `T` - Test interrupt state (shows LIS3DH INT1_SRC register)
+- `T` - Test interrupt state (shows ADXL343 INT_SOURCE register)
 
 **Time/Timezone:**
 - `SET DATETIME YYYY-MM-DD HH:MM:SS [tz]` - Set date, time, and timezone
@@ -147,7 +147,7 @@ The firmware supports comprehensive serial commands for configuration and testin
 - Good for testing build system and code structure
 
 ### With Hardware
-- Check sensor I2C addresses: NAU7802 (0x2A), LIS3DH (0x18)
+- Check sensor I2C addresses: NAU7802 (0x2A), ADXL343 (0x53)
 - Verify load cell wiring: Red (E+), Black (E-), White (A-), Green (A+)
 - Test wake-on-tilt by tilting board
 - Monitor deep sleep current with multimeter (target <200µA)

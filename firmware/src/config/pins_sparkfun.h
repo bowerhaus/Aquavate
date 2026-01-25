@@ -3,7 +3,7 @@
  *
  * I2C devices (Qwiic connector):
  *   - NAU7802 ADC (load cell): 0x2A
- *   - LIS3DH accelerometer: 0x18 or 0x19
+ *   - ADXL343 accelerometer: 0x53
  *   - DS3231 RTC: 0x68
  *
  * Waveshare 1.54" E-Paper connects via SPI (requires manual wiring)
@@ -27,7 +27,7 @@
 #define PIN_SPI_MISO        22  // Not used by E-Paper
 #define PIN_SPI_SCK         4
 
-// LIS3DH interrupt pin for wake-on-tilt
+// ADXL343 interrupt pin for wake-on-tilt
 #define PIN_ACCEL_INT       5
 
 // Battery monitoring (via external divider if needed)
