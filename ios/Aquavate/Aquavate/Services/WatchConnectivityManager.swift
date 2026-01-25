@@ -129,6 +129,12 @@ class WatchConnectivityManager: NSObject, ObservableObject {
             return
         }
 
+        // Limit queue size to prevent memory accumulation if Watch isn't receiving
+        guard session.outstandingUserInfoTransfers.count < 5 else {
+            print("[WatchConnectivity] Queue full (\(session.outstandingUserInfoTransfers.count) pending), skipping notification")
+            return
+        }
+
         let userInfo: [String: Any] = [
             "notificationRequest": true,
             "notificationType": type,

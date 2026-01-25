@@ -18,25 +18,15 @@ struct HistoryView: View {
     @State private var showErrorAlert = false
     @State private var errorAlertMessage = ""
 
-    // Fetch all drink records from CoreData
-    // Filter to last 7 days in computed property to ensure dynamic date comparison
+    // Fetch last 7 days of drink records from CoreData
+    // Predicate limits CoreData fetch to recent records only (reduces memory usage)
+    // Uses midnight boundary to match firmware DRINK_DAILY_RESET_HOUR
     @FetchRequest(
         sortDescriptors: [NSSortDescriptor(keyPath: \CDDrinkRecord.timestamp, ascending: false)],
+        predicate: NSPredicate(format: "timestamp >= %@", Calendar.current.date(byAdding: .day, value: -7, to: Calendar.current.startOfAquavateDay(for: Date()))! as CVarArg),
         animation: .default
     )
-    private var allDrinksCD: FetchedResults<CDDrinkRecord>
-
-    // Filter to last 7 days dynamically
-    // Uses 4am boundary to match firmware DRINK_DAILY_RESET_HOUR
-    private var recentDrinksCD: [CDDrinkRecord] {
-        let sevenDaysAgo = Calendar.current.date(byAdding: .day, value: -7, to: Calendar.current.startOfAquavateDay(for: Date()))!
-        return allDrinksCD.filter { ($0.timestamp ?? .distantPast) >= sevenDaysAgo }
-    }
-
-    // Convert to display model
-    private var drinks: [DrinkRecord] {
-        recentDrinksCD.map { $0.toDrinkRecord() }
-    }
+    private var recentDrinksCD: FetchedResults<CDDrinkRecord>
 
     private var last7Days: [Date] {
         let calendar = Calendar.current
@@ -45,22 +35,14 @@ struct HistoryView: View {
         }.reversed()
     }
 
+    // Compute totals directly from CoreData to avoid creating intermediate objects
     private func totalForDate(_ date: Date) -> Int {
         let calendar = Calendar.current
         let targetDay = calendar.startOfAquavateDay(for: date)
 
-        return drinks
-            .filter { calendar.startOfAquavateDay(for: $0.timestamp) == targetDay }
-            .reduce(0) { $0 + $1.amountMl }
-    }
-
-    private var drinksForSelectedDate: [DrinkRecord] {
-        let calendar = Calendar.current
-        let targetDay = calendar.startOfAquavateDay(for: selectedDate)
-
-        return drinks
-            .filter { calendar.startOfAquavateDay(for: $0.timestamp) == targetDay }
-            .sorted { $0.timestamp > $1.timestamp }
+        return recentDrinksCD
+            .filter { calendar.startOfAquavateDay(for: $0.timestamp ?? .distantPast) == targetDay }
+            .reduce(0) { $0 + Int($1.amountMl) }
     }
 
     // Get CDDrinkRecords for selected date (for deletion)
@@ -139,7 +121,7 @@ struct HistoryView: View {
                 .background(Color(.systemGroupedBackground))
 
                 // Selected day detail
-                if drinksForSelectedDate.isEmpty {
+                if drinksForSelectedDateCD.isEmpty {
                     VStack(spacing: 16) {
                         Spacer()
                         Image(systemName: "drop.slash")

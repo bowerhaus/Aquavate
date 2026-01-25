@@ -101,7 +101,7 @@ See [Plans/020-serial-commands-removal.md](Plans/020-serial-commands-removal.md)
 - Enable all features simultaneously (BLE + serial commands + standalone calibration)
 - Simplify [config.h](firmware/include/config.h), [main.cpp](firmware/src/main.cpp), [ble_service.cpp](firmware/src/ble_service.cpp), [serial_commands.cpp](firmware/src/serial_commands.cpp), [ui_calibration.cpp](firmware/src/ui_calibration.cpp)
 
-### Build Commands
+### Firmware Build Commands
 ```bash
 cd firmware
 ~/.platformio/penv/bin/platformio run                    # Build for Adafruit Feather (default)
@@ -111,6 +111,14 @@ cd firmware
 ```
 
 **Note:** The user will handle firmware uploads and device restarts manually. Do not attempt to upload firmware or wait for upload confirmation - just build and inform the user when ready.
+
+### iOS Build Commands
+```bash
+cd ios/Aquavate
+xcodebuild -scheme Aquavate -destination 'platform=iOS Simulator,name=iPhone 17' build
+```
+
+**Important:** Always use `iPhone 17` as the simulator name for test builds. Other common simulator names (e.g., iPhone 16) are not available on this system.
 
 ## Reference Documentation
 
