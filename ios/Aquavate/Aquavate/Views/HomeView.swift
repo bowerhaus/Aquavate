@@ -69,6 +69,16 @@ struct HomeView: View {
         return min(1.0, Double(displayBottleLevel) / Double(displayCapacity))
     }
 
+    /// Suffix to show when bottle level is from a previous session
+    private var bottleLevelSuffix: String {
+        if bleManager.connectionState.isConnected {
+            return ""
+        } else if bleManager.hasReceivedBottleData {
+            return " (recent)"
+        }
+        return ""
+    }
+
     // Delete today's drinks at given offsets - requires bottle connection for bidirectional sync
     private func deleteTodaysDrinks(at offsets: IndexSet) {
         // Require bottle connection for deletion
@@ -235,31 +245,34 @@ struct HomeView: View {
                     urgency: hydrationReminderService.currentUrgency
                 )
 
-                // Bottle level progress bar (SECONDARY)
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text("Bottle Level")
-                            .font(.headline)
-                        Spacer()
-                        Text("\(Int(bottleProgress * 100))%")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
+                // Bottle level progress bar (SECONDARY) - only show if we have data
+                if bleManager.hasReceivedBottleData || bleManager.connectionState.isConnected {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Bottle Level")
+                                .font(.headline)
+                            Spacer()
+                            Text("\(Int(bottleProgress * 100))%\(bottleLevelSuffix)")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
 
-                    ProgressView(value: bottleProgress)
-                        .tint(.blue)
+                        ProgressView(value: bottleProgress)
+                            .tint(.blue)
 
-                    HStack {
-                        Text("\(displayBottleLevel)ml")
-                            .font(.subheadline)
-                            .fontWeight(.medium)
-                        Text("/ \(displayCapacity)ml")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                        HStack {
+                            Text("\(displayBottleLevel)ml")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                            Text("/ \(displayCapacity)ml")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
                     }
+                    .padding(.horizontal)
                 }
-                .padding(.horizontal)
             }
+            .frame(maxWidth: .infinity)
             .padding(.vertical, 8)
             .background(Color(.systemGroupedBackground))
 

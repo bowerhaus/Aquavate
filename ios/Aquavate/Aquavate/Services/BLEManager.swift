@@ -99,7 +99,19 @@ class BLEManager: NSObject, ObservableObject {
     @Published private(set) var currentWeightG: Int = 0
 
     /// Current water level in bottle (ml)
-    @Published private(set) var bottleLevelMl: Int = 0
+    @Published private(set) var bottleLevelMl: Int = 0 {
+        didSet {
+            // Persist to UserDefaults for offline display
+            UserDefaults.standard.set(bottleLevelMl, forKey: "lastKnownBottleLevelMl")
+        }
+    }
+
+    /// Whether we've ever received bottle data (for showing "(recent)" indicator)
+    @Published private(set) var hasReceivedBottleData: Bool = false {
+        didSet {
+            UserDefaults.standard.set(hasReceivedBottleData, forKey: "hasReceivedBottleData")
+        }
+    }
 
     /// Today's cumulative water intake (ml)
     @Published private(set) var dailyTotalMl: Int = 0
@@ -275,6 +287,12 @@ class BLEManager: NSObject, ObservableObject {
         // Load persisted daily goal (default 2000 if never synced)
         if UserDefaults.standard.object(forKey: "lastKnownDailyGoalMl") != nil {
             dailyGoalMl = UserDefaults.standard.integer(forKey: "lastKnownDailyGoalMl")
+        }
+
+        // Load persisted bottle level and connection history flag
+        if UserDefaults.standard.bool(forKey: "hasReceivedBottleData") {
+            hasReceivedBottleData = true
+            bottleLevelMl = UserDefaults.standard.integer(forKey: "lastKnownBottleLevelMl")
         }
 
         let options: [String: Any] = [
@@ -1044,6 +1062,7 @@ extension BLEManager: CBPeripheralDelegate {
         // Update published properties
         currentWeightG = Int(state.currentWeightG)
         bottleLevelMl = Int(state.bottleLevelMl)
+        hasReceivedBottleData = true
         dailyTotalMl = Int(state.dailyTotalMl)
         batteryPercent = Int(state.batteryPercent)
         isTimeValid = state.isTimeValid

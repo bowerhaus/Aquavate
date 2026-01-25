@@ -1,7 +1,7 @@
 # Aquavate - Active Development Progress
 
-**Last Updated:** 2026-01-24
-**Current Branch:** `master`
+**Last Updated:** 2026-01-25
+**Current Branch:** `bottle-level-recent-indicator`
 
 ---
 
@@ -21,6 +21,12 @@ Resume from PROGRESS.md.
 ---
 
 ## Recently Completed
+
+- ✅ Bottle Level Recent Indicator (Issue #57) - [Plan 047](Plans/047-bottle-level-recent-indicator.md)
+  - Shows last known bottle level with "(recent)" suffix when disconnected
+  - Hides bottle level section entirely until first connection
+  - Persists `bottleLevelMl` and `hasReceivedBottleData` to UserDefaults
+  - Updated IOS-UX-PRD.md Section 2.4
 
 - ✅ Daily Rollover Timer Wake - [Plan 046](Plans/046-daily-rollover-timer-wake.md)
   - Wake bottle at 4am daily rollover to refresh display with reset daily total
