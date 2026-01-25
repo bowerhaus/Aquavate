@@ -9,7 +9,7 @@ import Foundation
 import UserNotifications
 
 @MainActor
-class NotificationManager: ObservableObject {
+class NotificationManager: NSObject, ObservableObject, UNUserNotificationCenterDelegate {
     // MARK: - Constants
 
     static let quietHoursStart = 22  // 10pm
@@ -23,7 +23,7 @@ class NotificationManager: ObservableObject {
     @Published var authorizationStatus: UNAuthorizationStatus = .notDetermined
 
     /// User preference for whether hydration reminders are enabled
-    @Published var isEnabled: Bool {
+    @Published var isEnabled: Bool = false {
         didSet {
             UserDefaults.standard.set(isEnabled, forKey: "hydrationRemindersEnabled")
             if !isEnabled {
@@ -33,14 +33,14 @@ class NotificationManager: ObservableObject {
     }
 
     /// User preference for back-on-track notifications
-    @Published var backOnTrackEnabled: Bool {
+    @Published var backOnTrackEnabled: Bool = false {
         didSet {
             UserDefaults.standard.set(backOnTrackEnabled, forKey: "backOnTrackNotificationsEnabled")
         }
     }
 
     /// User preference for enforcing daily reminder limit
-    @Published var dailyLimitEnabled: Bool {
+    @Published var dailyLimitEnabled: Bool = true {
         didSet {
             UserDefaults.standard.set(dailyLimitEnabled, forKey: "dailyReminderLimitEnabled")
         }
@@ -56,14 +56,26 @@ class NotificationManager: ObservableObject {
 
     // MARK: - Initialization
 
-    init() {
-        self.isEnabled = UserDefaults.standard.bool(forKey: "hydrationRemindersEnabled")
-        self.backOnTrackEnabled = UserDefaults.standard.bool(forKey: "backOnTrackNotificationsEnabled")
-        self.dailyLimitEnabled = UserDefaults.standard.object(forKey: "dailyReminderLimitEnabled") as? Bool ?? true
-        self.remindersSentToday = UserDefaults.standard.integer(forKey: "remindersSentToday")
-        if let lastReset = UserDefaults.standard.object(forKey: "lastReminderResetDate") as? Date {
-            self.lastResetDate = lastReset
-        }
+    override init() {
+        // Load from UserDefaults before super.init()
+        let isEnabledValue = UserDefaults.standard.bool(forKey: "hydrationRemindersEnabled")
+        let backOnTrackValue = UserDefaults.standard.bool(forKey: "backOnTrackNotificationsEnabled")
+        let dailyLimitValue = UserDefaults.standard.object(forKey: "dailyReminderLimitEnabled") as? Bool ?? true
+        let remindersValue = UserDefaults.standard.integer(forKey: "remindersSentToday")
+        let lastResetValue = UserDefaults.standard.object(forKey: "lastReminderResetDate") as? Date
+
+        super.init()
+
+        // Assign to properties after super.init()
+        self.isEnabled = isEnabledValue
+        self.backOnTrackEnabled = backOnTrackValue
+        self.dailyLimitEnabled = dailyLimitValue
+        self.remindersSentToday = remindersValue
+        self.lastResetDate = lastResetValue
+
+        // Set delegate for foreground notification presentation
+        notificationCenter.delegate = self
+
         checkAuthorizationStatus()
         checkDailyReset()
     }
@@ -281,5 +293,39 @@ class NotificationManager: ObservableObject {
     /// Reset the daily reminder count (called when goal achieved or new day)
     func resetReminderCount() {
         resetDailyCount()
+    }
+}
+
+// MARK: - UNUserNotificationCenterDelegate
+
+extension NotificationManager {
+
+    /// Present notifications when app is in foreground
+    nonisolated func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .sound, .badge])
+
+        Task { @MainActor in
+            print("[Notifications] Foreground notification presented: \(notification.request.identifier)")
+        }
+    }
+
+    /// Handle notification tap
+    nonisolated func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        let identifier = response.notification.request.identifier
+
+        Task { @MainActor in
+            print("[Notifications] User tapped notification: \(identifier)")
+            // Future: Navigate based on notification type
+        }
+
+        completionHandler()
     }
 }
