@@ -1,7 +1,7 @@
 # Aquavate - Active Development Progress
 
 **Last Updated:** 2026-01-25
-**Current Branch:** `bottle-level-recent-indicator`
+**Current Branch:** `master`
 
 ---
 
@@ -21,6 +21,11 @@ Resume from PROGRESS.md.
 ---
 
 ## Recently Completed
+
+- ✅ Human Figure Fill Fix (Issue #59) - [Plan 048](Plans/048-human-figure-fill-fix.md)
+  - Fixed white gap at top of head when goal reached/exceeded
+  - SwiftUI `Spacer()` default minLength caused fill to not reach 100%
+  - Changed to `Spacer(minLength: 0)` in HumanFigureProgressView.swift
 
 - ✅ Bottle Level Recent Indicator (Issue #57) - [Plan 047](Plans/047-bottle-level-recent-indicator.md)
   - Shows last known bottle level with "(recent)" suffix when disconnected
