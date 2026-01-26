@@ -74,12 +74,16 @@ struct HumanFigureProgressView: View {
                     .aspectRatio(contentMode: .fit)
                     .foregroundColor(.white)
 
-                // Deficit zone: gradient from attention (bottom) to overdue (top)
+                // Deficit zone: gradient from attention (bottom) to overdue (top of head)
                 // Only show when isBehindTarget (50ml rounded threshold) for consistency with text
+                // Gradient spans from current progress (yellow) to top of head (red), but:
+                // - Only filled up to expected progress level
+                // - White above expected progress (background shows through)
                 if expectedCurrent != nil && isBehindTarget {
                     GeometryReader { geometry in
                         VStack {
                             Spacer(minLength: 0)
+                            // Full gradient from progress to top of head
                             Rectangle()
                                 .fill(
                                     LinearGradient(
@@ -88,9 +92,22 @@ struct HumanFigureProgressView: View {
                                         endPoint: .top
                                     )
                                 )
-                                .frame(height: geometry.size.height * expectedProgress)
+                                .frame(height: geometry.size.height * (1.0 - progress))
+                                .opacity(0.7)
                         }
+                        .offset(y: -geometry.size.height * progress)
                     }
+                    // First mask: clip to expected progress height
+                    .mask(
+                        GeometryReader { geometry in
+                            VStack {
+                                Spacer(minLength: 0)
+                                Rectangle()
+                                    .frame(height: geometry.size.height * expectedProgress)
+                            }
+                        }
+                    )
+                    // Second mask: clip to human figure shape
                     .mask(
                         Image("HumanFigureFilled")
                             .resizable()
@@ -136,7 +153,7 @@ struct HumanFigureProgressView: View {
                 if isBehindTarget {
                     Text("\(roundedDeficitMl) ml behind target")
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(urgency.color)
+                        .foregroundColor(.secondary)
                         .padding(.top, 4)
                 }
             }

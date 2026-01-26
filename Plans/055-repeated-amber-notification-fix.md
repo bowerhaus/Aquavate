@@ -109,8 +109,13 @@ var color: Color {
 
 ### 3. Improved Human Figure Progress View (HumanFigureProgressView.swift)
 - Added white background layer so colors display correctly (not blending with grey)
-- Replaced discrete red/amber zones with smooth LinearGradient from attention (bottom) to overdue (top)
-- Removed extra `.opacity(0.6)` modifiers that were causing color blending issues
+- Gradient now properly positioned:
+  - Yellow (attention color) starts just above the blue progress fill
+  - Red (overdue color) at the top of the head
+  - Gradient only fills up to expected progress level (white above)
+  - Uses dual masks: first clips to expected progress height, second clips to human figure shape
+- Gradient opacity set to 70% for softer appearance
+- Changed "X ml behind target" text color from urgency color to `.secondary` (grey) for better readability
 
 ## Verification
 
