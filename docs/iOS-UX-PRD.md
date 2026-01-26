@@ -1,10 +1,11 @@
 # Aquavate iOS App - UX Product Requirements Document
 
-**Version:** 1.15
-**Date:** 2026-01-25
-**Status:** Approved and Tested (Notification Threshold Adjustment)
+**Version:** 1.16
+**Date:** 2026-01-26
+**Status:** Approved and Tested (Unified Sessions View)
 
 **Changelog:**
+- **v1.16 (2026-01-26):** Unified Sessions view in Activity Stats (Issue #74). Replaced confusing separate "Recent Motion Wakes" and "Backpack Sessions" sections with single chronological "Sessions" list. Summary changed from "Since Last Charge" to "Last 7 Days". See Section 2.7.
 - **v1.15 (2026-01-25):** Increased notification threshold from 50ml to 150ml behind pace (Issue #67). Early Notifications toggle (DEBUG only) lowers threshold to 50ml. See Section 7.
 - **v1.14 (2026-01-25):** Updated "Bottle is Asleep" alert message to reflect single-tap wake capability (Issue #63). Message now says "Tap or tilt your bottle to wake it up". See Section 2.4.
 - **v1.13 (2026-01-25):** Bottle level now shows last known value with "(recent)" indicator when disconnected (Issue #57). Section is hidden until first connection. See Section 2.4.
@@ -569,43 +570,34 @@ Aquavate uses **midnight** as the daily reset, matching Apple Health. Daily tota
 
 ---
 
-### 2.7 Activity Stats View (Issue #36)
+### 2.7 Activity Stats View (Issue #36, updated Issue #74)
 
 **Purpose:** Diagnostic view for analyzing bottle activity and sleep mode behavior for battery analysis
 
 **Access:** Settings → Diagnostics → Activity Stats
 
-**Layout:**
+**Layout (Updated 2026-01-26 - Unified Sessions):**
 ```
 ┌─────────────────────────────────┐
 │  < Settings    Activity Stats   │
 │                                 │
-│  CURRENT STATUS                 │
+│  LAST 7 DAYS                    │
 │  ┌─────────────────────────────┐│
-│  │ 💧 Normal Mode       Ready  ││  ← Or "🎒 In Backpack Mode"
-│  └─────────────────────────────┘│
-│                                 │
-│  SINCE LAST CHARGE              │
-│  ┌─────────────────────────────┐│
-│  │ ✋ Motion Wakes         42  ││
+│  │ ✋ Normal Sessions      38  ││
 │  ├─────────────────────────────┤│
 │  │ 🎒 Backpack Sessions     3  ││
 │  └─────────────────────────────┘│
 │                                 │
-│  RECENT MOTION WAKES            │
+│  SESSIONS                       │  ← Unified list (both types)
 │  ┌─────────────────────────────┐│
-│  │ 2:30 PM  💧      45s Normal ││  ← Water drop = drink taken
+│  │ 2:30 PM  💧         45s     ││  ← Normal session (water drop = drink)
+│  │ 26 Jan 2026        Normal   ││
 │  ├─────────────────────────────┤│
-│  │ 11:15 AM         32s Normal ││  ← No drop = no drink
+│  │ 11:15 AM           1h 23m   ││  ← Backpack session (orange text)
+│  │ 26 Jan 2026     🎒 Backpack ││
 │  ├─────────────────────────────┤│
-│  │ 9:00 AM  💧    180s Backpack││  ← Entered backpack mode
-│  └─────────────────────────────┘│
-│                                 │
-│  BACKPACK SESSIONS              │
-│  ┌─────────────────────────────┐│
-│  │ Jan 23, 9:03 AM             ││
-│  │ 🕐 1h 30m    ⏱ 90 wakes    ││
-│  │ Exit: Motion detected       ││
+│  │ 9:00 AM             32s     ││  ← Normal session (no drink)
+│  │ 26 Jan 2026        Normal   ││
 │  └─────────────────────────────┘│
 │                                 │
 └─────────────────────────────────┘
@@ -615,16 +607,27 @@ Aquavate uses **midnight** as the daily reset, matching Apple Health. Daily tota
 
 | Element | Source | Description |
 |---------|--------|-------------|
-| Current Status | BLE Activity Summary | Normal mode or backpack mode |
-| Motion Wakes | BLE Activity Summary | Count since last power cycle |
-| Backpack Sessions | BLE Activity Summary | Count since last power cycle |
-| Motion Wake List | BLE Motion Chunks | Time, duration, sleep type, drink flag |
-| Backpack List | BLE Backpack Chunks | Start time, duration, timer wakes, exit reason |
+| Normal Sessions (7d) | CoreData count | Normal sessions in last 7 days |
+| Backpack Sessions (7d) | CoreData count | Backpack sessions in last 7 days |
+| Sessions List | CoreData (merged) | Both types interleaved chronologically, most recent first |
+
+**Session Row Display:**
+
+| Session Type | Timestamp | Duration | Badge | Drink Indicator |
+|--------------|-----------|----------|-------|-----------------|
+| Normal | Time + Date | Seconds/minutes | "Normal" (gray) | 💧 if drink taken |
+| Backpack | Time + Date | Hours/minutes | "🎒 Backpack (N)" (orange) | N/A |
+
+**Design Rationale (Issue #74):**
+- Previous layout had separate "Recent Motion Wakes" and "Backpack Sessions" sections
+- Users confused short wake durations (3m 26s) labeled "Backpack" for backpack duration
+- Unified chronological list makes session flow clearer
+- Backpack sessions now show correct 1+ hour durations prominently
 
 **Drink Taken Indicator:**
-- Blue water drop icon (`drop.fill`) shown next to wake events where user took a drink
-- No icon shown for wakes without a drink
-- Uses bit 7 of `sleep_type` field from firmware
+- Blue water drop icon (`drop.fill`) shown next to Normal sessions where user took a drink
+- No icon shown for Normal sessions without a drink
+- Not applicable to Backpack sessions
 
 **Behavior:**
 - **Lazy loading:** Data fetched only when view appears (not on app launch)
