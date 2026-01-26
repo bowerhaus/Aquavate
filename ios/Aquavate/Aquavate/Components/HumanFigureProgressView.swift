@@ -67,14 +67,27 @@ struct HumanFigureProgressView: View {
     var body: some View {
         VStack(spacing: 16) {
             ZStack {
-                // Red zone: from overdue threshold to expected (only when 20%+ behind)
+                // White background layer - colors with opacity blend over this
+                Image("HumanFigureFilled")
+                    .renderingMode(.template)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .foregroundColor(.white)
+
+                // Deficit zone: gradient from attention (bottom) to overdue (top)
                 // Only show when isBehindTarget (50ml rounded threshold) for consistency with text
-                if expectedCurrent != nil && isBehindTarget && isOverdue {
+                if expectedCurrent != nil && isBehindTarget {
                     GeometryReader { geometry in
                         VStack {
                             Spacer(minLength: 0)
                             Rectangle()
-                                .fill(Color.red.opacity(0.3))
+                                .fill(
+                                    LinearGradient(
+                                        colors: [HydrationUrgency.attention.color, HydrationUrgency.overdue.color],
+                                        startPoint: .bottom,
+                                        endPoint: .top
+                                    )
+                                )
                                 .frame(height: geometry.size.height * expectedProgress)
                         }
                     }
@@ -84,25 +97,6 @@ struct HumanFigureProgressView: View {
                             .aspectRatio(contentMode: .fit)
                     )
                     .animation(.easeInOut(duration: 0.5), value: expectedProgress)
-                }
-
-                // Orange zone: from actual to overdue threshold (or expected if not overdue)
-                // Only show when isBehindTarget (50ml rounded threshold) for consistency with text
-                if expectedCurrent != nil && isBehindTarget {
-                    GeometryReader { geometry in
-                        VStack {
-                            Spacer(minLength: 0)
-                            Rectangle()
-                                .fill(Color.orange.opacity(0.3))
-                                .frame(height: geometry.size.height * orangeTopProgress)
-                        }
-                    }
-                    .mask(
-                        Image("HumanFigureFilled")
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                    )
-                    .animation(.easeInOut(duration: 0.5), value: orangeTopProgress)
                 }
 
                 // Actual progress fill from bottom using filled silhouette as mask

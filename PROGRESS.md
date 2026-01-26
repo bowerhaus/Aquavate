@@ -7,7 +7,7 @@
 
 ## Current Task
 
-No active task.
+None - ready for next issue.
 
 ---
 
@@ -21,6 +21,12 @@ Resume from PROGRESS.md
 ---
 
 ## Recently Completed
+
+- ✅ Repeated Amber Notification Fix (Issue #72) - [Plan 055](Plans/055-repeated-amber-notification-fix.md)
+  - Fixed `lastNotifiedUrgency` not persisting across app restarts (notifications were re-sent)
+  - Updated urgency colors: attention = RGB(247,239,151), overdue = red
+  - Human figure now uses smooth gradient from attention to overdue color
+  - Added white background layer to fix color blending issues
 
 - ✅ iOS Day Boundary Fix (Issue #70) - [Plan 054](Plans/054-ios-day-boundary-fix.md)
   - Fixed drinks from previous day showing after midnight

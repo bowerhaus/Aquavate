@@ -24,7 +24,18 @@ class HydrationReminderService: ObservableObject {
     // MARK: - Published Properties
 
     @Published private(set) var currentUrgency: HydrationUrgency = .onTrack
-    @Published private(set) var lastNotifiedUrgency: HydrationUrgency? = nil
+    @Published private(set) var lastNotifiedUrgency: HydrationUrgency? = nil {
+        didSet {
+            // Persist lastNotifiedUrgency along with the date it was set
+            if let urgency = lastNotifiedUrgency {
+                UserDefaults.standard.set(urgency.rawValue, forKey: "lastNotifiedUrgencyRawValue")
+                UserDefaults.standard.set(Date(), forKey: "lastNotifiedUrgencyDate")
+            } else {
+                UserDefaults.standard.removeObject(forKey: "lastNotifiedUrgencyRawValue")
+                UserDefaults.standard.removeObject(forKey: "lastNotifiedUrgencyDate")
+            }
+        }
+    }
     @Published private(set) var lastDrinkTime: Date? = nil
     @Published private(set) var dailyTotalMl: Int = 0
     @Published private(set) var dailyGoalMl: Int = 2500
@@ -59,6 +70,15 @@ class HydrationReminderService: ObservableObject {
         self.testModeEnabled = UserDefaults.standard.bool(forKey: "hydrationTestModeEnabled")
         #endif
         self.goalNotificationSentToday = UserDefaults.standard.bool(forKey: "goalNotificationSentToday")
+
+        // Restore lastNotifiedUrgency if it was set today
+        if let savedDate = UserDefaults.standard.object(forKey: "lastNotifiedUrgencyDate") as? Date,
+           Calendar.current.isDateInToday(savedDate) {
+            let rawValue = UserDefaults.standard.integer(forKey: "lastNotifiedUrgencyRawValue")
+            self.lastNotifiedUrgency = HydrationUrgency(rawValue: rawValue)
+            print("[HydrationReminder] Restored lastNotifiedUrgency: \(self.lastNotifiedUrgency?.description ?? "nil")")
+        }
+
         startPeriodicEvaluation()
     }
 
@@ -329,6 +349,9 @@ class HydrationReminderService: ObservableObject {
     /// Sync current state from CoreData to Watch (called on app launch/active)
     /// This ensures the Watch has the latest data even without a BLE connection
     func syncCurrentStateFromCoreData(dailyGoalMl: Int) {
+        // Capture previous urgency before updating state (Issue #72)
+        let previousUrgency = currentUrgency
+
         // Get today's total from CoreData
         let todaysTotalMl = PersistenceController.shared.getTodaysTotalMl()
 
@@ -342,6 +365,9 @@ class HydrationReminderService: ObservableObject {
         self.lastDrinkTime = lastDrink
         updateUrgency()
         syncStateToWatch()
+
+        // Check for back-on-track transition (resets lastNotifiedUrgency if improved)
+        checkBackOnTrack(previousUrgency: previousUrgency)
 
         print("[HydrationReminder] Initial sync from CoreData: \(todaysTotalMl)ml, goal=\(dailyGoalMl)ml")
     }
