@@ -7,7 +7,7 @@
 
 ## Current Task
 
-None - ready for next issue.
+No active task. Ready for next issue.
 
 ---
 
@@ -21,6 +21,12 @@ Resume from PROGRESS.md
 ---
 
 ## Recently Completed
+
+- ✅ Unified Sessions View Fix (Issue #74) - [Plan 056](Plans/056-unified-sessions-view.md)
+  - Replaced confusing separate "Recent Motion Wakes" and "Backpack Sessions" sections
+  - New unified "Sessions" list shows both types chronologically
+  - Summary changed from "Since Last Charge" to "Last 7 Days"
+  - Users can now clearly see backpack sessions with correct 1+ hour durations
 
 - ✅ Repeated Amber Notification Fix (Issue #72) - [Plan 055](Plans/055-repeated-amber-notification-fix.md)
   - Fixed `lastNotifiedUrgency` not persisting across app restarts (notifications were re-sent)
@@ -47,7 +53,8 @@ Resume from PROGRESS.md
 
 ## Branch Status
 
-- `master` - Stable baseline
+- `master` - Stable baseline (pending PR merge)
+- `unified-sessions-view` - Issue #74 complete, PR pending
 
 ---
 
