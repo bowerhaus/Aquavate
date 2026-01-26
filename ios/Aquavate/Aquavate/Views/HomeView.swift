@@ -22,14 +22,19 @@ struct HomeView: View {
     @State private var isDeleting = false
 
     // Fetch today's drinks from CoreData, sorted by most recent first
-    // Predicate limits CoreData fetch to today's records only (reduces memory usage)
+    // Predicate is set dynamically in onAppear to handle day boundary changes
     // Uses midnight boundary to match firmware DRINK_DAILY_RESET_HOUR
     @FetchRequest(
         sortDescriptors: [NSSortDescriptor(keyPath: \CDDrinkRecord.timestamp, ascending: false)],
-        predicate: NSPredicate(format: "timestamp >= %@", Calendar.current.startOfAquavateDay(for: Date()) as CVarArg),
         animation: .default
     )
     private var todaysDrinksCD: FetchedResults<CDDrinkRecord>
+
+    /// Generate predicate for today's drinks (evaluated fresh each call)
+    private func todaysPredicate() -> NSPredicate {
+        NSPredicate(format: "timestamp >= %@",
+            Calendar.current.startOfAquavateDay(for: Date()) as CVarArg)
+    }
 
     // Convert CoreData records to display model
     private var todaysDrinks: [DrinkRecord] {
@@ -332,6 +337,14 @@ struct HomeView: View {
             Button("OK", role: .cancel) { }
         } message: {
             Text("Please connect to your bottle before deleting drinks. This ensures both the app and bottle stay in sync.")
+        }
+        .onAppear {
+            // Update predicate on view appear to handle day boundary changes
+            todaysDrinksCD.nsPredicate = todaysPredicate()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in
+            // Update predicate when system time changes significantly (e.g., midnight)
+            todaysDrinksCD.nsPredicate = todaysPredicate()
         }
     }
 
