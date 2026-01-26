@@ -18,7 +18,7 @@ enum HydrationUrgency: Int, Codable, Comparable {
     var color: Color {
         switch self {
         case .onTrack: return .blue
-        case .attention: return .orange
+        case .attention: return Color(red: 247.0/255.0, green: 239.0/255.0, blue: 151.0/255.0)
         case .overdue: return .red
         }
     }

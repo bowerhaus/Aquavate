@@ -67,42 +67,53 @@ struct HumanFigureProgressView: View {
     var body: some View {
         VStack(spacing: 16) {
             ZStack {
-                // Red zone: from overdue threshold to expected (only when 20%+ behind)
+                // White background layer - colors with opacity blend over this
+                Image("HumanFigureFilled")
+                    .renderingMode(.template)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .foregroundColor(.white)
+
+                // Deficit zone: gradient from attention (bottom) to overdue (top of head)
                 // Only show when isBehindTarget (50ml rounded threshold) for consistency with text
-                if expectedCurrent != nil && isBehindTarget && isOverdue {
+                // Gradient spans from current progress (yellow) to top of head (red), but:
+                // - Only filled up to expected progress level
+                // - White above expected progress (background shows through)
+                if expectedCurrent != nil && isBehindTarget {
                     GeometryReader { geometry in
                         VStack {
                             Spacer(minLength: 0)
+                            // Full gradient from progress to top of head
                             Rectangle()
-                                .fill(Color.red.opacity(0.3))
-                                .frame(height: geometry.size.height * expectedProgress)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [HydrationUrgency.attention.color, HydrationUrgency.overdue.color],
+                                        startPoint: .bottom,
+                                        endPoint: .top
+                                    )
+                                )
+                                .frame(height: geometry.size.height * (1.0 - progress))
+                                .opacity(0.7)
                         }
+                        .offset(y: -geometry.size.height * progress)
                     }
+                    // First mask: clip to expected progress height
+                    .mask(
+                        GeometryReader { geometry in
+                            VStack {
+                                Spacer(minLength: 0)
+                                Rectangle()
+                                    .frame(height: geometry.size.height * expectedProgress)
+                            }
+                        }
+                    )
+                    // Second mask: clip to human figure shape
                     .mask(
                         Image("HumanFigureFilled")
                             .resizable()
                             .aspectRatio(contentMode: .fit)
                     )
                     .animation(.easeInOut(duration: 0.5), value: expectedProgress)
-                }
-
-                // Orange zone: from actual to overdue threshold (or expected if not overdue)
-                // Only show when isBehindTarget (50ml rounded threshold) for consistency with text
-                if expectedCurrent != nil && isBehindTarget {
-                    GeometryReader { geometry in
-                        VStack {
-                            Spacer(minLength: 0)
-                            Rectangle()
-                                .fill(Color.orange.opacity(0.3))
-                                .frame(height: geometry.size.height * orangeTopProgress)
-                        }
-                    }
-                    .mask(
-                        Image("HumanFigureFilled")
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                    )
-                    .animation(.easeInOut(duration: 0.5), value: orangeTopProgress)
                 }
 
                 // Actual progress fill from bottom using filled silhouette as mask
@@ -142,7 +153,7 @@ struct HumanFigureProgressView: View {
                 if isBehindTarget {
                     Text("\(roundedDeficitMl) ml behind target")
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(urgency.color)
+                        .foregroundColor(.secondary)
                         .padding(.top, 4)
                 }
             }
