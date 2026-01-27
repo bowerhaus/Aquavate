@@ -57,7 +57,7 @@ static BLE_BottleConfig bottleConfig = {
 
 // Device settings cache (loaded from NVS on init)
 static BLE_DeviceSettings deviceSettings = {
-    .flags = DEVICE_SETTINGS_FLAG_SHAKE_EMPTY_ENABLED,  // Default: enabled
+    .flags = 0,  // Default: shake-to-empty disabled
     .reserved1 = 0,
     .reserved2 = 0
 };

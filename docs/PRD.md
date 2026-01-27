@@ -188,17 +188,22 @@ When the bottle hasn't been placed on a stable surface (UPRIGHT_STABLE) for 3 mi
 #### Drink Record Structure
 ```c
 typedef struct {
-    uint32_t timestamp;      // Seconds since last sync (relative time)
+    uint32_t record_id;      // Unique record ID (never reused)
+    uint32_t timestamp;      // Unix epoch timestamp
     int16_t  amount_ml;      // Positive = drink, negative = refill
-    uint16_t bottle_level;   // Current ml remaining after event
-} DrinkRecord;
+    int16_t  bottle_level;   // Current ml remaining after event
+    uint8_t  synced;         // 1 = synced to iOS, 0 = pending
+    uint8_t  type;           // DrinkType: SIP=1, GULP=2, POUR=3, REFILL=4
+    uint8_t  reserved[2];    // Future extensibility
+} DrinkRecord;  // 16 bytes total
 ```
 
-#### Storage Capacity
-- 7 days of history (~500 drinks max)
-- Store in ESP32 NVS or SPIFFS
-- Circular buffer - oldest records overwritten when full
-- Sync flag to track what's been sent to iOS
+#### Storage Implementation
+- **Drink Records:** LittleFS file storage (`/drinks.bin`) - supports true in-place overwrites, no fragmentation
+- **Metadata/Settings:** NVS - calibration, daily state, debug level (rarely written, no fragmentation risk)
+- Circular buffer with 600 record capacity (~30 days history)
+- Oldest records overwritten when full
+- Sync flag tracks what's been sent to iOS
 
 ### 4. BLE Communication
 

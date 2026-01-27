@@ -1,5 +1,8 @@
-// storage_drinks.h - NVS storage for drink records and daily state
+// storage_drinks.h - LittleFS storage for drink records, NVS for daily state
 // Part of the Aquavate smart water bottle firmware
+//
+// Drink records use LittleFS file with fixed-size slots (true in-place overwrites).
+// Daily state uses NVS with retry logic (small, rarely changes).
 
 #ifndef STORAGE_DRINKS_H
 #define STORAGE_DRINKS_H
@@ -7,7 +10,7 @@
 #include <Arduino.h>
 #include "drinks.h"
 
-// CircularBufferMetadata: Tracks circular buffer state in NVS (14 bytes)
+// CircularBufferMetadata: Tracks circular buffer state in LittleFS (14 bytes)
 struct CircularBufferMetadata {
     uint16_t write_index;      // Next write position (0-599)
     uint16_t record_count;     // Number of records stored (0-600)
@@ -16,7 +19,22 @@ struct CircularBufferMetadata {
     uint16_t _reserved;        // Padding for future use
 };
 
-// NVS Storage API
+// ============================================================================
+// LittleFS Initialization
+// ============================================================================
+
+/**
+ * Initialize LittleFS for drink record storage
+ * Must be called before any drink storage functions
+ * Formats the filesystem on first boot after partition change
+ *
+ * @return true if mounted successfully
+ */
+bool storageInitDrinkFS();
+
+// ============================================================================
+// Drink Storage API (LittleFS)
+// ============================================================================
 
 /**
  * Save a drink record to the circular buffer

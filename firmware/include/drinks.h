@@ -7,7 +7,7 @@
 #include <Arduino.h>
 #include "storage.h"
 
-// DrinkRecord structure: Stores individual drink/refill events (14 bytes)
+// DrinkRecord structure: Stores individual drink/refill events (16 bytes)
 // Flag bits: 0x01=synced to app, 0x02=day_boundary, 0x04=deleted (soft delete)
 struct DrinkRecord {
     uint32_t record_id;         // Unique incrementing ID for bidirectional sync
@@ -16,6 +16,7 @@ struct DrinkRecord {
     uint16_t bottle_level_ml;   // Bottle water level after event (0-830ml)
     uint8_t  flags;             // Bit flags: 0x01=synced, 0x02=day_boundary, 0x04=deleted
     uint8_t  type;              // Drink type: 0=gulp (<100ml), 1=pour (≥100ml)
+    uint8_t  _reserved[2];      // Reserved for future fields (e.g., temperature, confidence)
 };
 
 // DailyState structure: Tracks drink detection state (8 bytes)

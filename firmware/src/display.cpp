@@ -513,6 +513,15 @@ bool displayNeedsUpdate(float current_water_ml,
                        bool battery_interval_elapsed) {
     bool needs_update = false;
 
+    // Check if water level is valid (ADC stabilized after power-on)
+    bool water_valid = (current_water_ml >= -100.0f && current_water_ml <= 1000.0f);
+
+    // If display not initialized and water is invalid, skip ALL updates until ADC stabilizes
+    if (!g_display_state.initialized && !water_valid) {
+        DEBUG_PRINTF(1, "Display: Waiting for ADC to stabilize (%.1fml invalid)\n", current_water_ml);
+        return false;
+    }
+
     // 1. Water level check (5ml threshold)
     if (!g_display_state.initialized) {
         DEBUG_PRINTF(1, "Display: Not initialized - forcing update\n");
@@ -730,6 +739,33 @@ void displayTapWakeFeedback() {
     g_display_ptr->display();
 
     Serial.println("Display: Tap wake feedback shown (waking)");
+}
+
+// Display NVS storage warning screen (shown when drink save fails)
+void displayNVSWarning() {
+    if (g_display_ptr == nullptr) return;
+
+    Serial.println("Display: Showing NVS warning");
+
+    g_display_ptr->clearBuffer();
+    g_display_ptr->setTextColor(EPD_BLACK);
+
+    // Warning text centered
+    g_display_ptr->setTextSize(3);
+    const char* line1 = "Storage";
+    const char* line2 = "Error";
+    int w1 = strlen(line1) * 18;  // 18px per char at textSize=3
+    int w2 = strlen(line2) * 18;
+    g_display_ptr->setCursor((250 - w1) / 2, 35);
+    g_display_ptr->print(line1);
+    g_display_ptr->setCursor((250 - w2) / 2, 70);
+    g_display_ptr->print(line2);
+
+    g_display_ptr->display();  // Full refresh
+    delay(3000);               // Show for 3 seconds
+
+    // Redraw main screen
+    drawMainScreen();
 }
 
 #if defined(BOARD_ADAFRUIT_FEATHER)
