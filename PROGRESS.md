@@ -1,6 +1,6 @@
 # Aquavate - Active Development Progress
 
-**Last Updated:** 2026-01-26
+**Last Updated:** 2026-01-27
 **Current Branch:** `master`
 
 ---
@@ -21,6 +21,11 @@ Resume from PROGRESS.md
 ---
 
 ## Recently Completed
+
+- ✅ Drink Baseline Hysteresis Fix (Issue #76) - [Plan 057](Plans/057-drink-baseline-hysteresis.md)
+  - Fixed drinks sometimes not recorded when second drink taken during same session
+  - Added drift threshold (15ml) to prevent baseline contamination during drink detection
+  - Only firmware changes (config.h, drinks.cpp)
 
 - ✅ Unified Sessions View Fix (Issue #74) - [Plan 056](Plans/056-unified-sessions-view.md)
   - Replaced confusing separate "Recent Motion Wakes" and "Backpack Sessions" sections
@@ -53,8 +58,8 @@ Resume from PROGRESS.md
 
 ## Branch Status
 
-- `master` - Stable baseline (pending PR merge)
-- `unified-sessions-view` - Issue #74 complete, PR pending
+- `master` - Stable baseline
+- `drink-baseline-hysteresis` - Issue #76 complete, PR pending
 
 ---
 
