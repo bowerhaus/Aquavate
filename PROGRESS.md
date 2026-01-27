@@ -1,88 +1,112 @@
 # Aquavate - Active Development Progress
 
-**Last Updated:** 2026-01-27 (Session 4)
+**Last Updated:** 2026-01-27 (Session 8)
 **Current Branch:** `ios-calibration-flow`
 
 ---
 
 ## Current Task
 
-**iOS Calibration Flow (Issue #30)** - [Plan 060](Plans/060-ios-calibration-flow.md)
+**iOS Calibration Flow (Issue #30)** - [Plan 060](Plans/060-ios-calibration-flow.md) **✅ COMPLETE - READY FOR MERGE**
 
-Add the ability to perform two-point calibration from the iOS app with guided screens and real-time device feedback.
+### Architecture: Bottle-Driven, iOS-Mirrored
 
-### Implementation Phases
-
-- [x] **Phase 1: Firmware Changes** - Add BLE calibration commands ✓
-- [x] **Phase 2: iOS BLE Updates** - Fix command codes and add calibration methods ✓
-- [x] **Phase 3: iOS Calibration UI** - Create guided calibration screens ✓
-- [x] **Phase 4: Integration** - Connect to SettingsView ✓
-- [x] **Phase 4.5: Keep-Alive During Calibration** - Prevent disconnects ✓
-- [x] **Phase 4.6: BLE Updates During Calibration** - Fix stability indicator not updating ✓
-- [ ] **Phase 5: Testing** - Verify end-to-end with hardware
-
-### Session 4 Changes
-
-**Bug Fixed: Stability indicator never updated during calibration**
-
-Root cause: BLE state updates (weight, stability) were only sent when `g_calibrated == true`:
-```cpp
-// Line 1569 in main.cpp - this requires calibration to exist!
-if (cal_state == CAL_IDLE && g_calibrated && (gesture == GESTURE_UPRIGHT_STABLE ...)) {
-    bleUpdateCurrentState(...);
-}
 ```
-During calibration, the bottle typically ISN'T calibrated yet, so no BLE updates were sent.
-
-Fix: Added new block in main.cpp that sends BLE updates every 500ms when `bleIsCalibrationInProgress()`:
-```cpp
-#if ENABLE_BLE
-    if (bleIsCalibrationInProgress()) {
-        // Update every 500ms during calibration
-        bleUpdateCurrentState(daily_total, current_adc, g_calibration,
-                            battery_pct, g_calibrated, g_time_valid,
-                            gesture == GESTURE_UPRIGHT_STABLE);
-    }
-#endif
+┌─────────────────┐                    ┌─────────────────┐
+│    iOS App      │                    │     Bottle      │
+├─────────────────┤                    ├─────────────────┤
+│                 │  START_CALIBRATION │                 │
+│  "Calibrate"    │ ──────────────────>│ Enters calib    │
+│   button tap    │                    │ state machine   │
+│                 │                    │                 │
+│                 │  STATE_NOTIFY      │ Detects stable  │
+│  Updates rich   │ <─────────────────-│ upright, runs   │
+│  UI to mirror   │  (state + weights) │ existing logic  │
+│  bottle state   │                    │                 │
+│                 │  CANCEL_CALIB      │                 │
+│  Cancel button  │ ──────────────────>│ Returns to idle │
+│                 │                    │                 │
+│  User watches   │                    │ E-paper shows   │
+│  phone screen   │                    │ simple version  │
+└─────────────────┘                    └─────────────────┘
 ```
 
-**UI Improvements:**
-- Removed all references to "sensor puck" (sensor is built into bottle)
-- Improved instruction text clarity on all calibration screens
-- Made "Measure Empty" and "Measure Full" buttons always enabled (firmware handles stability internally)
-- Changed hint text from blocking orange warning to informational gray text
+### Implementation Status
 
-### Key Files Modified This Session
+#### Firmware Phase ✓ COMPLETE
+
+- [x] **config.h** - Enable standalone calibration in IOS_MODE ✓
+- [x] **ble_service.h** - Added calibration UUID, struct, command codes ✓
+- [x] **ble_service.cpp** - CalibrationState characteristic + command handlers ✓
+- [x] **main.cpp** - BLE calibration integration with state machine ✓
+- [x] **Build verified** - 38,088 bytes RAM (11.6%), 772,705 bytes Flash (59.0%) ✓
+
+**Build size change:** +8 bytes RAM, +972 bytes Flash (minimal overhead)
+
+#### iOS Phase ✓ COMPLETE
+
+- [x] **iOS: Add BLE constants** - Added `calibrationStateUUID`, `startCalibration`/`cancelCalibration` commands ✓
+- [x] **iOS: Add CalibrationState parsing** - Added `BLECalibrationState` struct ✓
+- [x] **iOS: Add BLEManager methods** - `startCalibration()`, `cancelCalibration()`, `handleCalibrationStateUpdate()` ✓
+- [x] **iOS: Subscribe to calibration notifications** - Added to characteristic subscription list ✓
+- [x] **iOS: Update CalibrationManager** - Added bottle-driven mode with state mirroring ✓
+- [x] **iOS: Update CalibrationView** - Simplified to 4-screen flow (Welcome → Empty → Full → Complete) ✓
+- [x] **iOS: Simplified UI flow** - Removed intermediate confirmation screens, auto-transitions ✓
+
+### Files Modified (Sessions 6-8)
 
 **Firmware:**
-- `firmware/src/main.cpp` - Added BLE updates during calibration mode (lines ~1663-1688)
+- `firmware/include/ble_service.h` - Added `AQUAVATE_CALIBRATION_STATE_UUID`, `BLE_CMD_START_CALIBRATION` (0x20), `BLE_CMD_CANCEL_CALIBRATION` (0x21), `BLE_CalibrationState` struct
+- `firmware/src/ble_service.cpp` - Added CalibrationState characteristic, command handlers, `bleNotifyCalibrationState()`
+- `firmware/src/main.cpp` - Integrated BLE calibration start/cancel with existing state machine
 
 **iOS:**
-- `ios/Aquavate/Aquavate/Views/CalibrationView.swift` - Improved instruction text, removed stability gate from buttons
+- `ios/Aquavate/Aquavate/Services/BLEConstants.swift` - Added `calibrationStateUUID`, `CalibrationStep` enum, updated command codes
+- `ios/Aquavate/Aquavate/Services/BLEStructs.swift` - Added `BLECalibrationState` struct, `startCalibration()`/`cancelCalibration()` commands
+- `ios/Aquavate/Aquavate/Services/BLEManager.swift` - Added `calibrationState` published property, `startCalibration()`, `cancelCalibration()`, `handleCalibrationStateUpdate()`
+- `ios/Aquavate/Aquavate/Services/CalibrationManager.swift` - Added `CalibrationMode` enum, bottle-driven mode with state mirroring, auto-transitions
+- `ios/Aquavate/Aquavate/Views/CalibrationView.swift` - Simplified to 4-screen flow: Welcome → Empty → Full → Complete
 
-### Current Step
+**Note:** Activity stats commands renumbered from 0x21-0x23 to 0x30-0x32 to make room for calibration commands.
 
-**Phase 5: Hardware Testing** - Need to flash firmware and test
+### UI Simplification (Session 8)
 
-**Next action:** Flash updated firmware and test full calibration flow with real hardware
+Calibration flow simplified to match firmware's approach:
+- Removed water drop icons from welcome screen
+- Combined prompt + measuring into single screens for both steps
+- Removed intermediate "measured" confirmation screens
+- Auto-transition from empty → full and from full → complete
 
-### Calibration Flow Summary
+### BLE Protocol Summary
 
-**User-facing flow:**
-1. Navigate to Settings > Calibrate Bottle
-2. Welcome screen explains what you'll need
-3. Step 1: Empty bottle completely, cap on, set upright, tap "Measure Empty"
-4. Step 2: Fill with exactly 830ml, cap on, set upright, tap "Measure Full"
-5. Tap "Save Calibration" to store to device
-6. Done - bottle is calibrated
+**Commands (iOS → Bottle):**
+| Command | Code | Description |
+|---------|------|-------------|
+| `START_CALIBRATION` | `0x20` | Start calibration state machine |
+| `CANCEL_CALIBRATION` | `0x21` | Cancel calibration, return to idle |
 
-**BLE communication:**
-1. iOS sends `CAL_MEASURE_POINT` command (empty or full)
-2. Firmware sets `g_cal_mode = true` (blocks sleep), takes ~10s stable measurement
-3. Firmware sends BLE state updates every 500ms during calibration
-4. iOS reads `calibrationRawADC` from BLEManager when ready
-5. After both measurements, iOS calculates scale factor and sends `CAL_SET_DATA`
-6. Firmware saves to NVS, clears `g_cal_mode`
+**Notification Characteristic (Bottle → iOS, 12 bytes):**
+```cpp
+struct BLE_CalibrationState {
+    uint8_t  state;      // CalibrationState enum (0=idle, 2=started, 3=wait_empty, etc.)
+    uint8_t  flags;      // Bit 0: error occurred
+    int32_t  empty_adc;  // Captured empty ADC
+    int32_t  full_adc;   // Captured full ADC
+    uint16_t reserved;
+};
+```
+
+**State Values:**
+| State | Value | iOS Action |
+|-------|-------|------------|
+| `CAL_IDLE` | 0 | Show "Start Calibration" button |
+| `CAL_STARTED` | 2 | Show "Calibration Starting..." |
+| `CAL_WAIT_EMPTY` | 3 | Show empty bottle prompt |
+| `CAL_MEASURE_EMPTY` | 4 | Show "Measuring..." progress |
+| `CAL_WAIT_FULL` | 6 | Show full bottle prompt |
+| `CAL_MEASURE_FULL` | 7 | Show "Measuring..." progress |
+| `CAL_COMPLETE` | 9 | Show success screen |
+| `CAL_ERROR` | 10 | Show error with retry option |
 
 ---
 
@@ -90,58 +114,30 @@ Fix: Added new block in main.cpp that sends BLE updates every 500ms when `bleIsC
 
 To resume from this progress file:
 ```
-Resume from PROGRESS.md
+Resume from PROGRESS.md - iOS calibration flow complete, ready for merge (Plan 060)
 ```
+
+**Status:** Implementation complete. Ready for PR merge after hardware testing.
 
 ---
 
 ## Recently Completed
 
 - **LittleFS Drink Storage / NVS Fragmentation Fix (Issue #76)** - [Plan 059](Plans/059-littlefs-drink-storage.md)
-  - Root cause: NVS doesn't support in-place updates, fragments after ~136 drink writes
-  - Solution: LittleFS file storage for drink records (true in-place overwrites)
-  - NVS retained for calibration, settings, daily state (with retry logic)
-  - Also fixed: display garbage on cold boot, IOS_MODE=0 build error
-  - Files: partitions.csv (new), storage_drinks.cpp, drinks.h, main.cpp, display.cpp, and others
-
 - Drink Baseline Hysteresis Fix (Issue #76) - [Plan 057](Plans/057-drink-baseline-hysteresis.md)
-  - Fixed drinks sometimes not recorded when second drink taken during same session
-  - Added drift threshold (15ml) to prevent baseline contamination during drink detection
-  - Only firmware changes (config.h, drinks.cpp)
-
 - Unified Sessions View Fix (Issue #74) - [Plan 056](Plans/056-unified-sessions-view.md)
-  - Replaced confusing separate "Recent Motion Wakes" and "Backpack Sessions" sections
-  - New unified "Sessions" list shows both types chronologically
-  - Summary changed from "Since Last Charge" to "Last 7 Days"
-  - Users can now clearly see backpack sessions with correct 1+ hour durations
-
 - Repeated Amber Notification Fix (Issue #72) - [Plan 055](Plans/055-repeated-amber-notification-fix.md)
-  - Fixed `lastNotifiedUrgency` not persisting across app restarts (notifications were re-sent)
-  - Updated urgency colors: attention = RGB(247,239,151), overdue = red
-  - Human figure now uses smooth gradient from attention to overdue color
-  - Added white background layer to fix color blending issues
-
 - iOS Day Boundary Fix (Issue #70) - [Plan 054](Plans/054-ios-day-boundary-fix.md)
-  - Fixed drinks from previous day showing after midnight
-  - Made @FetchRequest predicate dynamic with onAppear and significantTimeChangeNotification
-
 - Notification Threshold Adjustment (Issue #67) - [Plan 053](Plans/053-notification-threshold-adjustment.md)
-  - Increased minimum deficit thresholds for hydration notifications (50ml -> 150ml)
-
 - iOS Memory Exhaustion Fix (Issue #28) - [Plan 052](Plans/052-ios-memory-exhaustion-fix.md)
-  - Fixed memory leaks from WatchConnectivity queue, CoreData @FetchRequest, NotificationManager captures
-  - App now runs 60+ minutes without memory exhaustion
-
 - Foreground Notification Fix (Issue #56) - [Plan 051](Plans/051-foreground-notification-fix.md)
-  - Fixed hydration reminders not appearing when app is in foreground
-  - Added UNUserNotificationCenterDelegate to NotificationManager
 
 ---
 
 ## Branch Status
 
 - `master` - Stable baseline
-- `ios-calibration-flow` - **ACTIVE** - iOS calibration flow (Issue #30)
+- `ios-calibration-flow` - **ACTIVE** - iOS calibration flow with bottle-driven approach
 
 ---
 

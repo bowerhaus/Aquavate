@@ -2,13 +2,23 @@
 //  CalibrationManager.swift
 //  Aquavate
 //
-//  State machine for iOS-driven two-point calibration flow.
-//  Coordinates BLE communication with firmware to capture empty/full ADC readings.
+//  State machine for calibration flow.
+//  Supports two modes:
+//  - iOS-driven: App controls measurement timing (legacy)
+//  - Bottle-driven: Bottle runs state machine, app mirrors (Plan 060)
 //
 
 import Foundation
 import Combine
 import os.log
+
+// MARK: - Calibration Mode
+
+/// Which device controls the calibration flow
+enum CalibrationMode {
+    case iosDriven    // Legacy: iOS sends CAL_MEASURE_POINT commands
+    case bottleDriven // Plan 060: Bottle runs state machine, iOS mirrors
+}
 
 // MARK: - Calibration State
 
@@ -115,6 +125,12 @@ class CalibrationManager: ObservableObject {
     /// Measurement progress (0.0 to 1.0) - simulated during firmware measurement
     @Published private(set) var measurementProgress: Double = 0.0
 
+    /// Current calibration mode (Plan 060)
+    @Published private(set) var mode: CalibrationMode = .bottleDriven
+
+    /// Bottle calibration state description (for UI display in bottle-driven mode)
+    @Published private(set) var bottleStateDescription: String = "Idle"
+
     // MARK: - Private Properties
 
     /// Reference to BLE manager for communication
@@ -207,18 +223,93 @@ class CalibrationManager: ObservableObject {
                 }
             }
             .store(in: &cancellables)
+
+        // Subscribe to bottle calibration state (Plan 060 - Bottle-Driven Calibration)
+        bleManager.$calibrationState
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] bottleState in
+                self?.handleBottleCalibrationStateChange(bottleState)
+            }
+            .store(in: &cancellables)
+    }
+
+    /// Handle bottle calibration state change (Plan 060 - Bottle-Driven Calibration)
+    private func handleBottleCalibrationStateChange(_ bottleState: BLECalibrationState?) {
+        guard mode == .bottleDriven, let bottleState = bottleState else { return }
+
+        // Update description for UI
+        bottleStateDescription = bottleState.stateDescription
+        logger.debug("Bottle calibration state: \(bottleState.stateDescription)")
+
+        // Map bottle state to iOS CalibrationState
+        switch bottleState.state {
+        case BLECalibrationState.stateIdle:
+            // Only transition to notStarted if we were in a calibration flow
+            if state != .notStarted && state != .complete(scaleFactor: 0) {
+                if case .failed = state {
+                    // Keep failed state
+                } else {
+                    state = .notStarted
+                }
+            }
+
+        case BLECalibrationState.stateStarted:
+            state = .emptyBottlePrompt
+            logger.info("Bottle-driven calibration started")
+
+        case BLECalibrationState.stateWaitEmpty:
+            state = .emptyBottlePrompt
+
+        case BLECalibrationState.stateMeasureEmpty:
+            state = .measuringEmpty
+            measurementProgress = 0.5 // Show progress during measurement
+
+        case BLECalibrationState.stateWaitFull:
+            // Empty measurement complete, move to full
+            state = .fullBottlePrompt
+            emptyADC = bottleState.emptyADC
+            measurementProgress = 0.0
+            logger.info("Empty measurement captured: ADC=\(bottleState.emptyADC)")
+
+        case BLECalibrationState.stateMeasureFull:
+            state = .measuringFull
+            measurementProgress = 0.5
+
+        case BLECalibrationState.stateComplete:
+            // Calibration complete - calculate scale factor from ADC values
+            fullADC = bottleState.fullADC
+            let bottleCapacityMl = Float(bleManager?.bottleCapacityMl ?? 830)
+            let adcDelta = Float(bottleState.fullADC - bottleState.emptyADC)
+            let scaleFactor = adcDelta > 0 ? adcDelta / bottleCapacityMl : 0
+            state = .complete(scaleFactor: scaleFactor)
+            measurementProgress = 1.0
+            logger.info("Bottle-driven calibration complete: scaleFactor=\(scaleFactor)")
+            bleManager?.startIdleDisconnectTimer()
+
+        case BLECalibrationState.stateError:
+            state = .failed(.measurementUnstable)
+            measurementProgress = 0.0
+            logger.warning("Bottle-driven calibration error")
+            bleManager?.startIdleDisconnectTimer()
+
+        default:
+            // Triggered, ConfirmEmpty, ConfirmFull - transitional states
+            break
+        }
     }
 
     // MARK: - Public API
 
     /// Start the calibration flow
+    /// In bottle-driven mode (default), sends START_CALIBRATION to bottle
+    /// In iOS-driven mode (legacy), starts the iOS-controlled flow
     func startCalibration() {
         guard let bleManager = bleManager, bleManager.connectionState.isConnected else {
             state = .failed(.notConnected)
             return
         }
 
-        logger.info("Starting calibration flow")
+        logger.info("Starting calibration flow (mode: \(String(describing: self.mode)))")
 
         // Cancel idle disconnect timer - we need to stay connected during calibration
         bleManager.cancelIdleDisconnectTimer()
@@ -228,8 +319,22 @@ class CalibrationManager: ObservableObject {
         fullADC = nil
         measurementProgress = 0.0
 
-        // Move to first step
-        state = .emptyBottlePrompt
+        if mode == .bottleDriven {
+            // Send START_CALIBRATION command to bottle (Plan 060)
+            // Bottle will run its state machine and notify us of state changes
+            bleManager.startCalibration()
+            state = .emptyBottlePrompt  // Show initial state while waiting for bottle response
+            logger.info("Sent START_CALIBRATION to bottle")
+        } else {
+            // Legacy iOS-driven mode - move to first step
+            state = .emptyBottlePrompt
+        }
+    }
+
+    /// Set the calibration mode (Plan 060)
+    func setMode(_ newMode: CalibrationMode) {
+        mode = newMode
+        logger.info("Calibration mode set to: \(String(describing: newMode))")
     }
 
     /// User confirms empty bottle is placed, start measurement
@@ -345,7 +450,13 @@ class CalibrationManager: ObservableObject {
 
     /// Cancel the calibration flow
     func cancel() {
-        logger.info("Calibration cancelled")
+        logger.info("Calibration cancelled (mode: \(String(describing: self.mode)))")
+
+        if mode == .bottleDriven {
+            // Send CANCEL_CALIBRATION command to bottle (Plan 060)
+            bleManager?.cancelCalibration()
+        }
+
         cleanup()
         state = .notStarted
         // Restart idle disconnect timer since calibration is done
@@ -382,6 +493,7 @@ class CalibrationManager: ObservableObject {
     }
 
     /// Handle calibration result from BLE
+    /// Auto-transitions to next step (no intermediate confirmation screens)
     private func handleCalibrationResult(adc: Int32) {
         // Cancel timeout since we got a result
         timeoutTask?.cancel()
@@ -396,16 +508,65 @@ class CalibrationManager: ObservableObject {
         switch state {
         case .measuringEmpty:
             emptyADC = adc
-            state = .emptyMeasured(adc: adc)
             logger.info("Empty bottle measurement complete: ADC=\(adc)")
+            // Auto-transition to full bottle step (no intermediate screen)
+            state = .fullBottlePrompt
+            measurementProgress = 0.0
 
         case .measuringFull:
             fullADC = adc
-            state = .fullMeasured(adc: adc)
             logger.info("Full bottle measurement complete: ADC=\(adc)")
+            // Auto-complete calibration (no intermediate screen)
+            autoCompleteCalibration(fullADC: adc)
 
         default:
             logger.warning("Received calibration result in unexpected state: \(String(describing: self.state))")
+        }
+    }
+
+    /// Auto-complete calibration after full measurement (called from handleCalibrationResult)
+    private func autoCompleteCalibration(fullADC fullADCValue: Int32) {
+        guard let emptyADCValue = emptyADC else {
+            logger.warning("autoCompleteCalibration called but missing emptyADC")
+            state = .failed(.invalidMeasurement("Missing empty bottle measurement."))
+            bleManager?.startIdleDisconnectTimer()
+            return
+        }
+
+        guard let bleManager = bleManager, bleManager.connectionState.isConnected else {
+            state = .failed(.notConnected)
+            return
+        }
+
+        // Validate measurements
+        guard fullADCValue > emptyADCValue else {
+            state = .failed(.invalidMeasurement("Full bottle reading must be greater than empty bottle reading. Please ensure the bottle was properly filled."))
+            bleManager.startIdleDisconnectTimer()
+            return
+        }
+
+        // Calculate scale factor
+        let bottleCapacityMl = Float(bleManager.bottleCapacityMl)
+        let scaleFactor = Float(fullADCValue - emptyADCValue) / bottleCapacityMl
+
+        logger.info("Auto-saving calibration: emptyADC=\(emptyADCValue), fullADC=\(fullADCValue), scaleFactor=\(scaleFactor)")
+
+        state = .savingCalibration
+        self.fullADC = fullADCValue
+
+        // Send calibration data to firmware
+        bleManager.sendCalSetDataCommand(emptyADC: emptyADCValue, fullADC: fullADCValue, scaleFactor: scaleFactor)
+
+        // Wait briefly for firmware to process, then mark complete
+        Task {
+            try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+            await MainActor.run {
+                if case .savingCalibration = self.state {
+                    self.state = .complete(scaleFactor: scaleFactor)
+                    self.logger.info("Calibration complete")
+                    self.bleManager?.startIdleDisconnectTimer()
+                }
+            }
         }
     }
 

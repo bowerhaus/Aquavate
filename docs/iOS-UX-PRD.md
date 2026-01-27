@@ -1,10 +1,11 @@
 # Aquavate iOS App - UX Product Requirements Document
 
-**Version:** 1.16
-**Date:** 2026-01-26
-**Status:** Approved and Tested (Unified Sessions View)
+**Version:** 1.17
+**Date:** 2026-01-27
+**Status:** Approved (Bottle-Driven Calibration)
 
 **Changelog:**
+- **v1.17 (2026-01-27):** Bottle-driven calibration (Issue #30). iOS sends START/CANCEL commands, bottle runs state machine and broadcasts state changes, iOS mirrors with rich UI. Simplified to 4 screens: Welcome → Empty → Full → Complete. See Section 2.3.
 - **v1.16 (2026-01-26):** Unified Sessions view in Activity Stats (Issue #74). Replaced confusing separate "Recent Motion Wakes" and "Backpack Sessions" sections with single chronological "Sessions" list. Summary changed from "Since Last Charge" to "Last 7 Days". See Section 2.7.
 - **v1.15 (2026-01-25):** Increased notification threshold from 50ml to 150ml behind pace (Issue #67). Early Notifications toggle (DEBUG only) lowers threshold to 50ml. See Section 7.
 - **v1.14 (2026-01-25):** Updated "Bottle is Asleep" alert message to reflect single-tap wake capability (Issue #63). Message now says "Tap or tilt your bottle to wake it up". See Section 2.4.
@@ -169,60 +170,96 @@ Sarah's Bluetooth is accidentally turned off. When she opens the app, she sees a
 
 ---
 
-### 2.3 Calibration Wizard (Modal) - UPDATED 2026-01-17
+### 2.3 Calibration Wizard (Modal) - UPDATED 2026-01-27
 
 **Purpose:** Guide user through two-point calibration to establish bottle's scale factor
 
-**Context:** iOS app now performs calibration (firmware standalone calibration removed for IRAM savings). App measures empty and full bottle weights, calculates scale factor, and writes results to firmware via BLE Bottle Config characteristic.
+**Context:** Bottle-driven calibration with iOS mirroring. iOS sends START/CANCEL commands, bottle runs its existing standalone calibration state machine, and broadcasts state changes via BLE notifications. iOS mirrors the bottle state with a rich UI. The simplified flow has 4 screens: Welcome → Empty → Full → Complete.
 
 **Presentation:** Full-screen modal sheet (not dismissible by swipe during calibration)
 
-**Step 1: Empty Bottle Measurement**
+**Architecture:**
+```
+┌─────────────────┐                    ┌─────────────────┐
+│    iOS App      │                    │     Bottle      │
+├─────────────────┤                    ├─────────────────┤
+│                 │  START_CALIBRATION │                 │
+│  "Calibrate"    │ ──────────────────>│ Enters calib    │
+│   button tap    │                    │ state machine   │
+│                 │                    │                 │
+│                 │  STATE_NOTIFY      │ Detects stable  │
+│  Updates rich   │ <─────────────────-│ upright, runs   │
+│  UI to mirror   │  (state + weights) │ existing logic  │
+│  bottle state   │                    │                 │
+│                 │  CANCEL_CALIB      │                 │
+│  Cancel button  │ ──────────────────>│ Returns to idle │
+└─────────────────┘                    └─────────────────┘
+```
+
+**Welcome Screen:**
 ```
 ┌─────────────────────────────────┐
-│  [X]          Step 1 of 2       │  ← Close button + Progress
+│  [Cancel]                       │
 │                                 │
 │        🍶                       │  ← Bottle icon (empty)
 │                                 │
-│   Place Empty Bottle            │  ← Headline (22pt Bold)
+│   Calibrate Your Bottle         │  ← Headline (22pt Bold)
 │                                 │
-│   Remove the bottle from the    │
-│   base and empty it completely. │  ← Body text (17pt Regular)
-│   Place back when ready.        │
-│                                 │
-│   Current: 1245 ADC             │  ← Live weight reading (14pt mono)
-│   ●●●○○ Stability               │  ← 5-dot indicator
+│   Calibration teaches your      │
+│   bottle to measure water       │  ← Body text (17pt Regular)
+│   accurately. You'll weigh it   │
+│   empty, then full with a       │
+│   known amount.                 │
 │                                 │
 │   ┌─────────────────────────┐   │
-│   │  Tap When Stable        │   │  ← Primary CTA (disabled until 5/5 dots)
+│   │   Start Calibration     │   │  ← Primary CTA
 │   └─────────────────────────┘   │
-│                                 │
-│   [< Back]                      │  ← Secondary action
 │                                 │
 └─────────────────────────────────┘
 ```
 
-**Step 2: Full Bottle Measurement**
+**Step 1: Empty Bottle**
 ```
 ┌─────────────────────────────────┐
-│  [X]          Step 2 of 2       │
+│  [Cancel]     ● ─ ○             │  ← Progress indicator (step 1 of 2)
+│                                 │
+│        🍶                       │  ← Bottle icon (empty)
+│                                 │
+│   Step 1: Empty Bottle          │  ← Headline
+│                                 │
+│   1. Empty your bottle          │
+│      completely and put         │  ← Instructions
+│      the cap on                 │
+│   2. Set the bottle upright     │
+│      on a flat surface          │
+│                                 │
+│   Weight: 245g ●●●●○            │  ← Stability indicator
+│   Waiting for stable            │  ← Status message
+│   measurement...                │
+│                                 │
+└─────────────────────────────────┘
+```
+
+*Note: When measuring, shows progress bar instead of stability indicator*
+
+**Step 2: Full Bottle**
+```
+┌─────────────────────────────────┐
+│  [Cancel]     ● ─ ●             │  ← Progress indicator (step 2 of 2)
 │                                 │
 │        🍶💧                     │  ← Bottle icon (filled)
 │                                 │
-│   Fill Bottle to 830ml          │  ← Headline
+│   Step 2: Full Bottle           │  ← Headline
 │                                 │
-│   Fill the bottle to the 830ml  │
-│   line. Place upright on the    │
-│   base when ready.              │
+│   1. Fill the bottle with       │
+│      exactly 830ml of water     │  ← Instructions
+│   2. Put the cap on and set     │
+│      it upright on a flat       │
+│      surface                    │
 │                                 │
-│   Current: 7892 ADC             │  ← Live weight reading
-│   ●●●●● Stability               │  ← All dots filled (stable)
-│                                 │
-│   ┌─────────────────────────┐   │
-│   │  Tap When Stable        │   │  ← Enabled (pulsing blue)
-│   └─────────────────────────┘   │
-│                                 │
-│   [< Back]                      │  ← Return to step 1
+│   Weight: 1075g ●●●●●           │  ← Stability indicator
+│   Waiting for stable            │  ← Status message
+│   measurement...                │
 │                                 │
 └─────────────────────────────────┘
 ```
@@ -230,54 +267,53 @@ Sarah's Bluetooth is accidentally turned off. When she opens the app, she sees a
 **Success Screen:**
 ```
 ┌─────────────────────────────────┐
-│  [Done]                         │
 │                                 │
 │           ✓                     │  ← Large checkmark (green, 72pt)
 │                                 │
 │   Calibration Complete!         │  ← Headline
 │                                 │
-│   Scale: 8.2 ADC/g              │  ← Calculated scale factor
-│   Tare: 1245 ADC                │  ← Empty baseline
-│                                 │
-│   Your bottle is ready to       │
-│   track water intake!           │
+│   Your bottle is now            │
+│   calibrated and ready for      │
+│   accurate drink tracking.      │
 │                                 │
 │   ┌─────────────────────────┐   │
-│   │     Continue            │   │  ← Primary CTA
+│   │        Done             │   │  ← Primary CTA
 │   └─────────────────────────┘   │
 │                                 │
 └─────────────────────────────────┘
 ```
 
 **Data Flow:**
-1. **Step 1:** Read live ADC from BLE Current State → `emptyADC = currentWeightG`
-2. **Step 2:** Read live ADC from BLE Current State → `fullADC = currentWeightG`
-3. **Calculate:** `scaleFactor = (fullADC - emptyADC) / 830.0`
-4. **Validate:** Scale factor must be 5-15 ADC/g (typical range)
-5. **Write:** Send to firmware via BLE Bottle Config characteristic
+1. **Start:** iOS sends START_CALIBRATION (0x20) command
+2. **Step 1:** Bottle broadcasts `CAL_WAIT_EMPTY` → `CAL_MEASURE_EMPTY` → captures emptyADC
+3. **Step 2:** Bottle broadcasts `CAL_WAIT_FULL` → `CAL_MEASURE_FULL` → captures fullADC
+4. **Complete:** Bottle calculates scale factor, stores to NVS, broadcasts `CAL_COMPLETE`
+5. iOS receives final state with emptyADC, fullADC, shows success
 
-**Stability Indicator:**
-- 5 dots that fill sequentially as weight stabilizes
-- Reading must be stable for 2s to fill all dots
-- Haptic feedback when all 5 dots filled
-- CTA button enabled only when stable (all 5 dots)
+**State Notifications (Bottle → iOS):**
+| State | Value | iOS Action |
+|-------|-------|------------|
+| `CAL_IDLE` | 0 | Show Welcome screen |
+| `CAL_WAIT_EMPTY` | 3 | Show Step 1 with stability indicator |
+| `CAL_MEASURE_EMPTY` | 4 | Show Step 1 with measuring progress |
+| `CAL_WAIT_FULL` | 6 | Show Step 2 with stability indicator |
+| `CAL_MEASURE_FULL` | 7 | Show Step 2 with measuring progress |
+| `CAL_COMPLETE` | 9 | Show Success screen |
+| `CAL_ERROR` | 10 | Show error with retry option |
 
 **Completion:**
 - Haptic: Success (light impact)
-- Show success screen for 2s
-- Write calibration to firmware
 - Dismiss modal → Navigate to Home Screen
-- Firmware sets `calibrated` flag to true
+- Bottle has already saved calibration to NVS
 
 **Edge Cases:**
 | Scenario | Behavior |
 |----------|----------|
-| Weight not stable | "Hold still..." tooltip, CTA disabled, < 5 dots |
-| Invalid scale factor (< 5 or > 15) | Alert: "Calibration failed. Try again." |
+| Weight not stable | Stability indicator shows progress, bottle auto-measures when stable |
 | BLE disconnect during calibration | Alert: "Connection lost" → return to Settings |
-| User exits mid-calibration | Alert: "Cancel calibration?" with confirm |
-| Firmware write fails | Alert: "Failed to save. Please retry." |
-| Scale factor = 0 or negative | Alert: "Invalid measurement. Ensure bottle is filled." |
+| User taps Cancel | iOS sends CANCEL_CALIBRATION (0x21), bottle returns to idle |
+| Calibration error | Bottle broadcasts CAL_ERROR, iOS shows retry option |
+| Full < Empty ADC | Bottle broadcasts CAL_ERROR, iOS shows "Fill bottle properly" |
 
 ---
 
@@ -1567,20 +1603,17 @@ Watch notifications include haptic feedback via `WKInterfaceDevice.current().pla
 | Timezone change | App returns to foreground | Resync time on next connection |
 | Clock drift | Consecutive connections | Resync every connection |
 
-### Calibration Edge Cases (Updated 2026-01-17)
+### Calibration Edge Cases (Updated 2026-01-27)
 
 | Scenario | Detection | Behavior |
 |----------|-----------|----------|
-| Weight unstable | stable flag = false | "Hold still..." tooltip, CTA disabled, < 5 stability dots |
-| Invalid scale factor | scaleFactor < 5 or > 15 | Alert: "Calibration failed. Scale factor out of range (8.2 expected, got X.X). Try again." → Restart Step 1 |
-| Scale factor = 0 or negative | (fullADC - emptyADC) ≤ 0 | Alert: "Invalid measurement. Ensure bottle is properly filled to 830ml." → Restart |
-| BLE disconnect (Step 1) | Connection lost | Alert: "Connection lost. Calibration incomplete." → Return to Settings |
-| BLE disconnect (Step 2) | Connection lost | Alert: "Connection lost. Calibration incomplete." → Return to Settings |
-| Firmware write fails | BLE write error | Alert: "Failed to save calibration to device. Please retry." → Offer retry |
-| Calibration timeout (60s) | No stable reading for 60s | Alert: "Calibration timed out. Please try again." → Return to Settings |
-| User exits mid-calibration | Tap [X] or swipe down | Alert: "Cancel calibration? Your bottle will not be calibrated." → Confirm/Cancel |
-| User taps Back from Step 2 | Tap [< Back] | Return to Step 1 (emptyADC value preserved) |
-| Same ADC both steps | fullADC == emptyADC | Alert: "No weight change detected. Did you fill the bottle?" → Retry Step 2 |
+| BLE disconnect | Connection lost during calibration | Alert: "Connection lost. Calibration incomplete." → Return to Settings |
+| User taps Cancel | User taps Cancel button | iOS sends CANCEL_CALIBRATION (0x21), bottle returns to idle, modal dismissed |
+| Calibration error | Bottle broadcasts CAL_ERROR state | Alert: "Calibration failed" with retry option |
+| Full < Empty ADC | Bottle detects invalid measurement | Bottle broadcasts CAL_ERROR, iOS shows "Ensure bottle was filled properly" |
+| Bottle timeout | No stable reading for bottle timeout | Bottle broadcasts CAL_ERROR, iOS shows retry option |
+
+*Note: With bottle-driven calibration, most edge cases (timeouts, validation) are handled by the bottle's state machine. iOS simply mirrors the state and shows appropriate UI.*
 
 ### Data Edge Cases
 

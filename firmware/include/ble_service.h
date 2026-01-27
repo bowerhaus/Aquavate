@@ -23,6 +23,7 @@
 #define AQUAVATE_COMMAND_UUID           "6F75616B-7661-7465-2D00-000000000005"
 #define AQUAVATE_DEVICE_SETTINGS_UUID   "6F75616B-7661-7465-2D00-000000000006"
 #define AQUAVATE_ACTIVITY_STATS_UUID    "6F75616B-7661-7465-2D00-000000000007"
+#define AQUAVATE_CALIBRATION_STATE_UUID "6F75616B-7661-7465-2D00-000000000008"
 
 // BLE advertising parameters
 #define BLE_ADV_INTERVAL_MS             1000    // 1 second (power-optimized)
@@ -104,10 +105,14 @@ struct __attribute__((packed)) BLE_Command {
 #define BLE_CMD_SET_DAILY_TOTAL     0x11  // DEPRECATED: Set daily total (use DELETE_DRINK_RECORD instead)
 #define BLE_CMD_DELETE_DRINK_RECORD 0x12  // Delete drink record (5 bytes: cmd + 4-byte record_id)
 
+// Calibration Commands (Plan 060 - Bottle-Driven iOS Calibration)
+#define BLE_CMD_START_CALIBRATION       0x20  // Start calibration state machine
+#define BLE_CMD_CANCEL_CALIBRATION      0x21  // Cancel calibration, return to idle
+
 // Activity Stats Commands
-#define BLE_CMD_GET_ACTIVITY_SUMMARY    0x21  // Request activity summary
-#define BLE_CMD_GET_MOTION_CHUNK        0x22  // Request motion event chunk (param1 = chunk index)
-#define BLE_CMD_GET_BACKPACK_CHUNK      0x23  // Request backpack session chunk (param1 = chunk index)
+#define BLE_CMD_GET_ACTIVITY_SUMMARY    0x30  // Request activity summary
+#define BLE_CMD_GET_MOTION_CHUNK        0x31  // Request motion event chunk (param1 = chunk index)
+#define BLE_CMD_GET_BACKPACK_CHUNK      0x32  // Request backpack session chunk (param1 = chunk index)
 
 // Current State flags (BLE_CurrentState.flags)
 #define BLE_FLAG_TIME_VALID             0x01  // Bit 0: RTC time has been set
@@ -178,6 +183,16 @@ struct __attribute__((packed)) BLE_BackpackSessionChunk {
     uint8_t  session_count;    // Sessions in this chunk (1-5)
     uint8_t  _reserved;
     BLE_BackpackSession sessions[BACKPACK_SESSIONS_PER_CHUNK];
+};
+
+// Calibration State Notification (12 bytes) - Plan 060
+// Bottle broadcasts this when calibration state changes
+struct __attribute__((packed)) BLE_CalibrationState {
+    uint8_t  state;           // CalibrationState enum (0=idle, 2=started, 3=wait_empty, etc.)
+    uint8_t  flags;           // Bit 0: error occurred
+    int32_t  empty_adc;       // Captured empty ADC (0 if not yet measured)
+    int32_t  full_adc;        // Captured full ADC (0 if not yet measured)
+    uint16_t reserved;        // Padding/future use
 };
 
 // Public API
@@ -275,6 +290,24 @@ bool bleGetShakeToEmptyEnabled();
  * @return true if measuring or result ready for iOS to read
  */
 bool bleIsCalibrationInProgress();
+
+/**
+ * Notify iOS of calibration state change (Plan 060)
+ * Sends 12-byte BLE_CalibrationState notification
+ */
+void bleNotifyCalibrationState();
+
+/**
+ * Check if BLE start calibration was requested (Plan 060)
+ * @return true once and clears the flag
+ */
+bool bleCheckCalibrationStartRequested();
+
+/**
+ * Check if BLE cancel calibration was requested (Plan 060)
+ * @return true once and clears the flag
+ */
+bool bleCheckCalibrationCancelRequested();
 
 #endif // ENABLE_BLE
 

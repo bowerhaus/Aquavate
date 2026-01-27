@@ -39,6 +39,7 @@ static NimBLECharacteristic* pDrinkDataChar = nullptr;
 static NimBLECharacteristic* pCommandChar = nullptr;
 static NimBLECharacteristic* pDeviceSettingsChar = nullptr;
 static NimBLECharacteristic* pActivityStatsChar = nullptr;
+static NimBLECharacteristic* pCalibrationStateChar = nullptr;
 
 // Connection state
 static bool isConnected = false;
@@ -82,11 +83,16 @@ static volatile bool g_ble_force_display_refresh = false;
 // Set whenever BLE data activity occurs (sync, commands)
 static volatile bool g_ble_data_activity = false;
 
-// Calibration state for iOS-driven calibration (Plan 060)
+// Calibration state for iOS-driven calibration (Plan 060 - original approach)
 static volatile bool g_cal_mode = false;            // Calibration mode active (blocks sleep)
 static volatile bool g_cal_measuring = false;       // Measurement in progress
 static volatile bool g_cal_result_ready = false;    // Result available for reading
 static volatile int32_t g_cal_last_adc = 0;         // Last measured raw ADC value
+
+// Bottle-driven calibration (Plan 060 - revised approach)
+// iOS sends START/CANCEL, bottle runs its state machine and notifies iOS of state changes
+static volatile bool g_ble_calibration_start_requested = false;   // iOS requested calibration start
+static volatile bool g_ble_calibration_cancel_requested = false;  // iOS requested calibration cancel
 
 // Forward declaration for sync complete notification
 static void bleNotifyCurrentStateUpdate();
@@ -286,6 +292,19 @@ class CommandCallbacks : public NimBLECharacteristicCallbacks {
                 case BLE_CMD_CLEAR_HISTORY:
                     BLE_DEBUG("Command: CLEAR_HISTORY (WARNING)");
                     g_ble_clear_history_requested = true;
+                    break;
+
+                case BLE_CMD_START_CALIBRATION:
+                    // Bottle-driven calibration (Plan 060): iOS requests start, bottle runs state machine
+                    BLE_DEBUG("Command: START_CALIBRATION (bottle-driven)");
+                    g_ble_calibration_start_requested = true;
+                    g_cal_mode = true;  // Block sleep during calibration
+                    break;
+
+                case BLE_CMD_CANCEL_CALIBRATION:
+                    // Cancel ongoing bottle-driven calibration
+                    BLE_DEBUG("Command: CANCEL_CALIBRATION");
+                    g_ble_calibration_cancel_requested = true;
                     break;
 
                 case BLE_CMD_GET_ACTIVITY_SUMMARY:
@@ -800,8 +819,19 @@ bool bleInit() {
     pActivityStatsChar->setValue((uint8_t*)&emptySummary, sizeof(emptySummary));
     BLE_DEBUG("Activity Stats characteristic initialized");
 
+    // Calibration State characteristic (Plan 060 - Bottle-Driven iOS Calibration)
+    pCalibrationStateChar = pAquavateService->createCharacteristic(
+        AQUAVATE_CALIBRATION_STATE_UUID,
+        NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
+    );
+    // Set initial value with idle state
+    BLE_CalibrationState initialCalState = {0};
+    initialCalState.state = 0;  // CAL_IDLE
+    pCalibrationStateChar->setValue((uint8_t*)&initialCalState, sizeof(initialCalState));
+    BLE_DEBUG("Calibration State characteristic initialized");
+
     pAquavateService->start();
-    BLE_DEBUG("Aquavate Service started (Current State + Config + Commands + Sync + Settings + Activity)");
+    BLE_DEBUG("Aquavate Service started (Current State + Config + Commands + Sync + Settings + Activity + Calibration)");
 
     // Setup advertising
     pAdvertising = NimBLEDevice::getAdvertising();
@@ -1141,6 +1171,48 @@ void bleSendBackpackSessionChunk(uint8_t chunkIndex) {
 
     BLE_DEBUG_F("Activity: Sent backpack chunk %d/%d with %d sessions",
                 chunkIndex + 1, totalChunks, chunk.session_count);
+}
+
+// Bottle-Driven Calibration functions (Plan 060)
+
+void bleNotifyCalibrationState() {
+#if ENABLE_STANDALONE_CALIBRATION
+    if (!isConnected || pCalibrationStateChar == nullptr) {
+        return;
+    }
+
+    BLE_CalibrationState state;
+    state.state = (uint8_t)calibrationGetState();
+    state.flags = (calibrationGetState() == CAL_ERROR) ? 0x01 : 0x00;
+
+    // Get current calibration result to access ADC values
+    CalibrationResult result = calibrationGetResult();
+    state.empty_adc = result.data.empty_bottle_adc;
+    state.full_adc = result.data.full_bottle_adc;
+    state.reserved = 0;
+
+    pCalibrationStateChar->setValue((uint8_t*)&state, sizeof(state));
+    pCalibrationStateChar->notify();
+
+    BLE_DEBUG_F("Calibration State notified: state=%d, empty=%d, full=%d",
+                state.state, state.empty_adc, state.full_adc);
+#endif
+}
+
+bool bleCheckCalibrationStartRequested() {
+    if (g_ble_calibration_start_requested) {
+        g_ble_calibration_start_requested = false;
+        return true;
+    }
+    return false;
+}
+
+bool bleCheckCalibrationCancelRequested() {
+    if (g_ble_calibration_cancel_requested) {
+        g_ble_calibration_cancel_requested = false;
+        return true;
+    }
+    return false;
 }
 
 #endif // ENABLE_BLE

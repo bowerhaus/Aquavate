@@ -65,6 +65,10 @@ enum BLEConstants {
     /// Contains: summary, motion events, or backpack sessions depending on command
     static let activityStatsUUID = CBUUID(string: "6F75616B-7661-7465-2D00-000000000007")
 
+    /// Calibration State (12 bytes) - READ/NOTIFY
+    /// Contains: state, flags, empty_adc, full_adc (Plan 060 - Bottle-Driven iOS Calibration)
+    static let calibrationStateUUID = CBUUID(string: "6F75616B-7661-7465-2D00-000000000008")
+
     // MARK: - All Services to Discover
 
     /// Services to discover on connection
@@ -84,7 +88,8 @@ enum BLEConstants {
         drinkDataUUID,
         commandUUID,
         deviceSettingsUUID,
-        activityStatsUUID
+        activityStatsUUID,
+        calibrationStateUUID
     ]
 
     /// Battery characteristics to discover
@@ -104,10 +109,13 @@ enum BLEConstants {
         case setTime = 0x10             // Time sync command
         case setDailyTotal = 0x11       // DEPRECATED: Set daily total
         case deleteDrinkRecord = 0x12   // Delete drink record (5 bytes: cmd + 4-byte record_id)
+        // Calibration Commands (Plan 060 - Bottle-Driven iOS Calibration)
+        case startCalibration = 0x20    // Start calibration state machine
+        case cancelCalibration = 0x21   // Cancel calibration, return to idle
         // Activity Stats Commands
-        case getActivitySummary = 0x21
-        case getMotionChunk = 0x22
-        case getBackpackChunk = 0x23
+        case getActivitySummary = 0x30
+        case getMotionChunk = 0x31
+        case getBackpackChunk = 0x32
     }
 
     // MARK: - Sync Control Commands
@@ -137,6 +145,23 @@ enum BLEConstants {
 
         /// Shake-to-empty gesture is enabled (default: enabled)
         static let shakeToEmptyEnabled = DeviceSettingsFlags(rawValue: 0x01)
+    }
+
+    // MARK: - Calibration States (Plan 060 - Bottle-Driven iOS Calibration)
+
+    /// Calibration state enum values matching firmware CalibrationState
+    enum CalibrationStep: UInt8 {
+        case idle = 0              // Not in calibration mode
+        case triggered = 1         // Calibration triggered (transitional)
+        case started = 2           // Show "Calibration Starting..."
+        case waitEmpty = 3         // Waiting for empty bottle placement
+        case measureEmpty = 4      // Measuring empty bottle
+        case confirmEmpty = 5      // Confirmation (deprecated in firmware)
+        case waitFull = 6          // Waiting for full bottle placement
+        case measureFull = 7       // Measuring full bottle
+        case confirmFull = 8       // Confirmation (deprecated in firmware)
+        case complete = 9          // Calibration successful
+        case error = 10            // Error occurred
     }
 
     // MARK: - State Restoration

@@ -32,7 +32,7 @@
 #if IOS_MODE
     #define ENABLE_BLE                      1
     #define ENABLE_SERIAL_COMMANDS          0
-    #define ENABLE_STANDALONE_CALIBRATION   1   // TEST: Enable alongside BLE
+    #define ENABLE_STANDALONE_CALIBRATION   1   // Bottle-driven calibration (iOS mirrors state)
 #else
     #define ENABLE_BLE                      0
     #define ENABLE_SERIAL_COMMANDS          1

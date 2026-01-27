@@ -1,691 +1,458 @@
-# Plan: iOS Calibration Flow (Issue #30)
+# Plan: iOS Calibration Flow (Issue #30) - COMPLETE
+
+**Status:** ✅ COMPLETE (2026-01-27)
 
 ## Overview
 
-Add the ability to perform two-point calibration from the iOS app with guided screens and real-time device feedback.
+Add iOS-triggered calibration that uses the bottle's existing standalone calibration state machine. The iOS app sends start/cancel commands and mirrors the bottle's state, while the bottle handles all measurement logic and displays status on e-paper.
 
-## Current State Analysis
+## Architecture: Bottle-Driven, iOS-Mirrored
 
-### Command Code Mismatch (Bug)
-- **iOS** (`BLEConstants.swift:99`): `startCalibration = 0x02`
-- **Firmware** (`ble_service.h:98`): `BLE_CMD_PING = 0x02`
-- Firmware reserves `0x03-0x04` for future calibration but never implemented them
-- **Must fix this mismatch** before implementing calibration
+```
+┌─────────────────┐                    ┌─────────────────┐
+│    iOS App      │                    │     Bottle      │
+├─────────────────┤                    ├─────────────────┤
+│                 │  START_CALIBRATION │                 │
+│  "Calibrate"    │ ──────────────────>│ Enters calib    │
+│   button tap    │                    │ state machine   │
+│                 │                    │                 │
+│                 │  STATE_NOTIFY      │ Detects stable  │
+│  Updates rich   │ <─────────────────-│ upright, runs   │
+│  UI to mirror   │  (state + weights) │ existing logic  │
+│  bottle state   │                    │                 │
+│                 │  CANCEL_CALIB      │                 │
+│  Cancel button  │ ──────────────────>│ Returns to idle │
+│                 │                    │                 │
+│  User watches   │                    │ E-paper shows   │
+│  phone screen   │                    │ simple version  │
+└─────────────────┘                    └─────────────────┘
+```
 
-### IRAM Constraints
-- Current usage: ~125KB / 131KB (95.3%) with BLE enabled
-- Standalone calibration state machine is disabled in IOS_MODE=1 to save ~2.4KB
-- Cannot simply enable full calibration state machine without exceeding limits
-
-### Key Insight
-The firmware's core calibration functions are **always compiled**:
-- `calibrationCalculateScaleFactor()` - Calculate scale from two ADC readings
-- `calibrationGetWaterWeight()` - Convert ADC to weight
-- `storageSaveCalibration()` - Persist calibration data
-
----
-
-## Architecture Options
-
-### Option A: iOS-Driven Calibration (Recommended)
-
-iOS app controls the entire calibration flow. Firmware acts as a measurement service.
-
-**Flow:**
-1. iOS sends `CAL_MEASURE_POINT` command (0x03) with point type (empty/full)
-2. Firmware takes stable measurement using existing `weightMeasureStable()`
-3. Firmware returns raw ADC value via Current State notification
-4. iOS stores both ADC readings, calculates scale factor
-5. iOS sends `CAL_SET_DATA` command (0x04) with calculated calibration
-6. Firmware saves to NVS
-
-**Pros:**
-- Minimal firmware changes (~400-500 bytes IRAM)
-- Stays within IRAM budget
-- Full UI flexibility on iOS side
-- Leverages existing firmware measurement code
-
-**Cons:**
-- More complex iOS implementation
-- Requires parsing raw ADC from notifications
-
-### Option B: Device-Assisted Calibration
-
-Re-enable simplified calibration state machine in firmware for BLE mode.
-
-**Pros:**
-- Simpler iOS implementation (just mirrors states)
-- More robust measurement handling on device
-
-**Cons:**
-- Significant IRAM increase (~2KB+)
-- May exceed IRAM budget
-- Requires careful conditional compilation
+**Key Principles:**
+- Bottle runs its existing, tested calibration state machine
+- iOS sends only 2 commands: START and CANCEL
+- Bottle broadcasts state changes as notifications
+- iOS mirrors state with richer UI - user primarily watches phone
+- Bottle e-paper shows simplified confirmation screens
 
 ---
 
-## Recommended Implementation (Option A)
+## IRAM Verification ✓
+
+Build test confirmed both BLE and standalone calibration fit:
+
+| Configuration | RAM | Flash |
+|--------------|-----|-------|
+| BLE only | 37,984 bytes (11.6%) | 764,749 bytes (58.3%) |
+| BLE + Standalone Calibration | 38,080 bytes (11.6%) | 771,733 bytes (58.9%) |
+| **Delta** | **+96 bytes** | **+6,984 bytes** |
+
+**Conclusion:** Minimal overhead, well within limits.
+
+---
+
+## BLE Protocol (Minimal)
+
+### Commands (iOS → Bottle)
+
+| Command | Code | Params | Description |
+|---------|------|--------|-------------|
+| `START_CALIBRATION` | `0x20` | None | Start calibration state machine |
+| `CANCEL_CALIBRATION` | `0x21` | None | Abort calibration, return to idle |
+
+### Notifications (Bottle → iOS)
+
+**Calibration State Characteristic** (new, 12 bytes):
+
+```cpp
+struct __attribute__((packed)) BLE_CalibrationState {
+    uint8_t  state;           // CalibrationState enum value
+    uint8_t  flags;           // Bit 0: error occurred
+    int32_t  empty_adc;       // Captured empty ADC (0 if not yet measured)
+    int32_t  full_adc;        // Captured full ADC (0 if not yet measured)
+    uint16_t reserved;        // Padding/future use
+};
+```
+
+**State Values:**
+
+| State | Value | iOS Action |
+|-------|-------|------------|
+| `CAL_IDLE` | 0 | Show "Start Calibration" button |
+| `CAL_STARTED` | 2 | Show "Calibration Starting..." |
+| `CAL_WAIT_EMPTY` | 3 | Show empty bottle prompt with live weight |
+| `CAL_MEASURE_EMPTY` | 4 | Show "Measuring..." progress |
+| `CAL_WAIT_FULL` | 6 | Show full bottle prompt with live weight |
+| `CAL_MEASURE_FULL` | 7 | Show "Measuring..." progress |
+| `CAL_COMPLETE` | 9 | Show success screen with results |
+| `CAL_ERROR` | 10 | Show error with retry option |
+
+---
+
+## Implementation Phases
 
 ### Phase 1: Firmware Changes
 
 **Files to modify:**
-- [firmware/include/ble_service.h](firmware/include/ble_service.h)
-- [firmware/src/ble_service.cpp](firmware/src/ble_service.cpp)
+- [firmware/src/config.h](../firmware/src/config.h) - Enable standalone calibration in IOS_MODE ✓
+- [firmware/include/ble_service.h](../firmware/include/ble_service.h) - Add calibration characteristic and commands
+- [firmware/src/ble_service.cpp](../firmware/src/ble_service.cpp) - Implement command handlers and notifications
+- [firmware/src/main.cpp](../firmware/src/main.cpp) - Integrate BLE calibration trigger with state machine
 
-#### 1.1 Add Command Definitions
+#### 1.1 Config Change (Already Done)
 
 ```cpp
-// In ble_service.h (replace reserved comment)
-#define BLE_CMD_CAL_MEASURE_POINT   0x03  // Take stable ADC measurement (param1: 0=empty, 1=full)
-#define BLE_CMD_CAL_SET_DATA        0x04  // Save calibration (13-byte extended command)
+#if IOS_MODE
+    #define ENABLE_BLE                      1
+    #define ENABLE_SERIAL_COMMANDS          0
+    #define ENABLE_STANDALONE_CALIBRATION   1   // Enable alongside BLE
+#endif
 ```
 
-#### 1.2 Extend Current State Flags
+#### 1.2 Add BLE Calibration Characteristic
 
 ```cpp
-// Existing flags (bits 0-2)
-// Bit 0: time_valid
-// Bit 1: calibrated
-// Bit 2: stable
+// In ble_service.h
+#define AQUAVATE_CALIBRATION_STATE_UUID "6F75616B-7661-7465-2D00-000000000008"
 
-// New flags (bits 3-4)
-// Bit 3: cal_measuring (measurement in progress)
-// Bit 4: cal_result_ready (raw ADC available in current_weight_g)
+#define BLE_CMD_START_CALIBRATION   0x20  // Start calibration
+#define BLE_CMD_CANCEL_CALIBRATION  0x21  // Cancel calibration
+
+struct __attribute__((packed)) BLE_CalibrationState {
+    uint8_t  state;           // CalibrationState enum
+    uint8_t  flags;           // Bit 0: error flag
+    int32_t  empty_adc;       // Empty ADC reading
+    int32_t  full_adc;        // Full ADC reading
+    uint16_t reserved;
+};
 ```
 
 #### 1.3 Add Command Handlers
 
 ```cpp
-// In ble_service.cpp - handle CAL_MEASURE_POINT
-case BLE_CMD_CAL_MEASURE_POINT: {
-    uint8_t pointType = cmd.param1;  // 0=empty, 1=full
-    g_cal_measuring = true;
-    bleNotifyCalibrationState();  // Notify measuring started
-
-    // Use existing stable measurement (blocks ~5 seconds)
-    MeasurementResult result = weightMeasureStable();
-
-    g_cal_measuring = false;
-    g_cal_last_adc = result.adc_value;
-    g_cal_result_ready = true;
-    bleNotifyCalibrationResult();  // Notify with ADC value
+// In ble_service.cpp
+case BLE_CMD_START_CALIBRATION:
+    if (calibrationGetState() == CAL_IDLE) {
+        calibrationStart();
+        bleNotifyCalibrationState();
+    }
     break;
-}
 
-// Handle CAL_SET_DATA (13-byte extended command)
-case BLE_CMD_CAL_SET_DATA: {
-    // Parse: empty_adc (4), full_adc (4), scale_factor (4)
-    // Create CalibrationData and call storageSaveCalibration()
+case BLE_CMD_CANCEL_CALIBRATION:
+    if (calibrationIsActive()) {
+        calibrationCancel();
+        uiCalibrationShowAborted();
+        bleNotifyCalibrationState();
+    }
     break;
+```
+
+#### 1.4 State Change Notifications
+
+```cpp
+// Call from main.cpp whenever calibration state changes
+void bleNotifyCalibrationState() {
+    BLE_CalibrationState state;
+    state.state = (uint8_t)calibrationGetState();
+    state.flags = (calibrationGetState() == CAL_ERROR) ? 0x01 : 0x00;
+
+    CalibrationResult result = calibrationGetResult();
+    state.empty_adc = result.data.empty_bottle_adc;
+    state.full_adc = result.data.full_bottle_adc;
+    state.reserved = 0;
+
+    // Notify subscribed clients
+    pCalibrationStateChar->setValue((uint8_t*)&state, sizeof(state));
+    pCalibrationStateChar->notify();
 }
 ```
 
-#### 1.4 IRAM Impact Estimate
+#### 1.5 Main Loop Integration
 
-| Addition | Est. Bytes |
-|----------|-----------|
-| Command handlers | ~300 |
-| Static variables | ~50 |
-| Notification helpers | ~100 |
-| **Total** | **~450 bytes** |
+```cpp
+// In main.cpp loop() - when BLE connected
+if (bleIsConnected()) {
+    // Check for BLE calibration start command
+    if (bleCheckCalibrationStartRequested()) {
+        if (calibrationGetState() == CAL_IDLE) {
+            calibrationInit();
+            calibrationStart();
+        }
+    }
 
-Resulting usage: ~125.4KB / 131KB (95.7%) - **within budget**
+    // Check for BLE calibration cancel command
+    if (bleCheckCalibrationCancelRequested()) {
+        if (calibrationIsActive()) {
+            calibrationCancel();
+            uiCalibrationShowAborted();
+        }
+    }
+}
+
+// Normal calibration state machine update (existing code)
+if (calibrationIsActive()) {
+    CalibrationState prevState = calibrationGetState();
+    calibrationUpdate(current_gesture, current_adc);
+
+    // Notify iOS if state changed
+    if (calibrationGetState() != prevState) {
+        bleNotifyCalibrationState();
+        uiCalibrationUpdateForState(calibrationGetState(), ...);
+    }
+}
+```
 
 ---
 
 ### Phase 2: iOS BLE Updates
 
 **Files to modify:**
-- [ios/Aquavate/Aquavate/Services/BLEConstants.swift](ios/Aquavate/Aquavate/Services/BLEConstants.swift)
-- [ios/Aquavate/Aquavate/Services/BLEManager.swift](ios/Aquavate/Aquavate/Services/BLEManager.swift)
+- [ios/Aquavate/Aquavate/Services/BLEConstants.swift](../ios/Aquavate/Aquavate/Services/BLEConstants.swift)
+- [ios/Aquavate/Aquavate/Services/BLEManager.swift](../ios/Aquavate/Aquavate/Services/BLEManager.swift)
+- [ios/Aquavate/Aquavate/Services/BLEStructs.swift](../ios/Aquavate/Aquavate/Services/BLEStructs.swift)
 
-#### 2.1 Fix Command Code Mismatch
+#### 2.1 Add Constants
 
 ```swift
+// BLEConstants.swift
+static let calibrationStateUUID = CBUUID(string: "6F75616B-7661-7465-2D00-000000000008")
+
 enum Command: UInt8 {
-    case tareNow = 0x01
-    case ping = 0x02                  // Keep-alive (fix: was incorrectly startCalibration)
-    case calMeasurePoint = 0x03       // Request stable measurement
-    case calSetData = 0x04            // Write calibration to NVS
-    case resetDaily = 0x05
-    // ... rest unchanged
-}
-
-// Remove old startCalibration, calibratePoint, cancelCalibration
-```
-
-#### 2.2 Add Calibration State Flags
-
-```swift
-struct StateFlags: OptionSet {
-    static let timeValid = StateFlags(rawValue: 0x01)
-    static let calibrated = StateFlags(rawValue: 0x02)
-    static let stable = StateFlags(rawValue: 0x04)
-    static let calMeasuring = StateFlags(rawValue: 0x08)      // New
-    static let calResultReady = StateFlags(rawValue: 0x10)    // New
+    // ... existing ...
+    case startCalibration = 0x20
+    case cancelCalibration = 0x21
 }
 ```
 
-#### 2.3 Add BLEManager Methods
+#### 2.2 Add Calibration State Struct
 
 ```swift
-extension BLEManager {
-    func sendCalMeasureCommand(pointType: CalibrationPointType) {
-        let command = BLECommand(command: 0x03, param1: pointType.rawValue, param2: 0)
-        writeCommand(command)
+// BLEStructs.swift
+struct CalibrationState {
+    let state: CalibrationStep
+    let hasError: Bool
+    let emptyADC: Int32
+    let fullADC: Int32
+
+    enum CalibrationStep: UInt8 {
+        case idle = 0
+        case started = 2
+        case waitEmpty = 3
+        case measureEmpty = 4
+        case waitFull = 6
+        case measureFull = 7
+        case complete = 9
+        case error = 10
     }
 
-    func sendCalSetDataCommand(emptyADC: Int32, fullADC: Int32, scaleFactor: Float) {
-        var data = Data(count: 13)
-        data[0] = 0x04
-        // Pack emptyADC, fullADC, scaleFactor as little-endian
-        writeRawData(data, to: BLEConstants.commandUUID)
+    init(data: Data) {
+        // Parse 12-byte struct
+        state = CalibrationStep(rawValue: data[0]) ?? .idle
+        hasError = (data[1] & 0x01) != 0
+        emptyADC = data.withUnsafeBytes { $0.load(fromByteOffset: 2, as: Int32.self) }
+        fullADC = data.withUnsafeBytes { $0.load(fromByteOffset: 6, as: Int32.self) }
     }
+}
+```
+
+#### 2.3 BLEManager Methods
+
+```swift
+// BLEManager.swift
+@Published var calibrationState: CalibrationState?
+
+func startCalibration() {
+    sendCommand(.startCalibration)
+}
+
+func cancelCalibration() {
+    sendCommand(.cancelCalibration)
+}
+
+// In peripheral(_:didUpdateValueFor:)
+if characteristic.uuid == BLEConstants.calibrationStateUUID,
+   let data = characteristic.value {
+    calibrationState = CalibrationState(data: data)
 }
 ```
 
 ---
 
-### Phase 3: iOS Calibration UI
+### Phase 3: Simplified iOS Calibration UI
 
-**New files:**
-- `ios/Aquavate/Aquavate/Views/CalibrationView.swift`
-- `ios/Aquavate/Aquavate/Views/Components/BottleGraphicView.swift`
-- `ios/Aquavate/Aquavate/Services/CalibrationManager.swift`
+**Files to modify:**
+- [ios/Aquavate/Aquavate/Services/CalibrationManager.swift](../ios/Aquavate/Aquavate/Services/CalibrationManager.swift) - Simplify to state mirror
+- [ios/Aquavate/Aquavate/Views/CalibrationView.swift](../ios/Aquavate/Aquavate/Views/CalibrationView.swift) - Update to mirror bottle state
 
-#### 3.1 CalibrationState Enum
-
-```swift
-enum CalibrationState: Equatable {
-    case notStarted
-    case emptyBottlePrompt       // Step 1: "Place empty bottle on sensor"
-    case measuringEmpty          // Step 1: Waiting for firmware measurement
-    case emptyMeasured(adc: Int32)  // Step 1 complete
-    case fullBottlePrompt        // Step 2: "Fill bottle to 830ml"
-    case measuringFull           // Step 2: Waiting for firmware measurement
-    case fullMeasured(adc: Int32)   // Step 2 complete
-    case savingCalibration       // Step 3: Writing to device
-    case complete(scaleFactor: Float)
-    case failed(CalibrationError)
-}
-
-enum CalibrationError: Error, Equatable {
-    case notConnected
-    case measurementTimeout
-    case measurementUnstable
-    case invalidMeasurement(String)  // e.g., "Full reading must be greater than empty"
-    case saveFailed
-    case disconnected
-}
-```
-
-#### 3.2 CalibrationManager
+#### 3.1 Simplified CalibrationManager
 
 ```swift
 @MainActor
 class CalibrationManager: ObservableObject {
-    @Published private(set) var state: CalibrationState = .notStarted
-    @Published private(set) var isStable: Bool = false
-    @Published private(set) var currentWeightG: Int = 0
-    @Published private(set) var measurementProgress: Double = 0  // 0.0-1.0 during measurement
+    @Published var isActive: Bool = false
+    @Published var currentStep: CalibrationStep = .idle
+    @Published var emptyADC: Int32 = 0
+    @Published var fullADC: Int32 = 0
+    @Published var hasError: Bool = false
 
     private weak var bleManager: BLEManager?
-    private var emptyADC: Int32?
-    private var fullADC: Int32?
-    private var measurementTimer: Timer?
-    private var timeoutTask: Task<Void, Never>?
 
-    // Calibration known value
-    static let calibrationVolumeMl: Float = 830.0
-
-    func startCalibration()
-    func confirmEmptyBottle()      // User confirms, sends CAL_MEASURE_POINT(empty)
-    func confirmFullBottle()       // User confirms, sends CAL_MEASURE_POINT(full)
-    func handleCurrentStateUpdate(flags: UInt8, weightOrADC: Int16)
-    func cancel()
-    func retry()
-
-    private func calculateScaleFactor() -> Float {
-        // scale = (full_adc - empty_adc) / 830g
+    func start() {
+        bleManager?.startCalibration()
+        isActive = true
     }
 
-    private func saveCalibration()  // Sends CAL_SET_DATA command
-}
-```
+    func cancel() {
+        bleManager?.cancelCalibration()
+        isActive = false
+    }
 
-#### 3.3 Step Progress Indicator
+    // Called when BLE notification received
+    func updateFromBLE(_ state: CalibrationState) {
+        currentStep = state.state
+        hasError = state.hasError
+        emptyADC = state.emptyADC
+        fullADC = state.fullADC
 
-A horizontal progress bar showing the 3 calibration steps:
-
-```
-┌─────────────────────────────────────────────────┐
-│  ●━━━━━━━○━━━━━━━○                              │
-│  Empty    Full    Save                          │
-└─────────────────────────────────────────────────┘
-```
-
-**States:**
-- Empty circle (○) = not started
-- Filled circle (●) = current or completed
-- Line between = progress connection
-
-```swift
-struct CalibrationProgressView: View {
-    let currentStep: Int  // 1, 2, or 3
-
-    var body: some View {
-        HStack(spacing: 0) {
-            StepIndicator(step: 1, label: "Empty", current: currentStep)
-            ProgressLine(completed: currentStep > 1)
-            StepIndicator(step: 2, label: "Full", current: currentStep)
-            ProgressLine(completed: currentStep > 2)
-            StepIndicator(step: 3, label: "Save", current: currentStep)
+        if state.state == .complete || state.state == .idle {
+            isActive = false
         }
-        .padding(.horizontal)
     }
 }
 ```
 
-#### 3.4 BottleGraphicView (Faithful to Firmware)
-
-Replicate the e-paper bottle graphic from `display.cpp:drawBottleGraphic()`:
-
-**Firmware Dimensions (40x90px):**
-- Cap: 12px wide × 10px tall (centered at top)
-- Neck: 16px wide × 10px tall (below cap)
-- Body: 40px wide × 70px tall (rounded rect, 8px corner radius)
-- Water fill: Inside body, height = 70px × fill_percent
-
-**SwiftUI Implementation:**
+#### 3.2 CalibrationView Structure
 
 ```swift
-struct BottleGraphicView: View {
-    let fillPercent: Double      // 0.0 to 1.0
-    let showQuestionMark: Bool   // Show "?" overlay
-    let size: CGSize             // Target size (scales proportionally)
-
-    // Proportions from firmware (40x90 base)
-    private let aspectRatio: CGFloat = 40.0 / 90.0
+struct CalibrationView: View {
+    @StateObject private var calibrationManager = CalibrationManager()
+    @EnvironmentObject var bleManager: BLEManager
 
     var body: some View {
-        GeometryReader { geo in
-            let scale = min(geo.size.width / 40, geo.size.height / 90)
+        VStack {
+            // Progress indicator
+            CalibrationProgressView(step: calibrationManager.currentStep)
 
-            ZStack {
-                // Bottle shape (cap + neck + body)
-                BottleShape()
-                    .stroke(Color.primary, lineWidth: 2 * scale)
+            // Content based on current step
+            switch calibrationManager.currentStep {
+            case .idle:
+                WelcomeContent(onStart: calibrationManager.start)
 
-                // Body fill (white interior)
-                BottleBodyShape()
-                    .fill(Color.white)
-                    .padding(2 * scale)
+            case .started:
+                StartingContent()
 
-                // Water fill (from bottom)
-                BottleBodyShape()
-                    .fill(Color.blue.opacity(0.7))
-                    .mask(
-                        VStack {
-                            Spacer()
-                            Rectangle()
-                                .frame(height: 70 * scale * fillPercent)
-                        }
-                    )
-                    .padding(4 * scale)
+            case .waitEmpty, .measureEmpty:
+                EmptyBottleContent(
+                    isMeasuring: calibrationManager.currentStep == .measureEmpty,
+                    currentWeight: bleManager.currentWeight,
+                    isStable: bleManager.isStable
+                )
 
-                // Question mark overlay
-                if showQuestionMark {
-                    Text("?")
-                        .font(.system(size: 36 * scale, weight: .bold))
-                        .foregroundColor(fillPercent > 0.5 ? .white : .orange)
-                        .offset(y: 15 * scale)  // Center in body area
+            case .waitFull, .measureFull:
+                FullBottleContent(
+                    isMeasuring: calibrationManager.currentStep == .measureFull,
+                    currentWeight: bleManager.currentWeight,
+                    isStable: bleManager.isStable
+                )
+
+            case .complete:
+                CompleteContent(
+                    emptyADC: calibrationManager.emptyADC,
+                    fullADC: calibrationManager.fullADC
+                )
+
+            case .error:
+                ErrorContent(onRetry: calibrationManager.start)
+            }
+
+            // Cancel button (when active)
+            if calibrationManager.isActive {
+                Button("Cancel") {
+                    calibrationManager.cancel()
                 }
-            }
-            .frame(width: 40 * scale, height: 90 * scale)
-            .position(x: geo.size.width / 2, y: geo.size.height / 2)
-        }
-    }
-}
-
-// Custom Shape matching firmware bottle outline
-struct BottleShape: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let scale = min(rect.width / 40, rect.height / 90)
-
-        // Cap (centered, 12px wide, 10px tall)
-        let capWidth: CGFloat = 12 * scale
-        let capHeight: CGFloat = 10 * scale
-        let capX = (rect.width - capWidth) / 2
-        path.addRect(CGRect(x: capX, y: 0, width: capWidth, height: capHeight))
-
-        // Neck (16px wide, 10px tall)
-        let neckWidth: CGFloat = 16 * scale
-        let neckHeight: CGFloat = 10 * scale
-        let neckX = (rect.width - neckWidth) / 2
-        path.addRect(CGRect(x: neckX, y: capHeight, width: neckWidth, height: neckHeight))
-
-        // Body (40px wide, 70px tall, 8px corner radius)
-        let bodyY = capHeight + neckHeight
-        let bodyHeight: CGFloat = 70 * scale
-        let cornerRadius: CGFloat = 8 * scale
-        path.addRoundedRect(
-            in: CGRect(x: 0, y: bodyY, width: rect.width, height: bodyHeight),
-            cornerSize: CGSize(width: cornerRadius, height: cornerRadius)
-        )
-
-        return path
-    }
-}
-```
-
-#### 3.5 Calibration Screen Designs
-
-Each screen uses the common layout:
-- **Top:** Step progress indicator
-- **Center:** Bottle graphic + instructional content
-- **Bottom:** Action button(s)
-
----
-
-**Screen 1: Welcome / Not Started**
-
-```
-┌─────────────────────────────────────────────────┐
-│              Calibrate Your Bottle              │
-│                                                 │
-│          ┌──────────────────────┐               │
-│          │    [Bottle Icon]     │               │
-│          │      (outline)       │               │
-│          └──────────────────────┘               │
-│                                                 │
-│  Two-point calibration ensures accurate         │
-│  drink tracking by measuring your empty         │
-│  and full bottle weights.                       │
-│                                                 │
-│  You'll need:                                   │
-│  • Your empty bottle                            │
-│  • 830ml of water to fill it                    │
-│                                                 │
-│           ┌─────────────────────┐               │
-│           │  Start Calibration  │               │
-│           └─────────────────────┘               │
-└─────────────────────────────────────────────────┘
-```
-
----
-
-**Screen 2: Empty Bottle Prompt (Step 1)**
-
-```
-┌─────────────────────────────────────────────────┐
-│     ●━━━━━━━━○━━━━━━━━○                         │
-│   Empty     Full     Save                       │
-│─────────────────────────────────────────────────│
-│                                                 │
-│         ┌──────────────────────┐                │
-│         │                      │                │
-│         │    [Empty Bottle]    │                │
-│         │         ?            │  ← 0% fill     │
-│         │                      │    with "?"    │
-│         └──────────────────────┘                │
-│                                                 │
-│           Step 1: Empty Bottle                  │
-│                                                 │
-│  1. Make sure your bottle is completely empty   │
-│  2. Place it upright on the sensor puck         │
-│  3. Keep it still until measurement completes   │
-│                                                 │
-│  ┌──────────────────────────────────────────┐   │
-│  │ Weight: 245g    Stability: ● Stable      │   │
-│  └──────────────────────────────────────────┘   │
-│                                                 │
-│           ┌─────────────────────┐               │
-│           │   Measure Empty     │               │
-│           └─────────────────────┘               │
-│              (enabled when stable)              │
-└─────────────────────────────────────────────────┘
-```
-
----
-
-**Screen 3: Measuring Empty (Step 1 - In Progress)**
-
-```
-┌─────────────────────────────────────────────────┐
-│     ●━━━━━━━━○━━━━━━━━○                         │
-│   Empty     Full     Save                       │
-│─────────────────────────────────────────────────│
-│                                                 │
-│         ┌──────────────────────┐                │
-│         │                      │                │
-│         │    [Empty Bottle]    │                │
-│         │                      │                │
-│         │                      │                │
-│         └──────────────────────┘                │
-│                                                 │
-│              Measuring...                       │
-│                                                 │
-│         ████████████░░░░░░░░░░  60%            │
-│                                                 │
-│           Keep the bottle still                 │
-│       This takes about 5 seconds                │
-│                                                 │
-└─────────────────────────────────────────────────┘
-```
-
----
-
-**Screen 4: Full Bottle Prompt (Step 2)**
-
-```
-┌─────────────────────────────────────────────────┐
-│     ●━━━━━━━━●━━━━━━━━○                         │
-│   Empty     Full     Save       ✓ Empty done    │
-│─────────────────────────────────────────────────│
-│                                                 │
-│         ┌──────────────────────┐                │
-│         │   ████████████████   │                │
-│         │   ████████████████   │                │
-│         │   ███[Full Bottle]██ │  ← 100% fill   │
-│         │   █████████?████████ │    with "?"    │
-│         │   ████████████████   │                │
-│         └──────────────────────┘                │
-│                                                 │
-│            Step 2: Full Bottle                  │
-│                                                 │
-│  1. Fill your bottle with exactly 830ml         │
-│  2. Place it upright on the sensor puck         │
-│  3. Keep it still until measurement completes   │
-│                                                 │
-│  ┌──────────────────────────────────────────┐   │
-│  │ Weight: 1075g    Stability: ● Stable     │   │
-│  └──────────────────────────────────────────┘   │
-│                                                 │
-│           ┌─────────────────────┐               │
-│           │    Measure Full     │               │
-│           └─────────────────────┘               │
-└─────────────────────────────────────────────────┘
-```
-
----
-
-**Screen 5: Calibration Complete**
-
-```
-┌─────────────────────────────────────────────────┐
-│     ●━━━━━━━━●━━━━━━━━●                         │
-│   Empty     Full     Save       All complete!   │
-│─────────────────────────────────────────────────│
-│                                                 │
-│                    ✓                            │
-│              (large checkmark)                  │
-│                                                 │
-│          Calibration Complete                   │
-│                                                 │
-│  Your bottle is now calibrated and ready        │
-│  for accurate drink tracking.                   │
-│                                                 │
-│  ┌──────────────────────────────────────────┐   │
-│  │  Empty weight:     245g                  │   │
-│  │  Full weight:      1075g                 │   │
-│  │  Water capacity:   830ml                 │   │
-│  │  Scale factor:     450.2 ADC/g           │   │
-│  └──────────────────────────────────────────┘   │
-│                                                 │
-│           ┌─────────────────────┐               │
-│           │        Done         │               │
-│           └─────────────────────┘               │
-└─────────────────────────────────────────────────┘
-```
-
----
-
-**Screen 6: Error State**
-
-```
-┌─────────────────────────────────────────────────┐
-│     ●━━━━━━━━○━━━━━━━━○                         │
-│   Empty     Full     Save                       │
-│─────────────────────────────────────────────────│
-│                                                 │
-│                    ✕                            │
-│              (large X icon)                     │
-│                                                 │
-│           Calibration Failed                    │
-│                                                 │
-│  The measurement timed out. Please ensure       │
-│  the bottle is placed firmly on the sensor      │
-│  and remains still during measurement.          │
-│                                                 │
-│     ┌───────────────┐  ┌───────────────┐        │
-│     │     Retry     │  │    Cancel     │        │
-│     └───────────────┘  └───────────────┘        │
-└─────────────────────────────────────────────────┘
-```
-
-#### 3.6 Real-Time Feedback Components
-
-**StabilityIndicator:** Shows current weight stability from BLE
-
-```swift
-struct StabilityIndicator: View {
-    let isStable: Bool
-    let currentWeightG: Int
-
-    var body: some View {
-        HStack {
-            Text("Weight: \(currentWeightG)g")
-            Spacer()
-            HStack(spacing: 4) {
-                Circle()
-                    .fill(isStable ? Color.green : Color.orange)
-                    .frame(width: 8, height: 8)
-                Text(isStable ? "Stable" : "Stabilizing...")
-                    .foregroundColor(isStable ? .green : .orange)
+                .foregroundColor(.red)
             }
         }
-        .font(.subheadline)
-        .padding()
-        .background(Color(.secondarySystemBackground))
-        .cornerRadius(8)
-    }
-}
-```
-
-**MeasurementProgressView:** Animated progress during 5-second measurement
-
-```swift
-struct MeasurementProgressView: View {
-    let progress: Double  // 0.0 to 1.0
-
-    var body: some View {
-        VStack(spacing: 12) {
-            ProgressView(value: progress)
-                .progressViewStyle(.linear)
-                .tint(.blue)
-
-            Text("Keep the bottle still")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-        }
-    }
-}
-```
-
----
-
-### Phase 4: Integration
-
-**File to modify:**
-- [ios/Aquavate/Aquavate/Views/SettingsView.swift](ios/Aquavate/Aquavate/Views/SettingsView.swift)
-
-Add calibration entry point in "Device Commands" section:
-
-```swift
-Section("Device Commands") {
-    // Existing buttons...
-
-    NavigationLink {
-        CalibrationView()
-    } label: {
-        HStack {
-            Image(systemName: bleManager.isCalibrated ? "checkmark.seal.fill" : "seal")
-                .foregroundStyle(bleManager.isCalibrated ? .green : .orange)
-            Text("Calibrate Bottle")
-            Spacer()
-            if !bleManager.isCalibrated {
-                Text("Required")
-                    .font(.caption)
-                    .foregroundStyle(.orange)
+        .onReceive(bleManager.$calibrationState) { state in
+            if let state = state {
+                calibrationManager.updateFromBLE(state)
             }
         }
     }
-    .disabled(!bleManager.connectionState.isConnected)
 }
 ```
 
 ---
 
-## Verification Plan
+## Comparison: Old vs New Approach
 
-### Firmware Testing
-1. Build with `IOS_MODE=1` - verify IRAM usage stays under 131KB
-2. Use serial monitor to test CAL_MEASURE_POINT command
-3. Verify stable measurement returns valid ADC
-4. Test CAL_SET_DATA saves correctly to NVS
-
-### iOS Testing
-1. Test command code fix (ping should work, not trigger calibration)
-2. Test measurement command sends correctly
-3. Test notification parsing extracts ADC value
-4. Test full calibration flow end-to-end
-5. Test error scenarios (timeout, disconnect, invalid data)
-
-### End-to-End Testing
-1. Connect iOS app to device
-2. Navigate to Settings > Calibrate Bottle
-3. Follow guided flow with actual empty/full bottle
-4. Verify calibration saved and `isCalibrated` flag updates
-5. Verify drink tracking uses new calibration
+| Aspect | Old (iOS-Driven) | New (Bottle-Driven) |
+|--------|-----------------|---------------------|
+| BLE Commands | 4+ (measure point, set data, etc.) | 2 (start, cancel) |
+| iOS Logic | Complex state machine, timing, retries | Simple state mirror |
+| Firmware Logic | Minimal (just measure on demand) | Reuse existing state machine |
+| Resilience | Dependent on BLE connection | Bottle works autonomously |
+| IRAM Impact | ~450 bytes new | ~7KB (existing code enabled) |
+| Development Effort | High (new iOS state machine) | Low (mostly wiring) |
+| Testing | Complex integration testing | Simple - bottle logic already tested |
 
 ---
 
-## Critical Files Summary
+## Implementation Order
+
+1. **Firmware: Enable standalone calibration** ✓ (config.h already updated)
+2. **Firmware: Add BLE characteristic and commands** (~2 hours)
+3. **Firmware: Integrate with main loop** (~1 hour)
+4. **iOS: Add BLE constants and parsing** (~1 hour)
+5. **iOS: Simplify CalibrationManager** (~1 hour)
+6. **iOS: Update CalibrationView** (~2 hours)
+7. **Test end-to-end** (~1 hour)
+
+---
+
+## Files Summary
 
 | File | Changes |
 |------|---------|
-| `firmware/include/ble_service.h` | Add command definitions 0x03, 0x04; extend flags |
-| `firmware/src/ble_service.cpp` | Add command handlers for measurement and save |
-| `ios/.../BLEConstants.swift` | Fix command mismatch; add new commands and flags |
-| `ios/.../BLEManager.swift` | Add calibration command methods |
-| `ios/.../CalibrationManager.swift` | New: state machine and BLE coordination |
-| `ios/.../CalibrationView.swift` | New: guided calibration UI |
-| `ios/.../BottleGraphicView.swift` | New: bottle graphic component |
-| `ios/.../SettingsView.swift` | Add calibration navigation link |
+| `firmware/src/config.h` | Enable STANDALONE_CALIBRATION in IOS_MODE ✓ |
+| `firmware/include/ble_service.h` | Add calibration UUID, commands, struct |
+| `firmware/src/ble_service.cpp` | Add characteristic, command handlers, notifications |
+| `firmware/src/main.cpp` | Integrate BLE calibration trigger |
+| `ios/.../BLEConstants.swift` | Add calibration UUID and commands |
+| `ios/.../BLEStructs.swift` | Add CalibrationState struct |
+| `ios/.../BLEManager.swift` | Add calibration methods and state |
+| `ios/.../CalibrationManager.swift` | Simplify to state mirror |
+| `ios/.../CalibrationView.swift` | Update to display mirrored state |
 
 ---
 
-## Open Questions
+## Completion Summary (2026-01-27)
 
-None - ready for implementation.
+### What Was Implemented
+
+**Firmware:**
+- CalibrationState BLE characteristic (12 bytes) for state broadcasting
+- START_CALIBRATION (0x20) and CANCEL_CALIBRATION (0x21) commands
+- Integration with existing standalone calibration state machine
+- State change notifications to iOS on each transition
+
+**iOS:**
+- BLECalibrationState struct for parsing calibration notifications
+- CalibrationManager with bottle-driven mode (state mirroring)
+- Simplified CalibrationView with 4 screens: Welcome → Empty → Full → Complete
+- Auto-transitions between steps (no intermediate confirmation screens)
+
+### Simplified UI Flow
+
+The iOS calibration UI was simplified to match the firmware's single-screen-per-step approach:
+1. **Welcome** - Description + Start button
+2. **Step 1: Empty Bottle** - Instructions + stability indicator/progress
+3. **Step 2: Full Bottle** - Instructions + stability indicator/progress
+4. **Complete** - Success message + Done button
+
+### Testing Performed
+- iOS app build verified (no compilation errors)
+- Hardware testing pending
+
+### Files Modified
+See Files Summary table above.

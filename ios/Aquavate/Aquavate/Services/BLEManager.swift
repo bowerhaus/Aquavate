@@ -137,6 +137,11 @@ class BLEManager: NSObject, ObservableObject {
     /// Raw ADC value from calibration measurement (only valid when isCalResultReady is true)
     @Published private(set) var calibrationRawADC: Int32?
 
+    // MARK: - Published Properties (Bottle-Driven Calibration - Plan 060)
+
+    /// Current calibration state from bottle (bottle-driven calibration)
+    @Published private(set) var calibrationState: BLECalibrationState?
+
     /// Number of drink records pending sync
     @Published private(set) var unsyncedCount: Int = 0
 
@@ -942,7 +947,8 @@ extension BLEManager: CBPeripheralDelegate {
                     if characteristic.uuid == BLEConstants.currentStateUUID ||
                        characteristic.uuid == BLEConstants.drinkDataUUID ||
                        characteristic.uuid == BLEConstants.batteryLevelUUID ||
-                       characteristic.uuid == BLEConstants.activityStatsUUID {
+                       characteristic.uuid == BLEConstants.activityStatsUUID ||
+                       characteristic.uuid == BLEConstants.calibrationStateUUID {
                         peripheral.setNotifyValue(true, for: characteristic)
                         logger.info("Subscribed to notifications for \(characteristic.uuid)")
                     }
@@ -995,6 +1001,9 @@ extension BLEManager: CBPeripheralDelegate {
 
             case BLEConstants.activityStatsUUID:
                 handleActivityStatsUpdate(data)
+
+            case BLEConstants.calibrationStateUUID:
+                handleCalibrationStateUpdate(data)
 
             default:
                 logger.debug("Received data from unknown characteristic: \(characteristic.uuid)")
@@ -1803,6 +1812,44 @@ extension BLEManager: CBPeripheralDelegate {
         PersistenceController.shared.updateLastActivitySyncDate(for: bottleId)
 
         logger.info("Activity stats saved to CoreData for offline viewing")
+    }
+
+    // MARK: - Bottle-Driven Calibration (Plan 060)
+
+    /// Handle calibration state characteristic update from bottle
+    private func handleCalibrationStateUpdate(_ data: Data) {
+        let hexString = data.map { String(format: "%02X", $0) }.joined(separator: " ")
+        logger.debug("Calibration State raw (\(data.count) bytes): \(hexString)")
+
+        guard let state = BLECalibrationState.parse(from: data) else {
+            logger.error("Failed to parse calibration state data")
+            return
+        }
+
+        calibrationState = state
+        logger.info("Calibration state: \(state.stateDescription), empty=\(state.emptyADC), full=\(state.fullADC)")
+    }
+
+    /// Start bottle-driven calibration (sends START_CALIBRATION command)
+    func startCalibration() {
+        guard connectionState.isConnected else {
+            logger.warning("Cannot start calibration: not connected")
+            return
+        }
+
+        logger.info("Sending START_CALIBRATION command")
+        writeCommand(BLECommand.startCalibration())
+    }
+
+    /// Cancel ongoing bottle-driven calibration (sends CANCEL_CALIBRATION command)
+    func cancelCalibration() {
+        guard connectionState.isConnected else {
+            logger.warning("Cannot cancel calibration: not connected")
+            return
+        }
+
+        logger.info("Sending CANCEL_CALIBRATION command")
+        writeCommand(BLECommand.cancelCalibration())
     }
 
     // MARK: - Pull-to-Refresh (Async API)

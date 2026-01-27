@@ -435,21 +435,33 @@ struct BLECommand {
         return data
     }
 
-    // MARK: - Activity Stats Commands
+    // MARK: - Calibration Commands (Plan 060 - Bottle-Driven iOS Calibration)
 
-    /// Create GET_ACTIVITY_SUMMARY command (0x21)
-    static func getActivitySummary() -> BLECommand {
+    /// Create START_CALIBRATION command (0x20) - triggers bottle calibration state machine
+    static func startCalibration() -> BLECommand {
+        BLECommand(command: 0x20, param1: 0, param2: 0)
+    }
+
+    /// Create CANCEL_CALIBRATION command (0x21) - cancels calibration and returns to idle
+    static func cancelCalibration() -> BLECommand {
         BLECommand(command: 0x21, param1: 0, param2: 0)
     }
 
-    /// Create GET_MOTION_CHUNK command (0x22) with chunk index
-    static func getMotionChunk(index: UInt8) -> BLECommand {
-        BLECommand(command: 0x22, param1: index, param2: 0)
+    // MARK: - Activity Stats Commands
+
+    /// Create GET_ACTIVITY_SUMMARY command (0x30)
+    static func getActivitySummary() -> BLECommand {
+        BLECommand(command: 0x30, param1: 0, param2: 0)
     }
 
-    /// Create GET_BACKPACK_CHUNK command (0x23) with chunk index
+    /// Create GET_MOTION_CHUNK command (0x31) with chunk index
+    static func getMotionChunk(index: UInt8) -> BLECommand {
+        BLECommand(command: 0x31, param1: index, param2: 0)
+    }
+
+    /// Create GET_BACKPACK_CHUNK command (0x32) with chunk index
     static func getBackpackChunk(index: UInt8) -> BLECommand {
-        BLECommand(command: 0x23, param1: index, param2: 0)
+        BLECommand(command: 0x32, param1: index, param2: 0)
     }
 }
 
@@ -701,4 +713,116 @@ struct BLEBackpackSessionChunk {
     }
 
     var isLastChunk: Bool { chunkIndex + 1 >= totalChunks }
+}
+
+// MARK: - Calibration State Characteristic (12 bytes) - Plan 060
+
+/// Calibration state notification from bottle-driven calibration
+/// Matches firmware's BLE_CalibrationState struct exactly
+struct BLECalibrationState {
+    let state: UInt8                // CalibrationState enum value
+    let flags: UInt8                // Bit 0: error occurred
+    let emptyADC: Int32             // Captured empty ADC (0 if not yet measured)
+    let fullADC: Int32              // Captured full ADC (0 if not yet measured)
+    let reserved: UInt16            // Padding/future use
+
+    /// Size of the binary data (must be 12 bytes)
+    static let size = 12
+
+    // State value constants (matches firmware CalibrationState enum)
+    static let stateIdle: UInt8 = 0
+    static let stateTriggered: UInt8 = 1
+    static let stateStarted: UInt8 = 2
+    static let stateWaitEmpty: UInt8 = 3
+    static let stateMeasureEmpty: UInt8 = 4
+    static let stateConfirmEmpty: UInt8 = 5
+    static let stateWaitFull: UInt8 = 6
+    static let stateMeasureFull: UInt8 = 7
+    static let stateConfirmFull: UInt8 = 8
+    static let stateComplete: UInt8 = 9
+    static let stateError: UInt8 = 10
+
+    /// Parse from raw BLE data
+    static func parse(from data: Data) -> BLECalibrationState? {
+        guard data.count == size else {
+            return nil
+        }
+
+        return data.withUnsafeBytes { (ptr: UnsafeRawBufferPointer) -> BLECalibrationState? in
+            guard let baseAddress = ptr.baseAddress else { return nil }
+
+            return BLECalibrationState(
+                state: baseAddress.load(as: UInt8.self),
+                flags: baseAddress.load(fromByteOffset: 1, as: UInt8.self),
+                emptyADC: baseAddress.loadUnaligned(fromByteOffset: 2, as: Int32.self),
+                fullADC: baseAddress.loadUnaligned(fromByteOffset: 6, as: Int32.self),
+                reserved: baseAddress.loadUnaligned(fromByteOffset: 10, as: UInt16.self)
+            )
+        }
+    }
+
+    // MARK: - State accessors
+
+    /// Check if an error occurred
+    var hasError: Bool {
+        (flags & 0x01) != 0
+    }
+
+    /// Check if calibration is idle
+    var isIdle: Bool {
+        state == Self.stateIdle
+    }
+
+    /// Check if calibration is active (not idle, not complete, not error)
+    var isActive: Bool {
+        state != Self.stateIdle && state != Self.stateComplete && state != Self.stateError
+    }
+
+    /// Check if calibration is complete (success)
+    var isComplete: Bool {
+        state == Self.stateComplete
+    }
+
+    /// Check if calibration is in error state
+    var isError: Bool {
+        state == Self.stateError || hasError
+    }
+
+    /// Check if waiting for empty bottle placement
+    var isWaitingForEmpty: Bool {
+        state == Self.stateWaitEmpty
+    }
+
+    /// Check if measuring empty bottle
+    var isMeasuringEmpty: Bool {
+        state == Self.stateMeasureEmpty
+    }
+
+    /// Check if waiting for full bottle placement
+    var isWaitingForFull: Bool {
+        state == Self.stateWaitFull
+    }
+
+    /// Check if measuring full bottle
+    var isMeasuringFull: Bool {
+        state == Self.stateMeasureFull
+    }
+
+    /// Human-readable state description
+    var stateDescription: String {
+        switch state {
+        case Self.stateIdle: return "Idle"
+        case Self.stateTriggered: return "Triggered"
+        case Self.stateStarted: return "Starting"
+        case Self.stateWaitEmpty: return "Place Empty Bottle"
+        case Self.stateMeasureEmpty: return "Measuring Empty"
+        case Self.stateConfirmEmpty: return "Confirm Empty"
+        case Self.stateWaitFull: return "Fill and Place Bottle"
+        case Self.stateMeasureFull: return "Measuring Full"
+        case Self.stateConfirmFull: return "Confirm Full"
+        case Self.stateComplete: return "Complete"
+        case Self.stateError: return "Error"
+        default: return "Unknown"
+        }
+    }
 }

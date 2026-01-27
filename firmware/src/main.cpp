@@ -1327,6 +1327,34 @@ void loop() {
 #endif
 
 #if ENABLE_STANDALONE_CALIBRATION
+    // Check for BLE calibration start request (Plan 060 - Bottle-Driven iOS Calibration)
+#if ENABLE_BLE
+    if (bleCheckCalibrationStartRequested()) {
+        if (cal_state == CAL_IDLE) {
+            Serial.println("Main: BLE calibration start requested");
+            calibrationInit();
+            calibrationStart();
+            cal_state = calibrationGetState();
+            bleNotifyCalibrationState();  // Notify iOS of initial state
+        }
+    }
+
+    // Check for BLE calibration cancel request
+    if (bleCheckCalibrationCancelRequested()) {
+        if (calibrationIsActive()) {
+            Serial.println("Main: BLE calibration cancel requested");
+            calibrationCancel();
+            cal_state = CAL_IDLE;
+            g_last_cal_state = CAL_IDLE;
+#if defined(BOARD_ADAFRUIT_FEATHER)
+            uiCalibrationShowAborted();
+#endif
+            bleNotifyCalibrationState();  // Notify iOS of cancelled state
+            wakeTime = millis();  // Reset sleep timer
+        }
+    }
+#endif
+
     // If not in calibration mode, check for calibration trigger
     if (cal_state == CAL_IDLE) {
         // Check for calibration trigger gesture (hold inverted for 5s)
@@ -1336,6 +1364,9 @@ void loop() {
                 Serial.println("Main: Calibration triggered!");
                 calibrationStart();
                 cal_state = calibrationGetState();
+#if ENABLE_BLE
+                bleNotifyCalibrationState();  // Notify iOS if connected
+#endif
             }
         } else {
             // Gesture released - allow new calibration trigger
@@ -1377,6 +1408,11 @@ void loop() {
 
             CalibrationResult result = calibrationGetResult();
             uiCalibrationUpdateForState(new_state, display_adc, result.data.scale_factor);
+#endif
+
+            // Notify iOS of state change (Plan 060 - Bottle-Driven iOS Calibration)
+#if ENABLE_BLE
+            bleNotifyCalibrationState();
 #endif
 
             // Check for calibration error BEFORE updating g_last_cal_state

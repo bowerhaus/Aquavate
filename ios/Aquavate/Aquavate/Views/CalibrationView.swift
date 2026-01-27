@@ -65,23 +65,13 @@ struct CalibrationView: View {
         case .notStarted:
             welcomeScreen
 
-        case .emptyBottlePrompt:
-            emptyBottlePromptScreen
+        case .emptyBottlePrompt, .measuringEmpty, .emptyMeasured:
+            // Combined Step 1 screen: prompt + measuring progress on same screen
+            emptyBottleScreen
 
-        case .measuringEmpty:
-            measuringScreen(step: "Empty")
-
-        case .emptyMeasured(let adc):
-            emptyMeasuredScreen(adc: adc)
-
-        case .fullBottlePrompt:
-            fullBottlePromptScreen
-
-        case .measuringFull:
-            measuringScreen(step: "Full")
-
-        case .fullMeasured(let adc):
-            fullMeasuredScreen(adc: adc)
+        case .fullBottlePrompt, .measuringFull, .fullMeasured:
+            // Combined Step 2 screen: prompt + measuring progress on same screen
+            fullBottleScreen
 
         case .savingCalibration:
             savingScreen
@@ -112,15 +102,6 @@ struct CalibrationView: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
 
-            VStack(alignment: .leading, spacing: 12) {
-                Label("Your bottle, completely empty with cap on", systemImage: "drop")
-                Label("A way to measure exactly \(bleManager.bottleCapacityMl)ml of water", systemImage: "drop.fill")
-            }
-            .font(.subheadline)
-            .padding()
-            .background(Color(UIColor.secondarySystemBackground))
-            .cornerRadius(12)
-
             Spacer()
 
             CalibrationActionButton(
@@ -138,13 +119,19 @@ struct CalibrationView: View {
         }
     }
 
-    // MARK: - Empty Bottle Prompt Screen
+    // MARK: - Empty Bottle Screen (Combined prompt + measuring)
 
-    private var emptyBottlePromptScreen: some View {
+    /// Whether we're currently measuring the empty bottle
+    private var isMeasuringEmpty: Bool {
+        if case .measuringEmpty = calibrationManager.state { return true }
+        return false
+    }
+
+    private var emptyBottleScreen: some View {
         VStack(spacing: 24) {
             Spacer()
 
-            BottleGraphicView(fillPercent: 0.0, showQuestionMark: true, targetHeight: 160)
+            BottleGraphicView(fillPercent: 0.0, targetHeight: 160)
 
             VStack(spacing: 8) {
                 Text("Step 1: Empty Bottle")
@@ -154,92 +141,48 @@ struct CalibrationView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     instructionRow(number: 1, text: "Empty your bottle completely and put the cap on")
                     instructionRow(number: 2, text: "Set the bottle upright on a flat surface")
-                    instructionRow(number: 3, text: "Wait for the weight reading to stabilize")
                 }
                 .padding()
             }
 
-            StabilityIndicator(
-                isStable: calibrationManager.isStable,
-                currentWeightG: calibrationManager.currentWeightG
-            )
+            // Show measuring progress or stability indicator based on state
+            if isMeasuringEmpty {
+                MeasurementProgressView(
+                    progress: calibrationManager.measurementProgress,
+                    message: "Keep the bottle still"
+                )
+            } else {
+                StabilityIndicator(
+                    isStable: calibrationManager.isStable,
+                    currentWeightG: calibrationManager.currentWeightG
+                )
 
-            Spacer()
-
-            CalibrationActionButton(
-                title: "Measure Empty",
-                isEnabled: true
-            ) {
-                calibrationManager.confirmEmptyBottle()
+                HStack(spacing: 8) {
+                    ProgressView()
+                    Text("Waiting for stable measurement...")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+                .padding()
             }
 
-            Text("Tap Measure when the bottle is still. The device will take a 10-second reading.")
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-        }
-    }
-
-    // MARK: - Measuring Screen
-
-    private func measuringScreen(step: String) -> some View {
-        VStack(spacing: 32) {
-            Spacer()
-
-            BottleGraphicView(
-                fillPercent: step == "Full" ? 1.0 : 0.0,
-                targetHeight: 160
-            )
-
-            Text("Measuring...")
-                .font(.title3)
-                .fontWeight(.semibold)
-
-            MeasurementProgressView(
-                progress: calibrationManager.measurementProgress,
-                message: "Keep the bottle still"
-            )
-
             Spacer()
         }
     }
 
-    // MARK: - Empty Measured Screen
+    // MARK: - Full Bottle Screen (Combined prompt + measuring)
 
-    private func emptyMeasuredScreen(adc: Int32) -> some View {
+    /// Whether we're currently measuring the full bottle
+    private var isMeasuringFull: Bool {
+        if case .measuringFull = calibrationManager.state { return true }
+        return false
+    }
+
+    private var fullBottleScreen: some View {
         VStack(spacing: 24) {
             Spacer()
 
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 60))
-                .foregroundColor(.green)
-
-            Text("Empty Measurement Complete")
-                .font(.title3)
-                .fontWeight(.semibold)
-
-            Text("ADC reading: \(adc)")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-
-            Spacer()
-
-            CalibrationActionButton(
-                title: "Continue to Full Bottle",
-                isEnabled: true
-            ) {
-                calibrationManager.proceedToFullBottle()
-            }
-        }
-    }
-
-    // MARK: - Full Bottle Prompt Screen
-
-    private var fullBottlePromptScreen: some View {
-        VStack(spacing: 24) {
-            Spacer()
-
-            BottleGraphicView(fillPercent: 1.0, showQuestionMark: true, targetHeight: 160)
+            BottleGraphicView(fillPercent: 1.0, targetHeight: 160)
 
             VStack(spacing: 8) {
                 Text("Step 2: Full Bottle")
@@ -249,58 +192,32 @@ struct CalibrationView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     instructionRow(number: 1, text: "Fill the bottle with exactly \(bleManager.bottleCapacityMl)ml of water")
                     instructionRow(number: 2, text: "Put the cap on and set it upright on a flat surface")
-                    instructionRow(number: 3, text: "Tap Measure when ready")
                 }
                 .padding()
             }
 
-            StabilityIndicator(
-                isStable: calibrationManager.isStable,
-                currentWeightG: calibrationManager.currentWeightG
-            )
+            // Show measuring progress or stability indicator based on state
+            if isMeasuringFull {
+                MeasurementProgressView(
+                    progress: calibrationManager.measurementProgress,
+                    message: "Keep the bottle still"
+                )
+            } else {
+                StabilityIndicator(
+                    isStable: calibrationManager.isStable,
+                    currentWeightG: calibrationManager.currentWeightG
+                )
 
-            Spacer()
-
-            CalibrationActionButton(
-                title: "Measure Full",
-                isEnabled: true
-            ) {
-                calibrationManager.confirmFullBottle()
+                HStack(spacing: 8) {
+                    ProgressView()
+                    Text("Waiting for stable measurement...")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+                .padding()
             }
 
-            Text("Tap Measure when the bottle is still. The device will take a 10-second reading.")
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-        }
-    }
-
-    // MARK: - Full Measured Screen
-
-    private func fullMeasuredScreen(adc: Int32) -> some View {
-        VStack(spacing: 24) {
             Spacer()
-
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 60))
-                .foregroundColor(.green)
-
-            Text("Full Measurement Complete")
-                .font(.title3)
-                .fontWeight(.semibold)
-
-            Text("ADC reading: \(adc)")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-
-            Spacer()
-
-            CalibrationActionButton(
-                title: "Save Calibration",
-                isEnabled: true
-            ) {
-                calibrationManager.completeCalibration()
-            }
         }
     }
 
@@ -495,23 +412,13 @@ private struct CalibrationViewContent: View {
         case .notStarted:
             welcomeScreen
 
-        case .emptyBottlePrompt:
-            emptyBottlePromptScreen
+        case .emptyBottlePrompt, .measuringEmpty, .emptyMeasured:
+            // Combined Step 1 screen: prompt + measuring progress on same screen
+            emptyBottleScreen
 
-        case .measuringEmpty:
-            measuringScreen(step: "Empty")
-
-        case .emptyMeasured(let adc):
-            emptyMeasuredScreen(adc: adc)
-
-        case .fullBottlePrompt:
-            fullBottlePromptScreen
-
-        case .measuringFull:
-            measuringScreen(step: "Full")
-
-        case .fullMeasured(let adc):
-            fullMeasuredScreen(adc: adc)
+        case .fullBottlePrompt, .measuringFull, .fullMeasured:
+            // Combined Step 2 screen: prompt + measuring progress on same screen
+            fullBottleScreen
 
         case .savingCalibration:
             savingScreen
@@ -542,15 +449,6 @@ private struct CalibrationViewContent: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
 
-            VStack(alignment: .leading, spacing: 12) {
-                Label("Your bottle, completely empty with cap on", systemImage: "drop")
-                Label("A way to measure exactly \(bleManager.bottleCapacityMl)ml of water", systemImage: "drop.fill")
-            }
-            .font(.subheadline)
-            .padding()
-            .background(Color(UIColor.secondarySystemBackground))
-            .cornerRadius(12)
-
             Spacer()
 
             CalibrationActionButton(
@@ -568,13 +466,19 @@ private struct CalibrationViewContent: View {
         }
     }
 
-    // MARK: - Empty Bottle Prompt Screen
+    // MARK: - Empty Bottle Screen (Combined prompt + measuring)
 
-    private var emptyBottlePromptScreen: some View {
+    /// Whether we're currently measuring the empty bottle
+    private var isMeasuringEmpty: Bool {
+        if case .measuringEmpty = calibrationManager.state { return true }
+        return false
+    }
+
+    private var emptyBottleScreen: some View {
         VStack(spacing: 24) {
             Spacer()
 
-            BottleGraphicView(fillPercent: 0.0, showQuestionMark: true, targetHeight: 160)
+            BottleGraphicView(fillPercent: 0.0, targetHeight: 160)
 
             VStack(spacing: 8) {
                 Text("Step 1: Empty Bottle")
@@ -584,92 +488,48 @@ private struct CalibrationViewContent: View {
                 VStack(alignment: .leading, spacing: 8) {
                     instructionRow(number: 1, text: "Empty your bottle completely and put the cap on")
                     instructionRow(number: 2, text: "Set the bottle upright on a flat surface")
-                    instructionRow(number: 3, text: "Wait for the weight reading to stabilize")
                 }
                 .padding()
             }
 
-            StabilityIndicator(
-                isStable: calibrationManager.isStable,
-                currentWeightG: calibrationManager.currentWeightG
-            )
+            // Show measuring progress or stability indicator based on state
+            if isMeasuringEmpty {
+                MeasurementProgressView(
+                    progress: calibrationManager.measurementProgress,
+                    message: "Keep the bottle still"
+                )
+            } else {
+                StabilityIndicator(
+                    isStable: calibrationManager.isStable,
+                    currentWeightG: calibrationManager.currentWeightG
+                )
 
-            Spacer()
-
-            CalibrationActionButton(
-                title: "Measure Empty",
-                isEnabled: true
-            ) {
-                calibrationManager.confirmEmptyBottle()
+                HStack(spacing: 8) {
+                    ProgressView()
+                    Text("Waiting for stable measurement...")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+                .padding()
             }
 
-            Text("Tap Measure when the bottle is still. The device will take a 10-second reading.")
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-        }
-    }
-
-    // MARK: - Measuring Screen
-
-    private func measuringScreen(step: String) -> some View {
-        VStack(spacing: 32) {
-            Spacer()
-
-            BottleGraphicView(
-                fillPercent: step == "Full" ? 1.0 : 0.0,
-                targetHeight: 160
-            )
-
-            Text("Measuring...")
-                .font(.title3)
-                .fontWeight(.semibold)
-
-            MeasurementProgressView(
-                progress: calibrationManager.measurementProgress,
-                message: "Keep the bottle still"
-            )
-
             Spacer()
         }
     }
 
-    // MARK: - Empty Measured Screen
+    // MARK: - Full Bottle Screen (Combined prompt + measuring)
 
-    private func emptyMeasuredScreen(adc: Int32) -> some View {
+    /// Whether we're currently measuring the full bottle
+    private var isMeasuringFull: Bool {
+        if case .measuringFull = calibrationManager.state { return true }
+        return false
+    }
+
+    private var fullBottleScreen: some View {
         VStack(spacing: 24) {
             Spacer()
 
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 60))
-                .foregroundColor(.green)
-
-            Text("Empty Measurement Complete")
-                .font(.title3)
-                .fontWeight(.semibold)
-
-            Text("ADC reading: \(adc)")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-
-            Spacer()
-
-            CalibrationActionButton(
-                title: "Continue to Full Bottle",
-                isEnabled: true
-            ) {
-                calibrationManager.proceedToFullBottle()
-            }
-        }
-    }
-
-    // MARK: - Full Bottle Prompt Screen
-
-    private var fullBottlePromptScreen: some View {
-        VStack(spacing: 24) {
-            Spacer()
-
-            BottleGraphicView(fillPercent: 1.0, showQuestionMark: true, targetHeight: 160)
+            BottleGraphicView(fillPercent: 1.0, targetHeight: 160)
 
             VStack(spacing: 8) {
                 Text("Step 2: Full Bottle")
@@ -679,58 +539,32 @@ private struct CalibrationViewContent: View {
                 VStack(alignment: .leading, spacing: 8) {
                     instructionRow(number: 1, text: "Fill the bottle with exactly \(bleManager.bottleCapacityMl)ml of water")
                     instructionRow(number: 2, text: "Put the cap on and set it upright on a flat surface")
-                    instructionRow(number: 3, text: "Tap Measure when ready")
                 }
                 .padding()
             }
 
-            StabilityIndicator(
-                isStable: calibrationManager.isStable,
-                currentWeightG: calibrationManager.currentWeightG
-            )
+            // Show measuring progress or stability indicator based on state
+            if isMeasuringFull {
+                MeasurementProgressView(
+                    progress: calibrationManager.measurementProgress,
+                    message: "Keep the bottle still"
+                )
+            } else {
+                StabilityIndicator(
+                    isStable: calibrationManager.isStable,
+                    currentWeightG: calibrationManager.currentWeightG
+                )
 
-            Spacer()
-
-            CalibrationActionButton(
-                title: "Measure Full",
-                isEnabled: true
-            ) {
-                calibrationManager.confirmFullBottle()
+                HStack(spacing: 8) {
+                    ProgressView()
+                    Text("Waiting for stable measurement...")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+                .padding()
             }
 
-            Text("Tap Measure when the bottle is still. The device will take a 10-second reading.")
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-        }
-    }
-
-    // MARK: - Full Measured Screen
-
-    private func fullMeasuredScreen(adc: Int32) -> some View {
-        VStack(spacing: 24) {
             Spacer()
-
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 60))
-                .foregroundColor(.green)
-
-            Text("Full Measurement Complete")
-                .font(.title3)
-                .fontWeight(.semibold)
-
-            Text("ADC reading: \(adc)")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-
-            Spacer()
-
-            CalibrationActionButton(
-                title: "Save Calibration",
-                isEnabled: true
-            ) {
-                calibrationManager.completeCalibration()
-            }
         }
     }
 
