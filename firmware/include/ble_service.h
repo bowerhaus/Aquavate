@@ -46,7 +46,7 @@ struct __attribute__((packed)) BLE_CurrentState {
     uint16_t bottle_level_ml;    // Water level after last event
     uint16_t daily_total_ml;     // Today's cumulative intake
     uint8_t  battery_percent;    // 0-100
-    uint8_t  flags;              // Bit 0: time_valid, Bit 1: calibrated, Bit 2: stable
+    uint8_t  flags;              // Bit 0: time_valid, Bit 1: calibrated, Bit 2: stable, Bit 3: cal_measuring, Bit 4: cal_result_ready
     uint16_t unsynced_count;     // Records pending sync
 };
 
@@ -96,7 +96,8 @@ struct __attribute__((packed)) BLE_Command {
 // Command types
 #define BLE_CMD_TARE_NOW            0x01
 #define BLE_CMD_PING                0x02  // Keep-alive ping (1 byte) - resets activity timeout
-// 0x03-0x04 reserved for future calibration commands (iOS app will handle calibration)
+#define BLE_CMD_CAL_MEASURE_POINT   0x03  // Take stable ADC measurement (param1: 0=empty, 1=full)
+#define BLE_CMD_CAL_SET_DATA        0x04  // Save calibration (13-byte extended command)
 #define BLE_CMD_RESET_DAILY         0x05
 #define BLE_CMD_CLEAR_HISTORY       0x06
 #define BLE_CMD_SET_TIME            0x10  // Set device time (5 bytes: cmd + 4-byte Unix timestamp)
@@ -107,6 +108,13 @@ struct __attribute__((packed)) BLE_Command {
 #define BLE_CMD_GET_ACTIVITY_SUMMARY    0x21  // Request activity summary
 #define BLE_CMD_GET_MOTION_CHUNK        0x22  // Request motion event chunk (param1 = chunk index)
 #define BLE_CMD_GET_BACKPACK_CHUNK      0x23  // Request backpack session chunk (param1 = chunk index)
+
+// Current State flags (BLE_CurrentState.flags)
+#define BLE_FLAG_TIME_VALID             0x01  // Bit 0: RTC time has been set
+#define BLE_FLAG_CALIBRATED             0x02  // Bit 1: Load cell calibrated
+#define BLE_FLAG_STABLE                 0x04  // Bit 2: Weight reading is stable
+#define BLE_FLAG_CAL_MEASURING          0x08  // Bit 3: Calibration measurement in progress
+#define BLE_FLAG_CAL_RESULT_READY       0x10  // Bit 4: Calibration ADC result available
 
 // Device Settings Characteristic (4 bytes)
 struct __attribute__((packed)) BLE_DeviceSettings {
@@ -260,6 +268,13 @@ bool bleCheckDataActivity();
  * @return true if enabled (default), false if disabled via iOS app
  */
 bool bleGetShakeToEmptyEnabled();
+
+/**
+ * Check if BLE calibration is in progress
+ * Used to prevent sleep during iOS-driven calibration flow
+ * @return true if measuring or result ready for iOS to read
+ */
+bool bleIsCalibrationInProgress();
 
 #endif // ENABLE_BLE
 

@@ -1,13 +1,88 @@
 # Aquavate - Active Development Progress
 
-**Last Updated:** 2026-01-27
-**Current Branch:** `master`
+**Last Updated:** 2026-01-27 (Session 4)
+**Current Branch:** `ios-calibration-flow`
 
 ---
 
 ## Current Task
 
-None - ready for next task.
+**iOS Calibration Flow (Issue #30)** - [Plan 060](Plans/060-ios-calibration-flow.md)
+
+Add the ability to perform two-point calibration from the iOS app with guided screens and real-time device feedback.
+
+### Implementation Phases
+
+- [x] **Phase 1: Firmware Changes** - Add BLE calibration commands ✓
+- [x] **Phase 2: iOS BLE Updates** - Fix command codes and add calibration methods ✓
+- [x] **Phase 3: iOS Calibration UI** - Create guided calibration screens ✓
+- [x] **Phase 4: Integration** - Connect to SettingsView ✓
+- [x] **Phase 4.5: Keep-Alive During Calibration** - Prevent disconnects ✓
+- [x] **Phase 4.6: BLE Updates During Calibration** - Fix stability indicator not updating ✓
+- [ ] **Phase 5: Testing** - Verify end-to-end with hardware
+
+### Session 4 Changes
+
+**Bug Fixed: Stability indicator never updated during calibration**
+
+Root cause: BLE state updates (weight, stability) were only sent when `g_calibrated == true`:
+```cpp
+// Line 1569 in main.cpp - this requires calibration to exist!
+if (cal_state == CAL_IDLE && g_calibrated && (gesture == GESTURE_UPRIGHT_STABLE ...)) {
+    bleUpdateCurrentState(...);
+}
+```
+During calibration, the bottle typically ISN'T calibrated yet, so no BLE updates were sent.
+
+Fix: Added new block in main.cpp that sends BLE updates every 500ms when `bleIsCalibrationInProgress()`:
+```cpp
+#if ENABLE_BLE
+    if (bleIsCalibrationInProgress()) {
+        // Update every 500ms during calibration
+        bleUpdateCurrentState(daily_total, current_adc, g_calibration,
+                            battery_pct, g_calibrated, g_time_valid,
+                            gesture == GESTURE_UPRIGHT_STABLE);
+    }
+#endif
+```
+
+**UI Improvements:**
+- Removed all references to "sensor puck" (sensor is built into bottle)
+- Improved instruction text clarity on all calibration screens
+- Made "Measure Empty" and "Measure Full" buttons always enabled (firmware handles stability internally)
+- Changed hint text from blocking orange warning to informational gray text
+
+### Key Files Modified This Session
+
+**Firmware:**
+- `firmware/src/main.cpp` - Added BLE updates during calibration mode (lines ~1663-1688)
+
+**iOS:**
+- `ios/Aquavate/Aquavate/Views/CalibrationView.swift` - Improved instruction text, removed stability gate from buttons
+
+### Current Step
+
+**Phase 5: Hardware Testing** - Need to flash firmware and test
+
+**Next action:** Flash updated firmware and test full calibration flow with real hardware
+
+### Calibration Flow Summary
+
+**User-facing flow:**
+1. Navigate to Settings > Calibrate Bottle
+2. Welcome screen explains what you'll need
+3. Step 1: Empty bottle completely, cap on, set upright, tap "Measure Empty"
+4. Step 2: Fill with exactly 830ml, cap on, set upright, tap "Measure Full"
+5. Tap "Save Calibration" to store to device
+6. Done - bottle is calibrated
+
+**BLE communication:**
+1. iOS sends `CAL_MEASURE_POINT` command (empty or full)
+2. Firmware sets `g_cal_mode = true` (blocks sleep), takes ~10s stable measurement
+3. Firmware sends BLE state updates every 500ms during calibration
+4. iOS reads `calibrationRawADC` from BLEManager when ready
+5. After both measurements, iOS calculates scale factor and sends `CAL_SET_DATA`
+6. Firmware saves to NVS, clears `g_cal_mode`
 
 ---
 
@@ -66,6 +141,7 @@ Resume from PROGRESS.md
 ## Branch Status
 
 - `master` - Stable baseline
+- `ios-calibration-flow` - **ACTIVE** - iOS calibration flow (Issue #30)
 
 ---
 

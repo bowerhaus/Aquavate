@@ -14,6 +14,8 @@
 #include "config.h"
 #include "storage_drinks.h"
 #include "activity_stats.h"
+#include "weight.h"
+#include "calibration.h"
 
 // NimBLE objects
 static NimBLEServer* pServer = nullptr;
@@ -79,6 +81,12 @@ static volatile bool g_ble_force_display_refresh = false;
 // BLE activity flag for activity timeout reset (Plan 034 - Timer Rationalization)
 // Set whenever BLE data activity occurs (sync, commands)
 static volatile bool g_ble_data_activity = false;
+
+// Calibration state for iOS-driven calibration (Plan 060)
+static volatile bool g_cal_mode = false;            // Calibration mode active (blocks sleep)
+static volatile bool g_cal_measuring = false;       // Measurement in progress
+static volatile bool g_cal_result_ready = false;    // Result available for reading
+static volatile int32_t g_cal_last_adc = 0;         // Last measured raw ADC value
 
 // Forward declaration for sync complete notification
 static void bleNotifyCurrentStateUpdate();
@@ -191,6 +199,44 @@ class CommandCallbacks : public NimBLECharacteristicCallbacks {
             return;
         }
 
+        // Check for CAL_SET_DATA command (13 bytes: cmd + empty_adc + full_adc + scale_factor)
+        if (value.length() == 13 && value[0] == BLE_CMD_CAL_SET_DATA) {
+            // Parse calibration data (all little-endian)
+            int32_t empty_adc, full_adc;
+            float scale_factor;
+
+            memcpy(&empty_adc, &value[1], sizeof(int32_t));
+            memcpy(&full_adc, &value[5], sizeof(int32_t));
+            memcpy(&scale_factor, &value[9], sizeof(float));
+
+            BLE_DEBUG_F("Command: CAL_SET_DATA empty=%d, full=%d, scale=%.2f",
+                       empty_adc, full_adc, scale_factor);
+
+            // Validate calibration data
+            if (scale_factor <= 0.0f || full_adc <= empty_adc) {
+                BLE_DEBUG("ERROR: Invalid calibration data");
+                return;
+            }
+
+            // Create and save calibration data
+            CalibrationData cal;
+            cal.empty_bottle_adc = empty_adc;
+            cal.full_bottle_adc = full_adc;
+            cal.scale_factor = scale_factor;
+
+            if (storageSaveCalibration(cal)) {
+                BLE_DEBUG("Calibration saved to NVS");
+                g_cal_mode = false;          // Exit calibration mode
+                g_cal_result_ready = false;  // Clear calibration result flag
+                g_ble_force_display_refresh = true;
+                bleNotifyCurrentStateUpdate();
+            } else {
+                BLE_DEBUG("ERROR: Failed to save calibration to NVS");
+                g_cal_mode = false;          // Exit calibration mode even on error
+            }
+            return;
+        }
+
         // Check for DELETE_DRINK_RECORD command (5 bytes: cmd + 4-byte record_id)
         if (value.length() == 5 && value[0] == BLE_CMD_DELETE_DRINK_RECORD) {
             uint32_t recordId = (uint8_t)value[1] | ((uint8_t)value[2] << 8) |
@@ -256,6 +302,40 @@ class CommandCallbacks : public NimBLECharacteristicCallbacks {
                     BLE_DEBUG_F("Command: GET_BACKPACK_CHUNK, chunk=%d", cmd.param1);
                     bleSendBackpackSessionChunk(cmd.param1);
                     break;
+
+                case BLE_CMD_CAL_MEASURE_POINT: {
+                    // iOS-driven calibration: take stable measurement
+                    // param1: 0 = empty bottle, 1 = full bottle
+                    uint8_t pointType = cmd.param1;
+                    BLE_DEBUG_F("Command: CAL_MEASURE_POINT, point=%s", pointType == 0 ? "empty" : "full");
+
+                    // Enter calibration mode (blocks sleep until CAL_SET_DATA or disconnect)
+                    g_cal_mode = true;
+                    g_cal_measuring = true;
+                    g_cal_result_ready = false;
+                    bleNotifyCurrentStateUpdate();
+
+                    // Take stable measurement (uses default 10s duration with variance check)
+                    // Note: This blocks the BLE callback, but NimBLE handles it
+                    WeightMeasurement result = weightMeasureStable();
+
+                    g_cal_measuring = false;
+                    if (result.valid && result.stable) {
+                        g_cal_last_adc = result.raw_adc;
+                        g_cal_result_ready = true;
+                        BLE_DEBUG_F("Calibration measurement complete: ADC=%d, stable=%d",
+                                   result.raw_adc, result.stable);
+                    } else {
+                        g_cal_last_adc = result.raw_adc;  // Still report the ADC even if unstable
+                        g_cal_result_ready = true;  // Let iOS decide what to do
+                        BLE_DEBUG_F("Calibration measurement: ADC=%d, valid=%d, stable=%d (warning)",
+                                   result.raw_adc, result.valid, result.stable);
+                    }
+
+                    // Notify iOS with result
+                    bleNotifyCurrentStateUpdate();
+                    break;
+                }
 
                 default:
                     BLE_DEBUG_F("Unknown command: 0x%02X", cmd.command);
@@ -452,6 +532,14 @@ class AquavateServerCallbacks : public NimBLEServerCallbacks {
     void onDisconnect(NimBLEServer* pServer) {
         BLE_DEBUG("Client disconnected");
         isConnected = false;
+
+        // Clear calibration mode if disconnected mid-calibration
+        if (g_cal_mode) {
+            BLE_DEBUG("Calibration abandoned due to disconnect");
+            g_cal_mode = false;
+            g_cal_measuring = false;
+            g_cal_result_ready = false;
+        }
 
         // Restart advertising for next connection
         // Note: Main loop will handle advertising timeout logic
@@ -814,9 +902,21 @@ void bleUpdateCurrentState(uint16_t daily_total_ml, int32_t current_adc,
 
     // Set flags
     currentState.flags = 0;
-    if (time_valid) currentState.flags |= 0x01;
-    if (calibrated) currentState.flags |= 0x02;
-    if (stable) currentState.flags |= 0x04;
+    if (time_valid) currentState.flags |= BLE_FLAG_TIME_VALID;
+    if (calibrated) currentState.flags |= BLE_FLAG_CALIBRATED;
+    if (stable) currentState.flags |= BLE_FLAG_STABLE;
+    if (g_cal_measuring) currentState.flags |= BLE_FLAG_CAL_MEASURING;
+    if (g_cal_result_ready) currentState.flags |= BLE_FLAG_CAL_RESULT_READY;
+
+    // During calibration measurement result, report raw ADC using two fields
+    // When cal_result_ready flag is set, iOS should interpret:
+    //   current_weight_g = lower 16 bits of raw ADC (reinterpreted as signed)
+    //   bottle_level_ml = upper 16 bits of raw ADC (unsigned)
+    // iOS reconstruction: rawADC = (Int32(bottle_level_ml) << 16) | Int32(UInt16(bitPattern: current_weight_g))
+    if (g_cal_result_ready) {
+        currentState.current_weight_g = (int16_t)(g_cal_last_adc & 0xFFFF);
+        currentState.bottle_level_ml = (uint16_t)((g_cal_last_adc >> 16) & 0xFFFF);
+    }
 
     // Unsynced count (Phase 3D)
     currentState.unsynced_count = storageGetUnsyncedCount();
@@ -835,9 +935,13 @@ void bleUpdateCurrentState(uint16_t daily_total_ml, int32_t current_adc,
         } else if (abs(currentState.bottle_level_ml - previousState.bottle_level_ml) >= 10) {
             should_notify = true;
             BLE_DEBUG("Current State: Bottle level changed >10ml, sending notification");
-        } else if ((currentState.flags & 0x04) != (previousState.flags & 0x04)) {
+        } else if ((currentState.flags & BLE_FLAG_STABLE) != (previousState.flags & BLE_FLAG_STABLE)) {
             should_notify = true;
             BLE_DEBUG("Current State: Stability changed, sending notification");
+        } else if ((currentState.flags & (BLE_FLAG_CAL_MEASURING | BLE_FLAG_CAL_RESULT_READY)) !=
+                   (previousState.flags & (BLE_FLAG_CAL_MEASURING | BLE_FLAG_CAL_RESULT_READY))) {
+            should_notify = true;
+            BLE_DEBUG("Current State: Calibration state changed, sending notification");
         }
 
         if (should_notify) {
@@ -923,6 +1027,12 @@ bool bleCheckDataActivity() {
 // Check if shake-to-empty gesture is enabled
 bool bleGetShakeToEmptyEnabled() {
     return (deviceSettings.flags & DEVICE_SETTINGS_FLAG_SHAKE_EMPTY_ENABLED) != 0;
+}
+
+// Check if BLE calibration is in progress (blocks sleep)
+bool bleIsCalibrationInProgress() {
+    // Block sleep during entire calibration flow (from first measurement to save)
+    return g_cal_mode;
 }
 
 // Activity Stats helper functions (Issue #36)

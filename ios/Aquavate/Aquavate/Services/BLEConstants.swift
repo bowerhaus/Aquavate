@@ -96,12 +96,14 @@ enum BLEConstants {
 
     enum Command: UInt8 {
         case tareNow = 0x01
-        case startCalibration = 0x02
-        case calibratePoint = 0x03
-        case cancelCalibration = 0x04
+        case ping = 0x02                // Keep-alive ping (resets activity timeout)
+        case calMeasurePoint = 0x03     // Request stable ADC measurement (param1: 0=empty, 1=full)
+        case calSetData = 0x04          // Save calibration (13-byte extended command)
         case resetDaily = 0x05
         case clearHistory = 0x06
-        case setTime = 0x10  // Time sync command
+        case setTime = 0x10             // Time sync command
+        case setDailyTotal = 0x11       // DEPRECATED: Set daily total
+        case deleteDrinkRecord = 0x12   // Delete drink record (5 bytes: cmd + 4-byte record_id)
         // Activity Stats Commands
         case getActivitySummary = 0x21
         case getMotionChunk = 0x22
@@ -124,6 +126,8 @@ enum BLEConstants {
         static let timeValid = StateFlags(rawValue: 0x01)
         static let calibrated = StateFlags(rawValue: 0x02)
         static let stable = StateFlags(rawValue: 0x04)
+        static let calMeasuring = StateFlags(rawValue: 0x08)      // Calibration measurement in progress
+        static let calResultReady = StateFlags(rawValue: 0x10)    // Calibration ADC result available
     }
 
     // MARK: - Device Settings Flags

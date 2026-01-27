@@ -1661,6 +1661,34 @@ void loop() {
         }
     }
 
+    // Send BLE updates during iOS calibration mode (even if bottle not yet calibrated)
+    // This allows the iOS app to show real-time weight and stability during calibration
+#if ENABLE_BLE
+    if (bleIsCalibrationInProgress()) {
+        static unsigned long last_cal_ble_update = 0;
+        const unsigned long CAL_BLE_UPDATE_INTERVAL_MS = 500;  // Update every 500ms during calibration
+
+        if (millis() - last_cal_ble_update >= CAL_BLE_UPDATE_INTERVAL_MS) {
+            last_cal_ble_update = millis();
+
+            // Get battery percent
+            uint8_t battery_pct = 50;  // Default
+            float voltage = getBatteryVoltage();
+            battery_pct = getBatteryPercent(voltage);
+
+            // Get daily total
+            uint16_t daily_total = drinksGetDailyTotal();
+
+            // Send BLE state update with current values
+            // Note: During calibration, weight values may not be meaningful if not calibrated,
+            // but stability flag (UPRIGHT_STABLE) is still useful
+            bleUpdateCurrentState(daily_total, current_adc, g_calibration,
+                                battery_pct, g_calibrated, g_time_valid,
+                                gesture == GESTURE_UPRIGHT_STABLE);
+        }
+    }
+#endif
+
     // Debug output (only print periodically to reduce serial spam)
     if (g_debug_enabled && g_debug_accelerometer) {
         static unsigned long last_debug_print = 0;
@@ -1773,6 +1801,9 @@ void loop() {
 #if ENABLE_STANDALONE_CALIBRATION
         && !calibrationIsActive()
 #endif
+#if ENABLE_BLE
+        && !bleIsCalibrationInProgress()
+#endif
     ) {
         unsigned long total_awake_time = millis() - g_time_since_stable_start;
         if (total_awake_time >= (g_time_since_stable_threshold_sec * 1000)) {
@@ -1809,7 +1840,15 @@ void loop() {
         // Prevent sleep during active calibration
 #if ENABLE_STANDALONE_CALIBRATION
         if (calibrationIsActive()) {
-            Serial.println("Sleep blocked - calibration in progress");
+            Serial.println("Sleep blocked - standalone calibration in progress");
+            wakeTime = millis(); // Reset timer to prevent immediate sleep after calibration
+            sleep_blocked = true;
+        }
+#endif
+#if ENABLE_BLE
+        // Block sleep during iOS-driven calibration (Plan 060)
+        if (bleIsCalibrationInProgress()) {
+            Serial.println("Sleep blocked - BLE calibration in progress");
             wakeTime = millis(); // Reset timer to prevent immediate sleep after calibration
             sleep_blocked = true;
         }

@@ -60,6 +60,27 @@ struct BLECurrentState {
         (flags & 0x04) != 0
     }
 
+    /// Whether a calibration measurement is in progress (bit 3)
+    var isCalMeasuring: Bool {
+        (flags & 0x08) != 0
+    }
+
+    /// Whether calibration ADC result is ready to read (bit 4)
+    /// When true, the raw ADC value is encoded in currentWeightG (lower 16 bits) and bottleLevelMl (upper 16 bits)
+    var isCalResultReady: Bool {
+        (flags & 0x10) != 0
+    }
+
+    /// Extract raw ADC value when calibration result is ready
+    /// The 32-bit ADC value is split across currentWeightG (lower 16 bits) and bottleLevelMl (upper 16 bits)
+    var calibrationRawADC: Int32? {
+        guard isCalResultReady else { return nil }
+        // Reconstruct 32-bit value: bottleLevelMl is upper 16 bits, currentWeightG is lower 16 bits (as unsigned)
+        let lower = UInt16(bitPattern: currentWeightG)
+        let upper = bottleLevelMl
+        return Int32(bitPattern: (UInt32(upper) << 16) | UInt32(lower))
+    }
+
     /// Convert timestamp to Date
     var date: Date {
         Date(timeIntervalSince1970: TimeInterval(timestamp))
@@ -360,14 +381,31 @@ struct BLECommand {
         BLECommand(command: 0x06, param1: 0, param2: 0)
     }
 
-    /// Create START_CALIBRATION command (0x02)
-    static func startCalibration() -> BLECommand {
-        BLECommand(command: 0x02, param1: 0, param2: 0)
+    /// Calibration point types for iOS-driven calibration
+    enum CalibrationPointType: UInt8 {
+        case empty = 0  // Empty bottle measurement
+        case full = 1   // Full bottle measurement
     }
 
-    /// Create CANCEL_CALIBRATION command (0x04)
-    static func cancelCalibration() -> BLECommand {
-        BLECommand(command: 0x04, param1: 0, param2: 0)
+    /// Create CAL_MEASURE_POINT command (0x03) - Request stable ADC measurement
+    /// The firmware will take a 10-second stable measurement and return the raw ADC in the Current State notification
+    static func calMeasurePoint(pointType: CalibrationPointType) -> BLECommand {
+        BLECommand(command: 0x03, param1: pointType.rawValue, param2: 0)
+    }
+
+    /// Create CAL_SET_DATA command (0x04) - Save calibration to firmware NVS
+    /// Sends 13 bytes: command (1) + emptyADC (4) + fullADC (4) + scaleFactor (4)
+    /// All values are little-endian
+    static func calSetData(emptyADC: Int32, fullADC: Int32, scaleFactor: Float) -> Data {
+        var data = Data(count: 13)
+        data.withUnsafeMutableBytes { ptr in
+            guard let baseAddress = ptr.baseAddress else { return }
+            baseAddress.storeBytes(of: UInt8(0x04), as: UInt8.self)
+            baseAddress.storeBytes(of: emptyADC, toByteOffset: 1, as: Int32.self)
+            baseAddress.storeBytes(of: fullADC, toByteOffset: 5, as: Int32.self)
+            baseAddress.storeBytes(of: scaleFactor, toByteOffset: 9, as: Float.self)
+        }
+        return data
     }
 
     /// Create SET_TIME command (0x10) with Unix timestamp

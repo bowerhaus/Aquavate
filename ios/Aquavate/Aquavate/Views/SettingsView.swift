@@ -298,6 +298,22 @@ struct SettingsView: View {
                             }
                         }
 
+                        NavigationLink {
+                            CalibrationViewWrapper()
+                        } label: {
+                            HStack {
+                                Image(systemName: bleManager.isCalibrated ? "checkmark.seal.fill" : "seal")
+                                    .foregroundStyle(bleManager.isCalibrated ? .green : .orange)
+                                Text("Calibrate Bottle")
+                                Spacer()
+                                if !bleManager.isCalibrated {
+                                    Text("Required")
+                                        .font(.caption)
+                                        .foregroundStyle(.orange)
+                                }
+                            }
+                        }
+
                         if bleManager.unsyncedCount > 0 && !bleManager.syncState.isActive {
                             Button {
                                 bleManager.startDrinkSync()

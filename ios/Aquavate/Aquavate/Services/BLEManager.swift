@@ -128,6 +128,15 @@ class BLEManager: NSObject, ObservableObject {
     /// Whether weight reading is stable
     @Published private(set) var isStable: Bool = false
 
+    /// Whether a calibration measurement is in progress (firmware taking stable reading)
+    @Published private(set) var isCalMeasuring: Bool = false
+
+    /// Whether calibration ADC result is ready to read
+    @Published private(set) var isCalResultReady: Bool = false
+
+    /// Raw ADC value from calibration measurement (only valid when isCalResultReady is true)
+    @Published private(set) var calibrationRawADC: Int32?
+
     /// Number of drink records pending sync
     @Published private(set) var unsyncedCount: Int = 0
 
@@ -1062,18 +1071,30 @@ extension BLEManager: CBPeripheralDelegate {
 
         // Update published properties
         currentWeightG = Int(state.currentWeightG)
-        bottleLevelMl = Int(state.bottleLevelMl)
         hasReceivedBottleData = true
         dailyTotalMl = Int(state.dailyTotalMl)
         batteryPercent = Int(state.batteryPercent)
         isTimeValid = state.isTimeValid
         isCalibrated = state.isCalibrated
         isStable = state.isStable
+        isCalMeasuring = state.isCalMeasuring
+        isCalResultReady = state.isCalResultReady
         unsyncedCount = Int(state.unsyncedCount)
         lastStateUpdateTime = Date()
 
+        // Handle calibration result - when cal_result_ready is set, extract raw ADC from encoded fields
+        if state.isCalResultReady {
+            calibrationRawADC = state.calibrationRawADC
+            // During calibration, currentWeightG and bottleLevelMl contain encoded ADC, not actual values
+            logger.info("Calibration result ready: rawADC=\(String(describing: self.calibrationRawADC))")
+        } else {
+            calibrationRawADC = nil
+            // Normal operation - use bottle level as-is
+            bottleLevelMl = Int(state.bottleLevelMl)
+        }
+
         logger.info("Current State: weight=\(state.currentWeightG)g, level=\(state.bottleLevelMl)ml, daily=\(state.dailyTotalMl)ml, battery=\(state.batteryPercent)%, unsynced=\(state.unsyncedCount)")
-        logger.debug("  Flags: timeValid=\(state.isTimeValid), calibrated=\(state.isCalibrated), stable=\(state.isStable)")
+        logger.debug("  Flags: timeValid=\(state.isTimeValid), calibrated=\(state.isCalibrated), stable=\(state.isStable), calMeasuring=\(state.isCalMeasuring), calResultReady=\(state.isCalResultReady)")
 
         // Check if we have a pending delete confirmation
         // The bottle sends a Current State notification after processing DELETE_DRINK_RECORD
@@ -1444,16 +1465,30 @@ extension BLEManager: CBPeripheralDelegate {
         logger.info("Sent CLEAR_HISTORY command")
     }
 
-    /// Send START_CALIBRATION command to begin calibration flow
-    func sendStartCalibrationCommand() {
-        writeCommand(BLECommand.startCalibration())
-        logger.info("Sent START_CALIBRATION command")
+    // MARK: - Calibration Commands (iOS-Driven Calibration - Plan 060)
+
+    /// Send CAL_MEASURE_POINT command to request stable ADC measurement
+    /// The firmware will take a ~10 second stable measurement and return the raw ADC
+    /// via a Current State notification with the cal_result_ready flag set
+    func sendCalMeasurePointCommand(pointType: BLECommand.CalibrationPointType) {
+        writeCommand(BLECommand.calMeasurePoint(pointType: pointType))
+        logger.info("Sent CAL_MEASURE_POINT command (point=\(pointType == .empty ? "empty" : "full"))")
     }
 
-    /// Send CANCEL_CALIBRATION command to abort calibration
-    func sendCancelCalibrationCommand() {
-        writeCommand(BLECommand.cancelCalibration())
-        logger.info("Sent CANCEL_CALIBRATION command")
+    /// Send CAL_SET_DATA command to save calibration to firmware NVS
+    /// After both empty and full measurements are taken, iOS calculates the scale factor
+    /// and sends the calibration data to the firmware for storage
+    func sendCalSetDataCommand(emptyADC: Int32, fullADC: Int32, scaleFactor: Float) {
+        guard let peripheral = connectedPeripheral,
+              let characteristic = characteristics[BLEConstants.commandUUID] else {
+            logger.error("Cannot send calibration data: not connected")
+            errorMessage = "Not connected to device"
+            return
+        }
+
+        let data = BLECommand.calSetData(emptyADC: emptyADC, fullADC: fullADC, scaleFactor: scaleFactor)
+        peripheral.writeValue(data, for: characteristic, type: .withResponse)
+        logger.info("Sent CAL_SET_DATA command (emptyADC=\(emptyADC), fullADC=\(fullADC), scale=\(scaleFactor))")
     }
 
     // MARK: - Bidirectional Sync (Delete Drink Record)
