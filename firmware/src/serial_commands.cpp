@@ -732,8 +732,8 @@ static void handleSetExtendedSleepThreshold(char* args) {
         return;
     }
 
-    extern uint32_t g_extended_sleep_threshold_sec;
-    g_extended_sleep_threshold_sec = (uint32_t)seconds;
+    extern uint32_t g_time_since_stable_threshold_sec;
+    g_time_since_stable_threshold_sec = (uint32_t)seconds;
 
     // Save to NVS for persistence
     if (storageSaveExtendedSleepThreshold((uint32_t)seconds)) {

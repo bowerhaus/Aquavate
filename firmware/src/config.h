@@ -26,7 +26,7 @@
 //     - IRAM usage: ~82KB / 131KB (62.4%)
 //     - Headroom: ~49.2KB
 
-#define IOS_MODE    1
+#define IOS_MODE    1   // Production: BLE enabled, serial commands disabled
 
 // Auto-configure feature flags based on IOS_MODE
 #if IOS_MODE

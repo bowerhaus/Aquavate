@@ -61,6 +61,7 @@ unsigned long wakeTime = 0;
 unsigned long g_time_since_stable_start = 0;    // When bottle last became NOT stable (for backpack detection)
 bool g_in_extended_sleep_mode = false;          // Currently using extended sleep
 uint32_t g_time_since_stable_threshold_sec = TIME_SINCE_STABLE_THRESHOLD_SEC; // Time without stability before extended sleep (3 min)
+uint32_t g_extended_sleep_timer_sec = 60;       // Timer wake interval for extended sleep (legacy, tap-wake replaced this)
 bool g_force_display_clear_sleep = false;       // Flag to clear Zzzz indicator on wake from extended sleep
 bool g_rollover_wake_pending = false;           // Flag to process 4am rollover after initialization
 
@@ -805,9 +806,14 @@ void setup() {
     // Initialize calibration system
     Serial.println("Initializing calibration system...");
 
-    // Initialize storage (NVS)
+    // Initialize storage (NVS for calibration/settings)
     if (storageInit()) {
-        Serial.println("Storage initialized");
+        Serial.println("NVS storage initialized");
+
+        // Initialize LittleFS for drink record storage
+        if (!storageInitDrinkFS()) {
+            Serial.println("WARNING: Drink storage (LittleFS) initialization failed");
+        }
 
         // Load calibration from NVS
         g_calibrated = storageLoadCalibration(g_calibration);
@@ -999,6 +1005,17 @@ void setup() {
     if (g_time_valid) {
         drinksInit();
         Serial.println("Drink tracking system initialized");
+
+        // Dump buffer metadata for diagnostics
+        CircularBufferMetadata meta;
+        if (storageLoadBufferMetadata(meta)) {
+            Serial.println("\n=== DRINK BUFFER STATUS (LittleFS) ===");
+            Serial.printf("Record count: %d / %d (max)\n", meta.record_count, DRINK_MAX_RECORDS);
+            Serial.printf("Write index: %d\n", meta.write_index);
+            Serial.printf("Total writes: %u\n", meta.total_writes);
+            Serial.printf("Next record ID: %u\n", meta.next_record_id);
+            Serial.println("======================================\n");
+        }
     } else {
         Serial.println("WARNING: Drink tracking not initialized - time not set");
     }

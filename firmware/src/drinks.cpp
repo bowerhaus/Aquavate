@@ -8,6 +8,7 @@
 #include "storage_drinks.h"
 #include "config.h"
 #include "calibration.h"
+#include "display.h"
 #include <sys/time.h>
 #include <time.h>
 
@@ -253,14 +254,27 @@ bool drinksUpdate(int32_t current_adc, const CalibrationData& cal) {
         record.flags = 0;
         record.type = drink_type;
 
-        storageSaveDrinkRecord(record);
+        // Try to save drink record to NVS
+        bool record_saved = storageSaveDrinkRecord(record);
 
         // Update baseline
         g_daily_state.last_recorded_adc = current_adc;
-        storageSaveDailyState(g_daily_state);
+        bool state_saved = storageSaveDailyState(g_daily_state);
 
-        // Recalculate totals from records
-        recalculateDailyTotals();
+        if (record_saved) {
+            // Record saved successfully - recalculate from NVS (authoritative)
+            recalculateDailyTotals();
+        } else {
+            // NVS write failed - update in-memory totals directly to preserve the drink
+            Serial.println("WARNING: NVS write failed, updating in-memory totals");
+            g_cached_daily_total_ml += (uint16_t)delta_ml;
+            g_cached_drink_count++;
+            displayNVSWarning();  // Show warning to user
+        }
+
+        if (!state_saved) {
+            Serial.println("WARNING: Daily state save failed");
+        }
 
         // Save timestamp to NVS on drink event (for time persistence)
         saveTimestampOnEvent("drink");

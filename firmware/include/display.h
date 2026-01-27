@@ -37,6 +37,7 @@ DisplayState displayGetState();
 void drawMainScreen();
 void displayBackpackMode();      // Show backpack mode screen with wake instructions (Issue #38)
 void displayTapWakeFeedback();   // Show immediate feedback when waking from tap (blank screen)
+void displayNVSWarning();        // Show storage error warning (3 seconds) when NVS write fails
 
 // Mark display as initialized (used when waking from deep sleep - display image preserved)
 void displayMarkInitialized();

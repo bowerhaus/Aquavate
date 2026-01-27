@@ -337,11 +337,11 @@ bool storageSaveShakeToEmptyEnabled(bool enabled) {
 
 bool storageLoadShakeToEmptyEnabled() {
     if (!g_initialized) {
-        Serial.println("Storage: Not initialized, using default shake_to_empty_enabled true");
-        return true; // Default: enabled
+        Serial.println("Storage: Not initialized, using default shake_to_empty_enabled false");
+        return false; // Default: disabled
     }
 
-    bool enabled = g_preferences.getBool(KEY_SHAKE_EMPTY_EN, true); // Default: enabled
+    bool enabled = g_preferences.getBool(KEY_SHAKE_EMPTY_EN, false); // Default: disabled
     Serial.print("Storage: Loaded shake_to_empty_enabled = ");
     Serial.println(enabled ? "true" : "false");
     return enabled;

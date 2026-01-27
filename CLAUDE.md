@@ -95,6 +95,42 @@ The current ESP32 Feather V2 has limited IRAM (131KB). To fit BLE + all features
 
 See [Plans/020-serial-commands-removal.md](Plans/020-serial-commands-removal.md) for implementation details.
 
+### Firmware Debug Logging System
+
+**IMPORTANT:** When adding any `Serial.print`, `Serial.println`, or `Serial.printf` to firmware code, first determine whether it should use the conditional debug system.
+
+**Debug levels** (set via serial command `d0`-`d4`, `d9`):
+- Level 0: All OFF
+- Level 1: Events (drinks, refills, display) - enables `g_debug_drink_tracking`
+- Level 2: + Gestures - enables `g_debug_calibration`
+- Level 3: + Weight readings - enables `g_debug_water_level`
+- Level 4: + Accelerometer - enables `g_debug_accelerometer`
+- Level 9: All ON (including `g_debug_ble`)
+
+**When to use unconditional `Serial.printf`:**
+- ERROR messages (critical failures that always need visibility)
+- WARNING messages (important but non-fatal issues)
+- Major events like `=== DRINK DETECTED ===`, `=== REFILL DETECTED ===`
+
+**When to use conditional `DEBUG_PRINTF` macro:**
+- Verbose debug info (baseline values, intermediate calculations)
+- Retry attempts, state transitions
+- Any output that would clutter logs during normal operation
+
+**Usage** (macros defined in [config.h](firmware/include/config.h)):
+```cpp
+#include "config.h"
+
+// Unconditional - always shown
+Serial.printf("ERROR: Something critical failed (code: 0x%x)\n", err);
+
+// Conditional - only at debug level 1+ (drink tracking enabled)
+DEBUG_PRINTF(g_debug_drink_tracking, "Drinks: baseline=%.1fml\n", baseline);
+
+// Conditional - only at debug level 3+ (water level enabled)
+DEBUG_PRINTF(g_debug_water_level, "Weight: ADC=%d\n", adc);
+```
+
 **TODO - Future Hardware Upgrade:** When upgrading to ESP32-S3 Feather (512KB IRAM):
 - Remove IOS_MODE and all related conditional compilation
 - Remove `#if ENABLE_BLE`, `#if ENABLE_SERIAL_COMMANDS`, `#if ENABLE_STANDALONE_CALIBRATION` blocks
