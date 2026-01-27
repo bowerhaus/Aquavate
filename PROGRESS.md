@@ -1,13 +1,28 @@
 # Aquavate - Active Development Progress
 
 **Last Updated:** 2026-01-27
-**Current Branch:** `master`
+**Current Branch:** `ota-firmware-updates`
 
 ---
 
 ## Current Task
 
-No active task. Ready for next issue.
+**OTA Firmware Updates** (Issue #78) - [Plan 058](Plans/058-ota-firmware-updates.md)
+
+**Status:** DEFERRED - Awaiting ESP32-S3 hardware
+
+**Decision:** OTA implementation deferred until ESP32-S3 Feather is available:
+- ESP32 V2 has insufficient IRAM (94.5% used, only ~6KB headroom)
+- BLE OTA transfer too slow (~5 minutes for 720KB firmware)
+- ESP32-S3 enables WiFi OTA (~10 seconds) with 512KB IRAM
+
+**Branch:** `ota-firmware-updates` - Pushed for future implementation
+
+**To resume implementation when S3 arrives:**
+```
+git checkout ota-firmware-updates
+Resume from PROGRESS.md
+```
 
 ---
 
@@ -59,7 +74,7 @@ Resume from PROGRESS.md
 ## Branch Status
 
 - `master` - Stable baseline
-- `drink-baseline-hysteresis` - Issue #76 complete, PR pending
+- `ota-firmware-updates` - Issue #78, deferred to ESP32-S3 (branch saved for future)
 
 ---
 
