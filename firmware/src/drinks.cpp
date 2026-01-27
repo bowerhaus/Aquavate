@@ -293,8 +293,15 @@ bool drinksUpdate(int32_t current_adc, const CalibrationData& cal) {
         Serial.println("Daily total unchanged (refill)");
     }
     // No significant change - update baseline for drift compensation
+    // Only update if change is very small to avoid contaminating baseline
+    // with intermediate readings when a second drink is in progress
     else {
-        g_daily_state.last_recorded_adc = current_adc;
+        float abs_delta = (delta_ml > 0) ? delta_ml : -delta_ml;
+        if (abs_delta < DRINK_DRIFT_THRESHOLD_ML) {
+            g_daily_state.last_recorded_adc = current_adc;
+        }
+        // If delta is between drift threshold and drink threshold,
+        // don't update baseline - a drink may be in progress
     }
     return false;  // No drink recorded
 }
