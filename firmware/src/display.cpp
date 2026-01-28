@@ -752,8 +752,8 @@ void displayNVSWarning() {
 
     // Warning text centered
     g_display_ptr->setTextSize(3);
-    const char* line1 = "Storage";
-    const char* line2 = "Error";
+    const char* line1 = "storage";
+    const char* line2 = "error";
     int w1 = strlen(line1) * 18;  // 18px per char at textSize=3
     int w2 = strlen(line2) * 18;
     g_display_ptr->setCursor((250 - w1) / 2, 35);

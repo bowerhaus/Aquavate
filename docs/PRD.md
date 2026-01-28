@@ -275,13 +275,17 @@ typedef struct {
 - Sufficient for most users
 
 **Precision Calibration (optional, via iOS app):**
-1. App prompts: "Remove everything from puck"
-2. Puck runs NAU7802 internal offset calibration, records zero reading
-3. App prompts: "Place a known weight (e.g., full 500ml bottle = 500g)"
-4. User enters the known weight in grams
-5. Puck calculates: `scale_factor = (current_reading - zero_reading) / known_grams`
-6. Scale factor stored in NVS
-7. Achieves ~±5ml accuracy
+
+*Architecture: Bottle-driven, iOS-mirrored* - iOS sends START/CANCEL commands, bottle runs its state machine and broadcasts state changes, iOS mirrors with rich UI.
+
+1. iOS sends START_CALIBRATION → Bottle enters calibration mode
+2. Bottle prompts "Empty bottle" → waits for stable upright position
+3. Bottle auto-measures empty ADC when stable
+4. Bottle prompts "Fill to Xml" → waits for stable upright position
+5. Bottle auto-measures full ADC when stable
+6. Bottle calculates scale factor and stores in NVS
+7. Bottle broadcasts COMPLETE state → iOS shows success
+8. Achieves ~±5ml accuracy
 
 #### Tare Calibration (required, per-bottle setup)
 1. User places empty bottle on puck
@@ -361,7 +365,7 @@ For detailed screen specifications, layouts, and UX flows, see [iOS-UX-PRD.md](i
 - **History Screen:** 7-day calendar with daily totals, drink list for selected day
 - **Settings Screen:** Device configuration, commands, preferences
 - **Pairing Screen:** BLE device discovery and connection
-- **Calibration Wizard:** Two-point calibration flow (iOS-based)
+- **Calibration Wizard:** Two-point calibration flow (bottle-driven, iOS-mirrored)
 
 ### 4. BLE Manager
 

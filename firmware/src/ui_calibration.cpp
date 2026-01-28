@@ -53,10 +53,10 @@ void uiCalibrationShowStart() {
     g_display->setTextColor(EPD_BLACK);
 
     // Title
-    printCentered("Calibration", 20, 2);
+    printCentered("calibration", 20, 2);
 
     // Instructions
-    printLeft("Empty bottle", 10, 60, 2);
+    printLeft("empty bottle", 10, 60, 2);
     printLeft("completely", 10, 80, 2);
 
     g_display->display(); // Full refresh
@@ -71,8 +71,8 @@ void uiCalibrationShowStarted() {
     g_display->setTextColor(EPD_BLACK);
 
     // Large "Calibration / Started" text
-    printCentered("Calibration", 35, 3);
-    printCentered("Started", 70, 3);
+    printCentered("calibration", 35, 3);
+    printCentered("started", 70, 3);
 
     g_display->display(); // Full refresh
 }
@@ -118,11 +118,11 @@ void uiCalibrationShowMeasuringEmpty() {
     g_display->setTextColor(EPD_BLACK);
 
     // Title
-    printCentered("Measuring", 30, 2);
-    printCentered("Empty...", 55, 2);
+    printCentered("measuring", 30, 2);
+    printCentered("empty...", 55, 2);
 
     // Instructions
-    printLeft("Hold still", 10, 95, 1);
+    printLeft("hold still", 10, 95, 1);
 
     g_display->display(); // Full refresh
 }
@@ -146,11 +146,11 @@ void uiCalibrationShowFillBottle() {
     g_display->setTextColor(EPD_BLACK);
 
     // Title
-    printCentered("Fill Bottle", 20, 2);
+    printCentered("fill bottle", 20, 2);
 
     // Instructions - updated for new flow
-    printLeft("Fill to 830ml", 10, 60, 2);
-    printLeft("Then place", 10, 80, 2);
+    printLeft("fill to 830ml", 10, 60, 2);
+    printLeft("then place", 10, 80, 2);
     printLeft("upright", 10, 100, 2);
 
     g_display->display(); // Full refresh
@@ -165,11 +165,11 @@ void uiCalibrationShowMeasuringFull() {
     g_display->setTextColor(EPD_BLACK);
 
     // Title
-    printCentered("Measuring", 30, 2);
-    printCentered("Full...", 55, 2);
+    printCentered("measuring", 30, 2);
+    printCentered("full...", 55, 2);
 
     // Instructions
-    printLeft("Hold still", 10, 95, 1);
+    printLeft("hold still", 10, 95, 1);
 
     g_display->display(); // Full refresh
 }
@@ -193,9 +193,9 @@ void uiCalibrationShowComplete(float scale_factor) {
     g_display->clearBuffer();
     g_display->setTextColor(EPD_BLACK);
 
-    // Large "Calibration / Complete" text (matches Started screen)
-    printCentered("Calibration", 35, 3);
-    printCentered("Complete", 70, 3);
+    // Large "calibration / complete" text (matches started screen)
+    printCentered("calibration", 35, 3);
+    printCentered("complete", 70, 3);
 
     g_display->display(); // Full refresh
 }
@@ -210,9 +210,9 @@ void uiCalibrationShowError(const char* message) {
     g_display->clearBuffer();
     g_display->setTextColor(EPD_BLACK);
 
-    // Large "Calibration / Error" text (matches Started screen)
-    printCentered("Calibration", 35, 3);
-    printCentered("Error", 70, 3);
+    // Large "calibration / error" text (matches started screen)
+    printCentered("calibration", 35, 3);
+    printCentered("error", 70, 3);
 
     g_display->display(); // Full refresh
 }
@@ -225,9 +225,9 @@ void uiCalibrationShowAborted() {
     g_display->clearBuffer();
     g_display->setTextColor(EPD_BLACK);
 
-    // Large "Calibration / Aborted" text (matches Started screen)
-    printCentered("Calibration", 35, 3);
-    printCentered("Aborted", 70, 3);
+    // Large "calibration / aborted" text (matches started screen)
+    printCentered("calibration", 35, 3);
+    printCentered("aborted", 70, 3);
 
     g_display->display(); // Full refresh
 }
@@ -288,7 +288,7 @@ void uiCalibrationUpdateForState(CalibrationState state, int32_t adc_value, floa
             break;
 
         case CAL_ERROR:
-            uiCalibrationShowError("Measurement failed");
+            uiCalibrationShowError("measurement failed");
             break;
 
         default:
@@ -325,9 +325,9 @@ void uiShowBottleEmptied(ThinkInk_213_Mono_GDEY0213B74& display) {
     display.clearBuffer();
     display.setTextColor(EPD_BLACK);
 
-    // Large "Bottle / Emptied" text (matches calibration screen style)
-    printCenteredBottleEmptied(&display, "Bottle", 35, 3);
-    printCenteredBottleEmptied(&display, "Emptied", 70, 3);
+    // Large "bottle / emptied" text (matches calibration screen style)
+    printCenteredBottleEmptied(&display, "bottle", 35, 3);
+    printCenteredBottleEmptied(&display, "emptied", 70, 3);
 
     display.display(); // Full refresh
 }

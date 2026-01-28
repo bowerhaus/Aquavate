@@ -1327,6 +1327,62 @@ void loop() {
 #endif
 
 #if ENABLE_STANDALONE_CALIBRATION
+    // Check for BLE calibration start request (Plan 060 - Bottle-Driven iOS Calibration)
+#if ENABLE_BLE
+    if (bleCheckCalibrationStartRequested()) {
+        if (cal_state == CAL_IDLE) {
+            Serial.println("Main: BLE calibration start requested");
+            calibrationInit();
+            calibrationStart();
+            cal_state = calibrationGetState();
+            bleNotifyCalibrationState();  // Notify iOS of initial state
+        }
+    }
+
+    // Check for BLE calibration cancel request
+    if (bleCheckCalibrationCancelRequested()) {
+        if (calibrationIsActive()) {
+            Serial.println("Main: BLE calibration cancel requested");
+            calibrationCancel();
+            cal_state = CAL_IDLE;
+            g_last_cal_state = CAL_IDLE;
+#if defined(BOARD_ADAFRUIT_FEATHER)
+            // For BLE cancel, skip "Calibration Aborted" screen and go straight to main screen
+            // (iOS provides the cancel feedback - user is watching their phone, not the bottle)
+            float water_ml = 0.0f;
+            if (nauReady && nau.available()) {
+                int32_t adc = nau.read();
+                water_ml = calibrationGetWaterWeight(adc, g_calibration);
+                if (water_ml < 0) water_ml = 0;
+                if (water_ml > 830) water_ml = 830;
+            }
+
+            uint16_t daily_total = drinksGetDailyTotal();
+
+            uint8_t time_hour = 0, time_minute = 0;
+            if (g_time_valid) {
+                struct timeval tv;
+                gettimeofday(&tv, NULL);
+                time_t now = tv.tv_sec + (g_timezone_offset * 3600);
+                struct tm timeinfo;
+                gmtime_r(&now, &timeinfo);
+                time_hour = timeinfo.tm_hour;
+                time_minute = timeinfo.tm_min;
+            }
+
+            uint8_t battery_pct = 50;
+            float voltage = getBatteryVoltage();
+            battery_pct = getBatteryPercent(voltage);
+
+            displayForceUpdate(water_ml, daily_total,
+                              time_hour, time_minute, battery_pct, false);
+#endif
+            bleNotifyCalibrationState();  // Notify iOS of cancelled state
+            wakeTime = millis();  // Reset sleep timer
+        }
+    }
+#endif
+
     // If not in calibration mode, check for calibration trigger
     if (cal_state == CAL_IDLE) {
         // Check for calibration trigger gesture (hold inverted for 5s)
@@ -1336,6 +1392,9 @@ void loop() {
                 Serial.println("Main: Calibration triggered!");
                 calibrationStart();
                 cal_state = calibrationGetState();
+#if ENABLE_BLE
+                bleNotifyCalibrationState();  // Notify iOS if connected
+#endif
             }
         } else {
             // Gesture released - allow new calibration trigger
@@ -1377,6 +1436,11 @@ void loop() {
 
             CalibrationResult result = calibrationGetResult();
             uiCalibrationUpdateForState(new_state, display_adc, result.data.scale_factor);
+#endif
+
+            // Notify iOS of state change (Plan 060 - Bottle-Driven iOS Calibration)
+#if ENABLE_BLE
+            bleNotifyCalibrationState();
 #endif
 
             // Check for calibration error BEFORE updating g_last_cal_state
@@ -1661,6 +1725,34 @@ void loop() {
         }
     }
 
+    // Send BLE updates during iOS calibration mode (even if bottle not yet calibrated)
+    // This allows the iOS app to show real-time weight and stability during calibration
+#if ENABLE_BLE
+    if (bleIsCalibrationInProgress()) {
+        static unsigned long last_cal_ble_update = 0;
+        const unsigned long CAL_BLE_UPDATE_INTERVAL_MS = 500;  // Update every 500ms during calibration
+
+        if (millis() - last_cal_ble_update >= CAL_BLE_UPDATE_INTERVAL_MS) {
+            last_cal_ble_update = millis();
+
+            // Get battery percent
+            uint8_t battery_pct = 50;  // Default
+            float voltage = getBatteryVoltage();
+            battery_pct = getBatteryPercent(voltage);
+
+            // Get daily total
+            uint16_t daily_total = drinksGetDailyTotal();
+
+            // Send BLE state update with current values
+            // Note: During calibration, weight values may not be meaningful if not calibrated,
+            // but stability flag (UPRIGHT_STABLE) is still useful
+            bleUpdateCurrentState(daily_total, current_adc, g_calibration,
+                                battery_pct, g_calibrated, g_time_valid,
+                                gesture == GESTURE_UPRIGHT_STABLE);
+        }
+    }
+#endif
+
     // Debug output (only print periodically to reduce serial spam)
     if (g_debug_enabled && g_debug_accelerometer) {
         static unsigned long last_debug_print = 0;
@@ -1773,6 +1865,9 @@ void loop() {
 #if ENABLE_STANDALONE_CALIBRATION
         && !calibrationIsActive()
 #endif
+#if ENABLE_BLE
+        && !bleIsCalibrationInProgress()
+#endif
     ) {
         unsigned long total_awake_time = millis() - g_time_since_stable_start;
         if (total_awake_time >= (g_time_since_stable_threshold_sec * 1000)) {
@@ -1809,7 +1904,15 @@ void loop() {
         // Prevent sleep during active calibration
 #if ENABLE_STANDALONE_CALIBRATION
         if (calibrationIsActive()) {
-            Serial.println("Sleep blocked - calibration in progress");
+            Serial.println("Sleep blocked - standalone calibration in progress");
+            wakeTime = millis(); // Reset timer to prevent immediate sleep after calibration
+            sleep_blocked = true;
+        }
+#endif
+#if ENABLE_BLE
+        // Block sleep during iOS-driven calibration (Plan 060)
+        if (bleIsCalibrationInProgress()) {
+            Serial.println("Sleep blocked - BLE calibration in progress");
             wakeTime = millis(); // Reset timer to prevent immediate sleep after calibration
             sleep_blocked = true;
         }

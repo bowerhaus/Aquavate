@@ -131,15 +131,15 @@ struct DebugView: View {
                     }
                     .disabled(!bleManager.connectionState.isConnected)
 
-                    Button("Start Calibration") {
-                        addLog("Sent START_CALIBRATION command", type: .warning)
-                        bleManager.sendStartCalibrationCommand()
+                    Button("Calibrate: Measure Empty") {
+                        addLog("Sent CAL_MEASURE_POINT (empty) command", type: .warning)
+                        bleManager.sendCalMeasurePointCommand(pointType: .empty)
                     }
                     .disabled(!bleManager.connectionState.isConnected)
 
-                    Button("Cancel Calibration") {
-                        addLog("Sent CANCEL_CALIBRATION command", type: .info)
-                        bleManager.sendCancelCalibrationCommand()
+                    Button("Calibrate: Measure Full") {
+                        addLog("Sent CAL_MEASURE_POINT (full) command", type: .warning)
+                        bleManager.sendCalMeasurePointCommand(pointType: .full)
                     }
                     .disabled(!bleManager.connectionState.isConnected)
 

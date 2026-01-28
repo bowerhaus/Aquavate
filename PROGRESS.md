@@ -1,13 +1,33 @@
 # Aquavate - Active Development Progress
 
-**Last Updated:** 2026-01-27
-**Current Branch:** `master`
+**Last Updated:** 2026-01-28 (Session 10)
+**Current Branch:** `master` (after merge)
 
 ---
 
 ## Current Task
 
-None - ready for next task.
+**None** - Ready for next task
+
+---
+
+## Recently Completed
+
+- **iOS Calibration Flow (Issue #30)** - [Plan 060](Plans/060-ios-calibration-flow.md) ✅ COMPLETE
+  - Bottle-driven calibration with iOS mirroring
+  - iOS sends START/CANCEL commands, bottle runs state machine
+  - Simplified 4-screen flow: Welcome → Empty → Full → Complete
+  - All calibration text lowercased (firmware + iOS)
+  - Cancel button fixes (red, back button hidden, 60s timeout)
+  - Navigation fixes (removed nested NavigationStack)
+- **LittleFS Drink Storage / NVS Fragmentation Fix (Issue #76)** - [Plan 059](Plans/059-littlefs-drink-storage.md)
+- Drink Baseline Hysteresis Fix (Issue #76) - [Plan 057](Plans/057-drink-baseline-hysteresis.md)
+- Unified Sessions View Fix (Issue #74) - [Plan 056](Plans/056-unified-sessions-view.md)
+- Repeated Amber Notification Fix (Issue #72) - [Plan 055](Plans/055-repeated-amber-notification-fix.md)
+- iOS Day Boundary Fix (Issue #70) - [Plan 054](Plans/054-ios-day-boundary-fix.md)
+- Notification Threshold Adjustment (Issue #67) - [Plan 053](Plans/053-notification-threshold-adjustment.md)
+- iOS Memory Exhaustion Fix (Issue #28) - [Plan 052](Plans/052-ios-memory-exhaustion-fix.md)
+- Foreground Notification Fix (Issue #56) - [Plan 051](Plans/051-foreground-notification-fix.md)
 
 ---
 
@@ -15,57 +35,8 @@ None - ready for next task.
 
 To resume from this progress file:
 ```
-Resume from PROGRESS.md
+Resume from PROGRESS.md - ready for next task
 ```
-
----
-
-## Recently Completed
-
-- **LittleFS Drink Storage / NVS Fragmentation Fix (Issue #76)** - [Plan 059](Plans/059-littlefs-drink-storage.md)
-  - Root cause: NVS doesn't support in-place updates, fragments after ~136 drink writes
-  - Solution: LittleFS file storage for drink records (true in-place overwrites)
-  - NVS retained for calibration, settings, daily state (with retry logic)
-  - Also fixed: display garbage on cold boot, IOS_MODE=0 build error
-  - Files: partitions.csv (new), storage_drinks.cpp, drinks.h, main.cpp, display.cpp, and others
-
-- Drink Baseline Hysteresis Fix (Issue #76) - [Plan 057](Plans/057-drink-baseline-hysteresis.md)
-  - Fixed drinks sometimes not recorded when second drink taken during same session
-  - Added drift threshold (15ml) to prevent baseline contamination during drink detection
-  - Only firmware changes (config.h, drinks.cpp)
-
-- Unified Sessions View Fix (Issue #74) - [Plan 056](Plans/056-unified-sessions-view.md)
-  - Replaced confusing separate "Recent Motion Wakes" and "Backpack Sessions" sections
-  - New unified "Sessions" list shows both types chronologically
-  - Summary changed from "Since Last Charge" to "Last 7 Days"
-  - Users can now clearly see backpack sessions with correct 1+ hour durations
-
-- Repeated Amber Notification Fix (Issue #72) - [Plan 055](Plans/055-repeated-amber-notification-fix.md)
-  - Fixed `lastNotifiedUrgency` not persisting across app restarts (notifications were re-sent)
-  - Updated urgency colors: attention = RGB(247,239,151), overdue = red
-  - Human figure now uses smooth gradient from attention to overdue color
-  - Added white background layer to fix color blending issues
-
-- iOS Day Boundary Fix (Issue #70) - [Plan 054](Plans/054-ios-day-boundary-fix.md)
-  - Fixed drinks from previous day showing after midnight
-  - Made @FetchRequest predicate dynamic with onAppear and significantTimeChangeNotification
-
-- Notification Threshold Adjustment (Issue #67) - [Plan 053](Plans/053-notification-threshold-adjustment.md)
-  - Increased minimum deficit thresholds for hydration notifications (50ml -> 150ml)
-
-- iOS Memory Exhaustion Fix (Issue #28) - [Plan 052](Plans/052-ios-memory-exhaustion-fix.md)
-  - Fixed memory leaks from WatchConnectivity queue, CoreData @FetchRequest, NotificationManager captures
-  - App now runs 60+ minutes without memory exhaustion
-
-- Foreground Notification Fix (Issue #56) - [Plan 051](Plans/051-foreground-notification-fix.md)
-  - Fixed hydration reminders not appearing when app is in foreground
-  - Added UNUserNotificationCenterDelegate to NotificationManager
-
----
-
-## Branch Status
-
-- `master` - Stable baseline
 
 ---
 
