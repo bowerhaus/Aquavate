@@ -1347,7 +1347,35 @@ void loop() {
             cal_state = CAL_IDLE;
             g_last_cal_state = CAL_IDLE;
 #if defined(BOARD_ADAFRUIT_FEATHER)
-            uiCalibrationShowAborted();
+            // For BLE cancel, skip "Calibration Aborted" screen and go straight to main screen
+            // (iOS provides the cancel feedback - user is watching their phone, not the bottle)
+            float water_ml = 0.0f;
+            if (nauReady && nau.available()) {
+                int32_t adc = nau.read();
+                water_ml = calibrationGetWaterWeight(adc, g_calibration);
+                if (water_ml < 0) water_ml = 0;
+                if (water_ml > 830) water_ml = 830;
+            }
+
+            uint16_t daily_total = drinksGetDailyTotal();
+
+            uint8_t time_hour = 0, time_minute = 0;
+            if (g_time_valid) {
+                struct timeval tv;
+                gettimeofday(&tv, NULL);
+                time_t now = tv.tv_sec + (g_timezone_offset * 3600);
+                struct tm timeinfo;
+                gmtime_r(&now, &timeinfo);
+                time_hour = timeinfo.tm_hour;
+                time_minute = timeinfo.tm_min;
+            }
+
+            uint8_t battery_pct = 50;
+            float voltage = getBatteryVoltage();
+            battery_pct = getBatteryPercent(voltage);
+
+            displayForceUpdate(water_ml, daily_total,
+                              time_hour, time_minute, battery_pct, false);
 #endif
             bleNotifyCalibrationState();  // Notify iOS of cancelled state
             wakeTime = millis();  // Reset sleep timer

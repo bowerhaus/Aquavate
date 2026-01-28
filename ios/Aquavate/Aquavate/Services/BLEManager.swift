@@ -1842,10 +1842,12 @@ extension BLEManager: CBPeripheralDelegate {
     }
 
     /// Cancel ongoing bottle-driven calibration (sends CANCEL_CALIBRATION command)
+    /// Best effort - tries to send even during disconnection to ensure bottle returns to main screen
     func cancelCalibration() {
-        guard connectionState.isConnected else {
-            logger.warning("Cannot cancel calibration: not connected")
-            return
+        // Don't strictly require connected state - try to send anyway
+        // This ensures cancel is sent even when navigating away triggers disconnection
+        if !connectionState.isConnected {
+            logger.warning("Attempting cancel calibration while not fully connected")
         }
 
         logger.info("Sending CANCEL_CALIBRATION command")

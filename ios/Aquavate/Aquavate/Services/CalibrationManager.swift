@@ -160,6 +160,12 @@ class CalibrationManager: ObservableObject {
     /// Expected measurement duration for progress animation (seconds)
     private let expectedMeasurementDuration: TimeInterval = 10.0
 
+    /// Bottle-driven mode timeout (seconds) - how long to wait for bottle response
+    private let bottleDrivenTimeout: TimeInterval = 60.0
+
+    /// Task for bottle-driven timeout
+    private var bottleTimeoutTask: Task<Void, Never>?
+
     // MARK: - Initialization
 
     init(bleManager: BLEManager) {
@@ -241,15 +247,22 @@ class CalibrationManager: ObservableObject {
         bottleStateDescription = bottleState.stateDescription
         logger.debug("Bottle calibration state: \(bottleState.stateDescription)")
 
+        // Reset bottle-driven timeout on any state change (bottle is responding)
+        resetBottleDrivenTimeout()
+
         // Map bottle state to iOS CalibrationState
         switch bottleState.state {
         case BLECalibrationState.stateIdle:
-            // Only transition to notStarted if we were in a calibration flow
+            // Bottle returned to idle - calibration was cancelled/aborted
             if state != .notStarted && state != .complete(scaleFactor: 0) {
                 if case .failed = state {
                     // Keep failed state
                 } else {
-                    state = .notStarted
+                    // Calibration was cancelled - set to cancelled error so UI can respond
+                    logger.info("Bottle returned to idle - calibration cancelled")
+                    state = .failed(.cancelled)
+                    cancelBottleDrivenTimeout()
+                    bleManager?.startIdleDisconnectTimer()
                 }
             }
 
@@ -283,12 +296,14 @@ class CalibrationManager: ObservableObject {
             let scaleFactor = adcDelta > 0 ? adcDelta / bottleCapacityMl : 0
             state = .complete(scaleFactor: scaleFactor)
             measurementProgress = 1.0
+            cancelBottleDrivenTimeout()
             logger.info("Bottle-driven calibration complete: scaleFactor=\(scaleFactor)")
             bleManager?.startIdleDisconnectTimer()
 
         case BLECalibrationState.stateError:
             state = .failed(.measurementUnstable)
             measurementProgress = 0.0
+            cancelBottleDrivenTimeout()
             logger.warning("Bottle-driven calibration error")
             bleManager?.startIdleDisconnectTimer()
 
@@ -296,6 +311,45 @@ class CalibrationManager: ObservableObject {
             // Triggered, ConfirmEmpty, ConfirmFull - transitional states
             break
         }
+    }
+
+    /// Start the bottle-driven timeout
+    private func startBottleDrivenTimeout() {
+        cancelBottleDrivenTimeout()
+
+        bottleTimeoutTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(self?.bottleDrivenTimeout ?? 60.0) * 1_000_000_000)
+
+            guard !Task.isCancelled else { return }
+
+            await MainActor.run { [weak self] in
+                guard let self = self else { return }
+
+                // Only timeout if we're still waiting for bottle response
+                if self.state != .notStarted && self.state != .complete(scaleFactor: 0) {
+                    if case .failed = self.state {
+                        // Already failed
+                    } else {
+                        self.logger.warning("Bottle-driven calibration timeout")
+                        self.state = .failed(.measurementTimeout)
+                        self.bleManager?.startIdleDisconnectTimer()
+                    }
+                }
+            }
+        }
+    }
+
+    /// Reset the bottle-driven timeout (call on each state change)
+    private func resetBottleDrivenTimeout() {
+        if bottleTimeoutTask != nil {
+            startBottleDrivenTimeout()
+        }
+    }
+
+    /// Cancel the bottle-driven timeout
+    private func cancelBottleDrivenTimeout() {
+        bottleTimeoutTask?.cancel()
+        bottleTimeoutTask = nil
     }
 
     // MARK: - Public API
@@ -324,6 +378,7 @@ class CalibrationManager: ObservableObject {
             // Bottle will run its state machine and notify us of state changes
             bleManager.startCalibration()
             state = .emptyBottlePrompt  // Show initial state while waiting for bottle response
+            startBottleDrivenTimeout()  // Start timeout in case bottle doesn't respond
             logger.info("Sent START_CALIBRATION to bottle")
         } else {
             // Legacy iOS-driven mode - move to first step
@@ -629,11 +684,13 @@ class CalibrationManager: ObservableObject {
         progressTimer = nil
         timeoutTask?.cancel()
         timeoutTask = nil
+        cancelBottleDrivenTimeout()
         measurementProgress = 0.0
     }
 
     deinit {
         progressTimer?.invalidate()
         timeoutTask?.cancel()
+        bottleTimeoutTask?.cancel()
     }
 }

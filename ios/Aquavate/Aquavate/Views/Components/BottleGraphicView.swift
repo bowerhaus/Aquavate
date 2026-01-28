@@ -27,7 +27,7 @@ struct BottleGraphicView: View {
     private let baseHeight: CGFloat = 90
 
     // Component dimensions (in base units)
-    private let capWidth: CGFloat = 12
+    private let capWidth: CGFloat = 18
     private let capHeight: CGFloat = 10
     private let neckWidth: CGFloat = 16
     private let neckHeight: CGFloat = 10

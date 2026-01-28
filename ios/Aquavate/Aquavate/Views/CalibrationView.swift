@@ -22,37 +22,47 @@ struct CalibrationView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                // Progress indicator (shown for all states except notStarted)
-                if calibrationManager.state.stepNumber > 0 {
-                    CalibrationProgressView(currentStep: calibrationManager.state.stepNumber)
-                        .padding(.vertical)
+        VStack(spacing: 0) {
+            // Progress indicator (shown for all states except notStarted)
+            if calibrationManager.state.stepNumber > 0 {
+                CalibrationProgressView(currentStep: calibrationManager.state.stepNumber)
+                    .padding(.vertical)
 
-                    Divider()
-                }
-
-                // Content based on state
-                ScrollView {
-                    contentForState
-                        .padding()
-                }
+                Divider()
             }
-            .navigationTitle("Calibrate Bottle")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    if calibrationManager.state != .notStarted {
-                        Button("Cancel") {
-                            calibrationManager.cancel()
-                            dismiss()
-                        }
+
+            // Content based on state
+            ScrollView {
+                contentForState
+                    .padding()
+            }
+        }
+        .navigationTitle("Calibrate Bottle")
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(calibrationManager.state != .notStarted)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                if calibrationManager.state != .notStarted {
+                    Button("Cancel") {
+                        calibrationManager.cancel()
+                        dismiss()
                     }
+                    .foregroundColor(.red)
                 }
             }
-            .onAppear {
-                // Re-initialize with proper bleManager when view appears
-                calibrationManager.cancel()
+        }
+        .onAppear {
+            // Re-initialize with proper bleManager when view appears
+            calibrationManager.cancel()
+        }
+        .onDisappear {
+            // Cancel calibration when leaving by any means (back button, swipe, etc.)
+            if calibrationManager.state != .notStarted {
+                if case .complete = calibrationManager.state {
+                    // Don't cancel if already complete
+                } else {
+                    calibrationManager.cancel()
+                }
             }
         }
     }
@@ -92,11 +102,11 @@ struct CalibrationView: View {
 
             BottleGraphicView(fillPercent: 0.0, targetHeight: 160)
 
-            Text("Calibrate Your Bottle")
+            Text("calibrate your bottle")
                 .font(.title2)
                 .fontWeight(.bold)
 
-            Text("Calibration teaches your bottle to measure water accurately. You'll weigh it empty, then full with a known amount.")
+            Text("calibration teaches your bottle to measure water accurately. you'll weigh it empty, then full with a known amount.")
                 .font(.body)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
@@ -112,7 +122,7 @@ struct CalibrationView: View {
             }
 
             if !bleManager.connectionState.isConnected {
-                Text("Connect to your bottle to begin calibration")
+                Text("connect to your bottle to begin calibration")
                     .font(.caption)
                     .foregroundColor(.orange)
             }
@@ -134,7 +144,7 @@ struct CalibrationView: View {
             BottleGraphicView(fillPercent: 0.0, targetHeight: 160)
 
             VStack(spacing: 8) {
-                Text("Step 1: Empty Bottle")
+                Text("step 1: empty bottle")
                     .font(.title3)
                     .fontWeight(.semibold)
 
@@ -159,7 +169,7 @@ struct CalibrationView: View {
 
                 HStack(spacing: 8) {
                     ProgressView()
-                    Text("Waiting for stable measurement...")
+                    Text("waiting for stable measurement...")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
@@ -185,7 +195,7 @@ struct CalibrationView: View {
             BottleGraphicView(fillPercent: 1.0, targetHeight: 160)
 
             VStack(spacing: 8) {
-                Text("Step 2: Full Bottle")
+                Text("step 2: full bottle")
                     .font(.title3)
                     .fontWeight(.semibold)
 
@@ -210,7 +220,7 @@ struct CalibrationView: View {
 
                 HStack(spacing: 8) {
                     ProgressView()
-                    Text("Waiting for stable measurement...")
+                    Text("waiting for stable measurement...")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
@@ -373,32 +383,32 @@ private struct CalibrationViewContent: View {
     }
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                // Progress indicator (shown for all states except notStarted)
-                if calibrationManager.state.stepNumber > 0 {
-                    CalibrationProgressView(currentStep: calibrationManager.state.stepNumber)
-                        .padding(.vertical)
+        VStack(spacing: 0) {
+            // Progress indicator (shown for all states except notStarted)
+            if calibrationManager.state.stepNumber > 0 {
+                CalibrationProgressView(currentStep: calibrationManager.state.stepNumber)
+                    .padding(.vertical)
 
-                    Divider()
-                }
-
-                // Content based on state
-                ScrollView {
-                    contentForState
-                        .padding()
-                }
+                Divider()
             }
-            .navigationTitle("Calibrate Bottle")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    if calibrationManager.state != .notStarted {
-                        Button("Cancel") {
-                            calibrationManager.cancel()
-                            dismiss()
-                        }
+
+            // Content based on state
+            ScrollView {
+                contentForState
+                    .padding()
+            }
+        }
+        .navigationTitle("Calibrate Bottle")
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(calibrationManager.state != .notStarted)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                if calibrationManager.state != .notStarted {
+                    Button("Cancel") {
+                        calibrationManager.cancel()
+                        dismiss()
                     }
+                    .foregroundColor(.red)
                 }
             }
         }
@@ -439,11 +449,11 @@ private struct CalibrationViewContent: View {
 
             BottleGraphicView(fillPercent: 0.0, targetHeight: 160)
 
-            Text("Calibrate Your Bottle")
+            Text("calibrate your bottle")
                 .font(.title2)
                 .fontWeight(.bold)
 
-            Text("Calibration teaches your bottle to measure water accurately. You'll weigh it empty, then full with a known amount.")
+            Text("calibration teaches your bottle to measure water accurately. you'll weigh it empty, then full with a known amount.")
                 .font(.body)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
@@ -459,7 +469,7 @@ private struct CalibrationViewContent: View {
             }
 
             if !bleManager.connectionState.isConnected {
-                Text("Connect to your bottle to begin calibration")
+                Text("connect to your bottle to begin calibration")
                     .font(.caption)
                     .foregroundColor(.orange)
             }
@@ -481,7 +491,7 @@ private struct CalibrationViewContent: View {
             BottleGraphicView(fillPercent: 0.0, targetHeight: 160)
 
             VStack(spacing: 8) {
-                Text("Step 1: Empty Bottle")
+                Text("step 1: empty bottle")
                     .font(.title3)
                     .fontWeight(.semibold)
 
@@ -506,7 +516,7 @@ private struct CalibrationViewContent: View {
 
                 HStack(spacing: 8) {
                     ProgressView()
-                    Text("Waiting for stable measurement...")
+                    Text("waiting for stable measurement...")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
@@ -532,7 +542,7 @@ private struct CalibrationViewContent: View {
             BottleGraphicView(fillPercent: 1.0, targetHeight: 160)
 
             VStack(spacing: 8) {
-                Text("Step 2: Full Bottle")
+                Text("step 2: full bottle")
                     .font(.title3)
                     .fontWeight(.semibold)
 
@@ -557,7 +567,7 @@ private struct CalibrationViewContent: View {
 
                 HStack(spacing: 8) {
                     ProgressView()
-                    Text("Waiting for stable measurement...")
+                    Text("waiting for stable measurement...")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
