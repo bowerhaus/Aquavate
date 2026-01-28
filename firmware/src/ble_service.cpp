@@ -129,9 +129,22 @@ class BottleConfigCallbacks : public NimBLECharacteristicCallbacks {
         if (value.length() == sizeof(BLE_BottleConfig)) {
             memcpy(&bottleConfig, value.data(), sizeof(BLE_BottleConfig));
 
-            BLE_DEBUG_F("Config updated: scale=%.2f, tare=%d, capacity=%d, goal=%d",
+            BLE_DEBUG_F("Config received: scale=%.2f, tare=%d, capacity=%d, goal=%d",
                        bottleConfig.scale_factor, bottleConfig.tare_weight_grams,
                        bottleConfig.bottle_capacity_ml, bottleConfig.daily_goal_ml);
+
+            // Validate scale_factor before accepting - prevents calibration corruption
+            // (Issue #84: iOS app was sending default/uninitialized scale_factor values)
+            if (bottleConfig.scale_factor < CALIBRATION_SCALE_FACTOR_MIN ||
+                bottleConfig.scale_factor > CALIBRATION_SCALE_FACTOR_MAX) {
+                BLE_DEBUG_F("WARNING: Invalid scale_factor %.2f (valid range: %.0f-%.0f), rejecting write",
+                           bottleConfig.scale_factor, CALIBRATION_SCALE_FACTOR_MIN, CALIBRATION_SCALE_FACTOR_MAX);
+                // Restore valid values from NVS
+                bleLoadBottleConfig();
+                return;
+            }
+
+            BLE_DEBUG("Config validated - saving to NVS");
 
             // Save to NVS
             bleSaveBottleConfig();
@@ -604,6 +617,17 @@ void bleSaveBottleConfig() {
 
     // Load existing calibration to preserve ADC values
     if (storageLoadCalibration(cal)) {
+        // Validate incoming scale_factor before accepting (defense in depth)
+        // This check is also in BottleConfigCallbacks::onWrite(), but we double-check here
+        if (bottleConfig.scale_factor < CALIBRATION_SCALE_FACTOR_MIN ||
+            bottleConfig.scale_factor > CALIBRATION_SCALE_FACTOR_MAX) {
+            BLE_DEBUG_F("ERROR: Rejecting invalid scale_factor %.2f in bleSaveBottleConfig()",
+                       bottleConfig.scale_factor);
+            // Restore correct value from loaded calibration
+            bottleConfig.scale_factor = cal.scale_factor;
+            return;  // Don't save corrupt data
+        }
+
         // Update scale factor
         cal.scale_factor = bottleConfig.scale_factor;
 

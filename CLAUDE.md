@@ -81,11 +81,11 @@ Two prototype configurations are being evaluated:
 ### IRAM Constraints (Temporary - ESP32 V2 only)
 The current ESP32 Feather V2 has limited IRAM (131KB). To fit BLE + all features, we use conditional compilation:
 
-**IOS_MODE flag** in [config.h](firmware/include/config.h) - single flag that controls three mutually exclusive features:
+**IOS_MODE flag** in [config.h](firmware/src/config.h) - controls build configuration:
 - `IOS_MODE=1` (Production - default):
   - BLE enabled (iOS app communication)
   - Serial commands disabled (saves ~3.7KB IRAM)
-  - Standalone calibration disabled (saves ~1KB IRAM)
+  - Standalone calibration enabled (bottle-driven, iOS mirrors state via BLE)
   - IRAM: 125KB / 131KB (95.3%)
 - `IOS_MODE=0` (Development/USB mode):
   - BLE disabled (saves ~45.5KB IRAM)

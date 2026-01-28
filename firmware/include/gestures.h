@@ -62,4 +62,11 @@ float gesturesGetVariance();
 // Reset gesture state (useful after handling a gesture)
 void gesturesReset();
 
+// Set calibration mode - when enabled, UPRIGHT_STABLE uses accelerometer-only stability
+// This bypasses the weight_ml stability check to allow calibration with corrupt/missing calibration data
+void gesturesSetCalibrationMode(bool enabled);
+
+// Check if calibration mode is active
+bool gesturesIsCalibrationMode();
+
 #endif // GESTURES_H

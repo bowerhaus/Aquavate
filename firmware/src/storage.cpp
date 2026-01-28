@@ -106,6 +106,17 @@ bool storageLoadCalibration(CalibrationData& cal) {
     Serial.print("Storage: Valid = ");
     Serial.println(cal.calibration_valid);
 
+    // Sanity check: validate scale factor is within reasonable bounds
+    // This catches corrupt calibration data that could cause circular dependency issues (Issue #84)
+    if (cal.calibration_valid == 1) {
+        if (cal.scale_factor < CALIBRATION_SCALE_FACTOR_MIN ||
+            cal.scale_factor > CALIBRATION_SCALE_FACTOR_MAX) {
+            Serial.printf("Storage: WARNING - scale_factor %.2f out of range [%.0f-%.0f], marking invalid\n",
+                         cal.scale_factor, CALIBRATION_SCALE_FACTOR_MIN, CALIBRATION_SCALE_FACTOR_MAX);
+            cal.calibration_valid = 0;
+        }
+    }
+
     return (cal.calibration_valid == 1);
 }
 

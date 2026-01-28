@@ -774,6 +774,16 @@ static void handleTare() {
         // Recalculate scale factor (if we have a valid full bottle reading)
         if (cal.calibration_valid && cal.full_bottle_adc != cal.empty_bottle_adc) {
             cal.scale_factor = (float)(cal.full_bottle_adc - cal.empty_bottle_adc) / 830.0f;
+
+            // Validate the new scale factor - prevent creating invalid calibration (Issue #84)
+            if (cal.scale_factor < CALIBRATION_SCALE_FACTOR_MIN ||
+                cal.scale_factor > CALIBRATION_SCALE_FACTOR_MAX) {
+                Serial.printf("WARNING: Tare would create invalid scale_factor (%.2f)\n", cal.scale_factor);
+                Serial.printf("Valid range: %.0f - %.0f counts/g\n",
+                             CALIBRATION_SCALE_FACTOR_MIN, CALIBRATION_SCALE_FACTOR_MAX);
+                Serial.println("Full recalibration required - run standalone calibration");
+                cal.calibration_valid = 0;
+            }
         }
 
         // Save updated calibration
