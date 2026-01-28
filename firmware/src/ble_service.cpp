@@ -16,6 +16,7 @@
 #include "activity_stats.h"
 #include "weight.h"
 #include "calibration.h"
+#include "display.h"
 
 // NimBLE objects
 static NimBLEServer* pServer = nullptr;
@@ -55,7 +56,7 @@ static BLE_BottleConfig bottleConfig = {
     .scale_factor = 1.0f,
     .tare_weight_grams = 0,
     .bottle_capacity_ml = 830,
-    .daily_goal_ml = DRINK_DAILY_GOAL_ML
+    .daily_goal_ml = DRINK_DAILY_GOAL_DEFAULT_ML
 };
 
 // Device settings cache (loaded from NVS on init)
@@ -147,6 +148,9 @@ class BottleConfigCallbacks : public NimBLECharacteristicCallbacks {
 
             // Save to NVS
             bleSaveBottleConfig();
+
+            // Update display module with new goal (triggers redraw if changed)
+            displaySetDailyGoal(bottleConfig.daily_goal_ml);
 
             // Trigger Current State update to reflect config change
             // (Main loop will call bleUpdateCurrentState)
@@ -582,11 +586,14 @@ class AquavateServerCallbacks : public NimBLEServerCallbacks {
 // Load bottle config from NVS
 void bleLoadBottleConfig() {
     CalibrationData cal;
+
+    // Always load daily goal from NVS (persists independently of calibration)
+    bottleConfig.daily_goal_ml = storageLoadDailyGoal();
+
     if (storageLoadCalibration(cal)) {
         bottleConfig.scale_factor = cal.scale_factor;
         bottleConfig.tare_weight_grams = (int32_t)(cal.empty_bottle_adc / cal.scale_factor);
         bottleConfig.bottle_capacity_ml = 830; // Default capacity (could be configurable later)
-        bottleConfig.daily_goal_ml = DRINK_DAILY_GOAL_ML;
 
         // Update characteristic value
         if (pBottleConfigChar) {
@@ -597,12 +604,15 @@ void bleLoadBottleConfig() {
                    bottleConfig.scale_factor, bottleConfig.tare_weight_grams,
                    bottleConfig.bottle_capacity_ml, bottleConfig.daily_goal_ml);
     } else {
-        BLE_DEBUG("No calibration data found in NVS");
+        BLE_DEBUG_F("No calibration data found in NVS (goal=%dml)", bottleConfig.daily_goal_ml);
     }
 }
 
 // Save bottle config to NVS
 void bleSaveBottleConfig() {
+    // Always save daily goal (persists independently of calibration)
+    storageSaveDailyGoal(bottleConfig.daily_goal_ml);
+
     CalibrationData cal;
 
     // Load existing calibration to preserve ADC values
@@ -636,7 +646,7 @@ void bleSaveBottleConfig() {
             BLE_DEBUG("Failed to save config to NVS");
         }
     } else {
-        BLE_DEBUG("Cannot save config: no existing calibration");
+        BLE_DEBUG_F("Daily goal saved (no calibration to update): %dml", bottleConfig.daily_goal_ml);
     }
 }
 

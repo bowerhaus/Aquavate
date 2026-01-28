@@ -1725,6 +1725,38 @@ void loop() {
         }
     }
 
+    // Check for BLE config changes that require display update (e.g., daily goal changed)
+    // This check is OUTSIDE the gesture block so display updates even when bottle isn't upright
+#if defined(BOARD_ADAFRUIT_FEATHER)
+    if (g_calibrated && cal_state == CAL_IDLE && displayCheckGoalChanged()) {
+        Serial.println("Display: Goal changed via BLE - forcing update");
+        DisplayState last_state = displayGetState();
+
+        // Get current time
+        uint8_t time_hour = 0, time_minute = 0;
+        if (g_time_valid) {
+            struct timeval tv;
+            gettimeofday(&tv, NULL);
+            time_t now = tv.tv_sec + (g_timezone_offset * 3600);
+            struct tm timeinfo;
+            gmtime_r(&now, &timeinfo);
+            time_hour = timeinfo.tm_hour;
+            time_minute = timeinfo.tm_min;
+        }
+
+        // Get battery percent
+        float voltage = getBatteryVoltage();
+        uint8_t battery_pct = getBatteryPercent(voltage);
+
+        // Get daily total
+        uint16_t daily_total = drinksGetDailyTotal();
+
+        // Force display update with current values
+        displayForceUpdate(last_state.water_ml, daily_total,
+                          time_hour, time_minute, battery_pct, false);
+    }
+#endif
+
     // Send BLE updates during iOS calibration mode (even if bottle not yet calibrated)
     // This allows the iOS app to show real-time weight and stability during calibration
 #if ENABLE_BLE

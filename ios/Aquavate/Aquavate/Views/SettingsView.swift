@@ -13,6 +13,13 @@ struct SettingsView: View {
     @EnvironmentObject var notificationManager: NotificationManager
     @EnvironmentObject var hydrationReminderService: HydrationReminderService
 
+    // Daily goal picker sheet state
+    @State private var isGoalPickerPresented = false
+    @State private var selectedGoalMl: Int = 2000
+
+    // Goal options: 1000ml to 4000ml in 250ml steps
+    private let goalOptions = stride(from: 1000, through: 4000, by: 250).map { $0 }
+
     private var connectionStatusColor: Color {
         switch bleManager.connectionState {
         case .connected:
@@ -181,12 +188,25 @@ struct SettingsView: View {
                             .foregroundStyle(.secondary)
                     }
 
-                    HStack {
-                        Text("Daily Goal")
-                        Spacer()
-                        Text("\(bleManager.dailyGoalMl)ml")
-                            .foregroundStyle(.secondary)
+                    // Daily Goal - tappable row that opens picker sheet
+                    Button {
+                        selectedGoalMl = bleManager.dailyGoalMl
+                        isGoalPickerPresented = true
+                    } label: {
+                        HStack {
+                            Text("Daily Goal")
+                                .foregroundStyle(.primary)
+                            Spacer()
+                            Text("\(bleManager.dailyGoalMl)ml")
+                                .foregroundStyle(.secondary)
+                            if bleManager.connectionState.isConnected {
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
                     }
+                    .disabled(!bleManager.connectionState.isConnected)
                 }
 
                 // Device Info (when connected)
@@ -522,6 +542,42 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
+            .sheet(isPresented: $isGoalPickerPresented) {
+                NavigationView {
+                    VStack(spacing: 20) {
+                        Text("Select your daily hydration target")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .padding(.top)
+
+                        Picker("Daily Goal", selection: $selectedGoalMl) {
+                            ForEach(goalOptions, id: \.self) { goal in
+                                Text("\(goal)ml").tag(goal)
+                            }
+                        }
+                        .pickerStyle(.wheel)
+                        .frame(height: 150)
+
+                        Spacer()
+                    }
+                    .navigationTitle("Daily Goal")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Cancel") {
+                                isGoalPickerPresented = false
+                            }
+                        }
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Save") {
+                                bleManager.setDailyGoal(selectedGoalMl)
+                                isGoalPickerPresented = false
+                            }
+                        }
+                    }
+                }
+                .presentationDetents([.medium])
+            }
         }
     }
 }

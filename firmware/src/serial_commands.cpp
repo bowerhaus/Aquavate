@@ -498,8 +498,8 @@ static void handleGetDailyState() {
     Serial.println("\n=== DAILY STATE ===");
     Serial.printf("Daily total: %dml / %dml (%d%%)\n",
                  daily_total,
-                 DRINK_DAILY_GOAL_ML,
-                 (daily_total * 100) / DRINK_DAILY_GOAL_ML);
+                 DRINK_DAILY_GOAL_DEFAULT_ML,
+                 (daily_total * 100) / DRINK_DAILY_GOAL_DEFAULT_ML);
     Serial.printf("Drink count: %d drinks today\n", drink_count);
     Serial.printf("Last baseline ADC: %d\n", state.last_recorded_adc);
     Serial.printf("Last displayed: %dml\n", state.last_displayed_total_ml);

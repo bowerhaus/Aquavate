@@ -23,6 +23,7 @@ struct DisplayState {
 // Public API
 void displayInit(ThinkInk_213_Mono_GDEY0213B74& display_ref);
 void displaySetDailyGoal(uint16_t goal_ml);
+bool displayCheckGoalChanged();  // Returns true if goal changed, clears flag
 bool displayNeedsUpdate(float current_water_ml,
                        uint16_t current_daily_ml,
                        bool time_interval_elapsed,
