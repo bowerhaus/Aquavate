@@ -249,6 +249,7 @@ class BLEManager: NSObject, ObservableObject {
     private var scanTimer: Timer?
     private var connectionTimer: Timer?
     private var idleDisconnectTimer: Timer?
+    private var goalWriteTask: Task<Void, Never>?
 
     /// How long to stay connected after sync when app is in foreground (seconds)
     private let idleDisconnectInterval: TimeInterval = 60.0
@@ -1615,6 +1616,40 @@ extension BLEManager: CBPeripheralDelegate {
 
         peripheral.readValue(for: characteristic)
         logger.info("Requested bottle config read")
+    }
+
+    // MARK: - Daily Goal Setting
+
+    /// Set daily hydration goal with debounce (waits 0.5s after last change before writing)
+    /// - Parameter ml: Goal in milliliters (clamped to 1000-4000ml)
+    func setDailyGoal(_ ml: Int) {
+        // Clamp to valid range
+        let clampedMl = max(1000, min(4000, ml))
+
+        // Update local state immediately (optimistic UI)
+        dailyGoalMl = clampedMl
+
+        // Update hydration reminder service with new goal (recalculates behind-target status)
+        hydrationReminderService?.updateState(
+            totalMl: dailyTotalMl,
+            goalMl: clampedMl,
+            lastDrink: nil  // Don't update last drink time
+        )
+
+        // Cancel any pending write
+        goalWriteTask?.cancel()
+
+        // Schedule debounced write
+        goalWriteTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 500_000_000)  // 0.5s debounce
+            guard !Task.isCancelled else { return }
+
+            // Write to bottle if connected
+            if connectionState.isConnected {
+                writeBottleConfig(capacity: UInt16(bottleCapacityMl), goal: UInt16(clampedMl))
+                logger.info("Set daily goal: \(clampedMl)ml")
+            }
+        }
     }
 
     // MARK: - Device Settings

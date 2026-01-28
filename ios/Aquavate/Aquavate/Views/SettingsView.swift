@@ -181,11 +181,29 @@ struct SettingsView: View {
                             .foregroundStyle(.secondary)
                     }
 
-                    HStack {
-                        Text("Daily Goal")
-                        Spacer()
-                        Text("\(bleManager.dailyGoalMl)ml")
-                            .foregroundStyle(.secondary)
+                    if bleManager.connectionState.isConnected {
+                        Stepper(
+                            value: Binding(
+                                get: { bleManager.dailyGoalMl },
+                                set: { bleManager.setDailyGoal($0) }
+                            ),
+                            in: 1000...4000,
+                            step: 250
+                        ) {
+                            HStack {
+                                Text("Daily Goal")
+                                Spacer()
+                                Text("\(bleManager.dailyGoalMl)ml")
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    } else {
+                        HStack {
+                            Text("Daily Goal")
+                            Spacer()
+                            Text("\(bleManager.dailyGoalMl)ml")
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
 

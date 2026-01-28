@@ -25,6 +25,7 @@ static const char* KEY_SLEEP_TIMEOUT = "sleep_timeout";
 static const char* KEY_EXT_SLEEP_TMR = "ext_sleep_tmr";
 static const char* KEY_EXT_SLEEP_THR = "ext_sleep_thr";
 static const char* KEY_SHAKE_EMPTY_EN = "shake_empty_en";
+static const char* KEY_DAILY_GOAL = "daily_goal_ml";
 
 bool storageInit() {
     if (g_initialized) {
@@ -345,4 +346,45 @@ bool storageLoadShakeToEmptyEnabled() {
     Serial.print("Storage: Loaded shake_to_empty_enabled = ");
     Serial.println(enabled ? "true" : "false");
     return enabled;
+}
+
+bool storageSaveDailyGoal(uint16_t goal_ml) {
+    if (!g_initialized) {
+        Serial.println("Storage: Not initialized");
+        return false;
+    }
+
+    // Clamp to valid range
+    if (goal_ml < DRINK_DAILY_GOAL_MIN_ML) {
+        goal_ml = DRINK_DAILY_GOAL_MIN_ML;
+    } else if (goal_ml > DRINK_DAILY_GOAL_MAX_ML) {
+        goal_ml = DRINK_DAILY_GOAL_MAX_ML;
+    }
+
+    g_preferences.putUShort(KEY_DAILY_GOAL, goal_ml);
+    Serial.print("Storage: Saved daily_goal = ");
+    Serial.print(goal_ml);
+    Serial.println("ml");
+    return true;
+}
+
+uint16_t storageLoadDailyGoal() {
+    if (!g_initialized) {
+        Serial.printf("Storage: Not initialized, using default daily_goal %dml\n", DRINK_DAILY_GOAL_DEFAULT_ML);
+        return DRINK_DAILY_GOAL_DEFAULT_ML;
+    }
+
+    uint16_t goal_ml = g_preferences.getUShort(KEY_DAILY_GOAL, DRINK_DAILY_GOAL_DEFAULT_ML);
+
+    // Validate range and fix if corrupted
+    if (goal_ml < DRINK_DAILY_GOAL_MIN_ML || goal_ml > DRINK_DAILY_GOAL_MAX_ML) {
+        Serial.printf("Storage: WARNING - daily_goal %dml out of range, resetting to %dml\n", goal_ml, DRINK_DAILY_GOAL_DEFAULT_ML);
+        goal_ml = DRINK_DAILY_GOAL_DEFAULT_ML;
+        g_preferences.putUShort(KEY_DAILY_GOAL, goal_ml);  // Fix the stored value
+    }
+
+    Serial.print("Storage: Loaded daily_goal = ");
+    Serial.print(goal_ml);
+    Serial.println("ml");
+    return goal_ml;
 }

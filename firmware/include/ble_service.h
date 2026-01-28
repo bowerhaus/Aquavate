@@ -56,7 +56,7 @@ struct __attribute__((packed)) BLE_BottleConfig {
     float    scale_factor;        // ADC counts per gram
     int32_t  tare_weight_grams;   // Empty bottle weight
     uint16_t bottle_capacity_ml;  // Max capacity (default 830ml)
-    uint16_t daily_goal_ml;       // User's daily target (default DRINK_DAILY_GOAL_ML)
+    uint16_t daily_goal_ml;       // User's daily target (1000-4000ml, persisted to NVS)
 };
 
 // Sync Control Characteristic (8 bytes)

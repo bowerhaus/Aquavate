@@ -30,8 +30,9 @@ extern int getBatteryPercent(float voltage);
 static DisplayState g_display_state;
 static ThinkInk_213_Mono_GDEY0213B74* g_display_ptr = nullptr;
 
-// Daily goal for hydration graphic (synced from BLE config, default matches DRINK_DAILY_GOAL_ML)
-static uint16_t g_daily_goal_ml = DRINK_DAILY_GOAL_ML;
+// Daily goal for hydration graphic (synced from BLE config, persisted to NVS)
+static uint16_t g_daily_goal_ml = DRINK_DAILY_GOAL_DEFAULT_ML;
+static bool g_daily_goal_changed = false;  // Flag to trigger display update when goal changes
 
 // RTC memory for display state persistence across deep sleep
 // RTC_DATA_ATTR keeps data in RTC slow memory (survives deep sleep, lost on power cycle)
@@ -503,8 +504,11 @@ void displayInit(ThinkInk_213_Mono_GDEY0213B74& display_ref) {
 }
 
 void displaySetDailyGoal(uint16_t goal_ml) {
-    g_daily_goal_ml = goal_ml;
-    Serial.printf("Display: Daily goal set to %dml\n", goal_ml);
+    if (goal_ml != g_daily_goal_ml) {
+        g_daily_goal_ml = goal_ml;
+        g_daily_goal_changed = true;  // Trigger display update
+        Serial.printf("Display: Daily goal changed to %dml\n", goal_ml);
+    }
 }
 
 bool displayNeedsUpdate(float current_water_ml,
@@ -537,6 +541,13 @@ bool displayNeedsUpdate(float current_water_ml,
         DRINK_DISPLAY_UPDATE_THRESHOLD_ML) {
         DEBUG_PRINTF(1, "Display: Daily intake changed (%dml -> %dml)\n",
                      g_display_state.daily_total_ml, current_daily_ml);
+        needs_update = true;
+    }
+
+    // 2b. Daily goal changed (from BLE config update)
+    if (g_daily_goal_changed) {
+        Serial.println("Display: Daily goal changed - triggering update");
+        g_daily_goal_changed = false;  // Clear flag
         needs_update = true;
     }
 

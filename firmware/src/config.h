@@ -245,7 +245,9 @@ extern uint8_t g_daily_intake_display_mode;
 #define DRINK_DAILY_RESET_HOUR          0       // Reset daily counter at midnight (aligns with HealthKit)
 #define DRINK_DISPLAY_UPDATE_THRESHOLD_ML 50    // Only refresh display if daily total changed by ≥50ml
 #define DRINK_MAX_RECORDS               600     // Circular buffer capacity (30 days at 20 drinks/day)
-#define DRINK_DAILY_GOAL_ML             2500    // Hardcoded daily goal for MVP
+#define DRINK_DAILY_GOAL_MIN_ML         1000    // Minimum configurable goal
+#define DRINK_DAILY_GOAL_MAX_ML         4000    // Maximum configurable goal
+#define DRINK_DAILY_GOAL_DEFAULT_ML     2500    // Default daily goal (persisted to NVS)
 #define DRINK_DRIFT_THRESHOLD_ML        15      // Max delta for drift compensation (avoids baseline contamination)
 
 // Drink type classification

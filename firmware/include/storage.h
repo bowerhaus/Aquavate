@@ -83,4 +83,10 @@ bool storageSaveShakeToEmptyEnabled(bool enabled);
 // Load shake-to-empty enabled setting from NVS (default: true = enabled)
 bool storageLoadShakeToEmptyEnabled();
 
+// Save daily hydration goal to NVS in ml (1000-4000ml)
+bool storageSaveDailyGoal(uint16_t goal_ml);
+
+// Load daily hydration goal from NVS in ml (default: 2500ml)
+uint16_t storageLoadDailyGoal();
+
 #endif // STORAGE_H
