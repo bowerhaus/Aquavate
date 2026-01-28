@@ -1,6 +1,6 @@
 # Aquavate - Active Development Progress
 
-**Last Updated:** 2026-01-28 (Session 10)
+**Last Updated:** 2026-01-28 (Session 11)
 **Current Branch:** `master` (after merge)
 
 ---
@@ -13,6 +13,11 @@
 
 ## Recently Completed
 
+- **Faded Blue Behind Indicator (Issue #81)** - [Plan 061](Plans/061-faded-blue-behind-indicator.md) ✅ COMPLETE
+  - Simplified human figure's "behind target" overlay from amber/red gradient to faded blue (30% opacity)
+  - Removed visual distinction between Attention and Overdue urgency levels
+  - Kept deficit text ("Xml behind target") unchanged
+  - Updated iOS-UX-PRD.md Section 2.9
 - **iOS Calibration Flow (Issue #30)** - [Plan 060](Plans/060-ios-calibration-flow.md) ✅ COMPLETE
   - Bottle-driven calibration with iOS mirroring
   - iOS sends START/CANCEL commands, bottle runs state machine

@@ -49,21 +49,6 @@ struct HumanFigureProgressView: View {
         roundedDeficitMl >= 50
     }
 
-    /// Progress level at which overdue begins (80% of expected = 20% behind)
-    private var overdueThresholdProgress: Double {
-        expectedProgress * 0.8
-    }
-
-    /// Whether deficit exceeds the overdue threshold (20%+)
-    private var isOverdue: Bool {
-        progress < overdueThresholdProgress
-    }
-
-    /// Top of orange zone: up to overdue threshold, or expected if not overdue
-    private var orangeTopProgress: Double {
-        isOverdue ? overdueThresholdProgress : expectedProgress
-    }
-
     var body: some View {
         VStack(spacing: 16) {
             ZStack {
@@ -74,40 +59,20 @@ struct HumanFigureProgressView: View {
                     .aspectRatio(contentMode: .fit)
                     .foregroundColor(.white)
 
-                // Deficit zone: gradient from attention (bottom) to overdue (top of head)
+                // Deficit zone: faded blue showing how far behind target
                 // Only show when isBehindTarget (50ml rounded threshold) for consistency with text
-                // Gradient spans from current progress (yellow) to top of head (red), but:
-                // - Only filled up to expected progress level
-                // - White above expected progress (background shows through)
+                // Fills from current progress up to expected progress level
                 if expectedCurrent != nil && isBehindTarget {
                     GeometryReader { geometry in
                         VStack {
                             Spacer(minLength: 0)
-                            // Full gradient from progress to top of head
                             Rectangle()
-                                .fill(
-                                    LinearGradient(
-                                        colors: [HydrationUrgency.attention.color, HydrationUrgency.overdue.color],
-                                        startPoint: .bottom,
-                                        endPoint: .top
-                                    )
-                                )
-                                .frame(height: geometry.size.height * (1.0 - progress))
-                                .opacity(0.7)
+                                .fill(color.opacity(0.3))
+                                .frame(height: geometry.size.height * (expectedProgress - progress))
                         }
                         .offset(y: -geometry.size.height * progress)
                     }
-                    // First mask: clip to expected progress height
-                    .mask(
-                        GeometryReader { geometry in
-                            VStack {
-                                Spacer(minLength: 0)
-                                Rectangle()
-                                    .frame(height: geometry.size.height * expectedProgress)
-                            }
-                        }
-                    )
-                    // Second mask: clip to human figure shape
+                    // Mask to human figure shape
                     .mask(
                         Image("HumanFigureFilled")
                             .resizable()
@@ -181,9 +146,9 @@ struct HumanFigureProgressView: View {
     HumanFigureProgressView(current: 2000, total: 2000, color: .blue, label: "of 2000ml goal")
 }
 
-#Preview("15% behind - orange only") {
-    // 850 actual vs 1000 expected = 15% behind (below 20% overdue threshold)
-    // Shows: blue (850) + orange (850 to 1000)
+#Preview("15% behind") {
+    // 850 actual vs 1000 expected = 15% behind
+    // Shows: blue (850) + faded blue (850 to 1000)
     HumanFigureProgressView(
         current: 850,
         total: 2000,
@@ -195,9 +160,9 @@ struct HumanFigureProgressView: View {
     )
 }
 
-#Preview("30% behind - orange + red") {
-    // 700 actual vs 1000 expected = 30% behind (exceeds 20% overdue threshold)
-    // Shows: blue (700) + orange (700 to 800) + red (800 to 1000)
+#Preview("30% behind") {
+    // 700 actual vs 1000 expected = 30% behind
+    // Shows: blue (700) + faded blue (700 to 1000)
     HumanFigureProgressView(
         current: 700,
         total: 2000,
