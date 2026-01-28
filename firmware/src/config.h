@@ -227,6 +227,13 @@ extern uint8_t g_daily_intake_display_mode;
 #define CALIBRATION_BOTTLE_VOLUME_ML    830.0f  // Full bottle volume (ml)
 #define CALIBRATION_WATER_DENSITY       1.0f    // Water density (g/ml)
 
+// Calibration scale factor bounds (ADC counts per gram)
+// Based on NAU7802 at 128 gain with typical load cells:
+// Expected range: ~200-600 ADC/g, with margin for variation
+// Values outside this range indicate corrupt calibration
+#define CALIBRATION_SCALE_FACTOR_MIN    100.0f  // Minimum valid scale factor
+#define CALIBRATION_SCALE_FACTOR_MAX    800.0f  // Maximum valid scale factor
+
 // Calibration UI timeouts (milliseconds)
 #define CAL_STARTED_DISPLAY_DURATION    3000    // 3 seconds - "Calibration Started" screen
 #define CAL_WAIT_EMPTY_TIMEOUT          60000   // 60 seconds - Empty bottle prompt timeout
