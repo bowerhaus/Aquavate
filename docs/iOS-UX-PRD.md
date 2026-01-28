@@ -1,10 +1,11 @@
 # Aquavate iOS App - UX Product Requirements Document
 
-**Version:** 1.17
-**Date:** 2026-01-27
-**Status:** Approved (Bottle-Driven Calibration)
+**Version:** 1.18
+**Date:** 2026-01-28
+**Status:** Approved (Faded Blue Behind Indicator)
 
 **Changelog:**
+- **v1.18 (2026-01-28):** Simplified behind-target indicator to faded blue (Issue #81). Replaced amber/red gradient with 30% opacity blue. Removes visual distinction between urgency levels while keeping deficit text. See Section 2.9.
 - **v1.17 (2026-01-27):** Bottle-driven calibration (Issue #30). iOS sends START/CANCEL commands, bottle runs state machine and broadcasts state changes, iOS mirrors with rich UI. Simplified to 4 screens: Welcome → Empty → Full → Complete. See Section 2.3.
 - **v1.16 (2026-01-26):** Unified Sessions view in Activity Stats (Issue #74). Replaced confusing separate "Recent Motion Wakes" and "Backpack Sessions" sections with single chronological "Sessions" list. Summary changed from "Since Last Charge" to "Last 7 Days". See Section 2.7.
 - **v1.15 (2026-01-25):** Increased notification threshold from 50ml to 150ml behind pace (Issue #67). Early Notifications toggle (DEBUG only) lowers threshold to 50ml. See Section 7.
@@ -745,7 +746,7 @@ ios/Aquavate/
 
 ---
 
-### 2.9 HomeView Target Visualization (Issue #27)
+### 2.9 HomeView Target Visualization (Issue #27, updated Issue #81)
 
 **Purpose:** Visual pace tracking showing expected vs actual progress
 
@@ -756,10 +757,10 @@ ios/Aquavate/
 │      [Human figure graphic]     │
 │      ┌─────────────────────┐    │
 │      │  ████████░░░░░░░░░  │    │  ← Blue fill = actual
-│      │  ████████████░░░░░  │    │  ← Urgency fill = expected (behind)
+│      │  ████████████░░░░░  │    │  ← Faded blue (30% opacity) = deficit
 │      └─────────────────────┘    │
 │                                 │
-│      250 ml behind target       │  ← Text (urgency colored)
+│      250 ml behind target       │  ← Text (secondary color)
 │                                 │
 └─────────────────────────────────┘
 ```
@@ -769,13 +770,14 @@ ios/Aquavate/
 | State | Visualization |
 |-------|--------------|
 | On track | Blue fill only (actual progress) |
-| Behind target (<20%) | Orange fill showing expected level, blue fill showing actual. Gap indicates deficit. |
-| Behind target (≥20%) | Stacked fill: red (beyond 20% threshold) + orange (up to 20% threshold) + blue (actual). Shows severity of deficit. |
+| Behind target | Blue fill (actual) + faded blue at 30% opacity (deficit zone from actual to expected) |
 
 **Text Display:**
 - Shows "X ml behind target" when rounded deficit ≥ 50ml
-- Text color matches urgency (amber or red)
+- Text uses secondary color (neutral, not urgency-colored)
 - Hidden when on track or deficit < 50ml
+
+**Note:** Urgency levels (attention/overdue) are still calculated for notification purposes but are not visually distinguished in the human figure display.
 
 ---
 
