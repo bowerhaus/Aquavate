@@ -161,6 +161,11 @@ class BLEManager: NSObject, ObservableObject {
         }
     }
 
+    // Calibration values (not user-editable, stored for read-modify-write pattern)
+    // These are read from the device on connection and preserved when writing config updates
+    private var lastKnownScaleFactor: Float = 0
+    private var lastKnownTareWeightGrams: Int32 = 0
+
     // MARK: - Published Properties (Device Settings)
 
     /// Whether shake-to-empty gesture is enabled (default: true)
@@ -817,6 +822,11 @@ extension BLEManager: CBCentralManagerDelegate {
             connectedPeripheral = nil
             characteristics.removeAll()
 
+            // Reset calibration values to prevent stale data on reconnect
+            // These will be refreshed when bottle config is read after reconnection
+            lastKnownScaleFactor = 0
+            lastKnownTareWeightGrams = 0
+
             // Check if we should request background reconnection
             // This is set when disconnect(requestBackgroundReconnect: true) was called
             if let pendingPeripheral = pendingBackgroundReconnectPeripheral {
@@ -1142,8 +1152,14 @@ extension BLEManager: CBPeripheralDelegate {
             return
         }
 
+        // Store user-editable values
         bottleCapacityMl = Int(config.bottleCapacityMl)
         dailyGoalMl = Int(config.dailyGoalMl)
+
+        // Store calibration values for read-modify-write pattern
+        // These are preserved when writing config updates to avoid corrupting calibration
+        lastKnownScaleFactor = config.scaleFactor
+        lastKnownTareWeightGrams = config.tareWeightGrams
 
         logger.info("Bottle Config: capacity=\(config.bottleCapacityMl)ml, goal=\(config.dailyGoalMl)ml, tare=\(config.tareWeightGrams)g, scale=\(config.scaleFactor)")
     }
@@ -1580,6 +1596,7 @@ extension BLEManager: CBPeripheralDelegate {
     // MARK: - Bottle Config (Phase 4.5)
 
     /// Write new bottle configuration to device
+    /// Uses read-modify-write pattern: preserves calibration values, updates user settings
     func writeBottleConfig(capacity: UInt16, goal: UInt16) {
         guard let peripheral = connectedPeripheral,
               let characteristic = characteristics[BLEConstants.bottleConfigUUID] else {
@@ -1588,18 +1605,25 @@ extension BLEManager: CBPeripheralDelegate {
             return
         }
 
-        // Create config with current values (we only update capacity and goal)
-        // Note: scaleFactor and tareWeight should be preserved from calibration
+        // Validate we have valid calibration data before writing
+        // The firmware validates scale_factor in range 100-800 ADC/g (Issue #84 fix)
+        guard lastKnownScaleFactor >= 100 && lastKnownScaleFactor <= 800 else {
+            logger.error("Cannot write bottle config: no valid calibration data (scaleFactor=\(self.lastKnownScaleFactor))")
+            errorMessage = "Please reconnect to device"
+            return
+        }
+
+        // Use read-modify-write pattern: preserve calibration, update user settings
         let config = BLEBottleConfig(
-            scaleFactor: 1.0,  // Will be preserved by firmware if not recalibrating
-            tareWeightGrams: 0, // Will be preserved by firmware
+            scaleFactor: lastKnownScaleFactor,
+            tareWeightGrams: lastKnownTareWeightGrams,
             bottleCapacityMl: capacity,
             dailyGoalMl: goal
         )
 
         let data = config.toData()
         peripheral.writeValue(data, for: characteristic, type: .withResponse)
-        logger.info("Wrote bottle config: capacity=\(capacity)ml, goal=\(goal)ml")
+        logger.info("Wrote bottle config: capacity=\(capacity)ml, goal=\(goal)ml, scale=\(self.lastKnownScaleFactor), tare=\(self.lastKnownTareWeightGrams)")
 
         // Update local state
         bottleCapacityMl = Int(capacity)

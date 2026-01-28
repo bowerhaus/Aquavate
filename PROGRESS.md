@@ -1,6 +1,6 @@
 # Aquavate - Active Development Progress
 
-**Last Updated:** 2026-01-28 (Session 12)
+**Last Updated:** 2026-01-28 (Session 13)
 **Current Branch:** `daily-goal-setting`
 **GitHub Issue:** #83
 
@@ -8,7 +8,13 @@
 
 ## Current Task
 
-**Daily Goal Setting from iOS App (Issue #83)** - [Plan 063](Plans/063-daily-goal-setting.md)
+**No active task** - Ready for next issue or PR creation for Issue #83
+
+---
+
+## Recently Completed (This Session)
+
+**Daily Goal Setting from iOS App (Issue #83)** - [Plan 062](Plans/062-daily-goal-setting.md) ✅ COMPLETE
 
 Allow users to configure their daily hydration goal from the iOS app Settings screen. Goal transfers to bottle via BLE and persists in NVS.
 
@@ -27,34 +33,47 @@ Allow users to configure their daily hydration goal from the iOS app Settings sc
 - [x] Build and verify firmware
 - [x] Build and verify iOS
 - [x] Merged master (includes Issue #84 calibration fix)
-- [ ] **Testing**: Upload firmware, test on device
+- [x] **Phase 3: iOS - Fix Read-Modify-Write** (prevents calibration corruption)
+  - [x] 3.1 Add calibration storage properties (lastKnownScaleFactor, lastKnownTareWeightGrams)
+  - [x] 3.2 Update handleBottleConfigUpdate() to store calibration values
+  - [x] 3.3 Fix writeBottleConfig() to use stored calibration values
+  - [x] 3.4 Reset calibration values on disconnect
+- [x] Build and verify iOS (passed)
+- [x] **Phase 4: Display Update & UI Improvements**
+  - [x] 4.1 Fix e-paper not updating on goal change (was gated by UPRIGHT_STABLE gesture)
+  - [x] 4.2 Replace Stepper with dialog/picker (single BLE write on confirm)
+- [x] Build and verify firmware (passed)
+- [x] Build and verify iOS (passed)
+- [x] **Testing**: Upload firmware, test on device - ALL TESTS PASS
 
 ### Key Decisions
-- UI: Stepper with ±250ml steps
-- Range: 1000-4000ml
-- Offline: Require connection (stepper disabled when disconnected)
+- UI: Dialog with Picker (select value, tap Save - single BLE write)
+- Range: 1000-4000ml in 250ml steps
+- Offline: Require connection (row disabled when disconnected)
 
 ### Files Modified
 - `firmware/src/storage.cpp` - Added `storageSaveDailyGoal()`, `storageLoadDailyGoal()`
 - `firmware/include/storage.h` - Added function declarations
 - `firmware/src/ble_service.cpp` - Updated `bleLoadBottleConfig()`, `bleSaveBottleConfig()`, calls `displaySetDailyGoal()` on config write
 - `firmware/src/config.h` - Added `DRINK_DAILY_GOAL_MIN_ML`, `DRINK_DAILY_GOAL_MAX_ML`, `DRINK_DAILY_GOAL_DEFAULT_ML`
-- `firmware/src/display.cpp` - Added `g_daily_goal_changed` flag, updated `displaySetDailyGoal()` to set flag, updated `displayNeedsUpdate()` to check flag
+- `firmware/src/display.cpp` - Added `g_daily_goal_changed` flag, `displaySetDailyGoal()`, **`displayCheckGoalChanged()`**
+- `firmware/include/display.h` - Added `displayCheckGoalChanged()` declaration
+- `firmware/src/main.cpp` - **Added goal change check outside gesture block to force display update**
 - `firmware/src/serial_commands.cpp` - Updated default constant reference
 - `firmware/include/ble_service.h` - Updated comment
-- `ios/.../SettingsView.swift` - Added Stepper UI for goal setting
-- `ios/.../BLEManager.swift` - Added `setDailyGoal()` method with debounce, updates HydrationReminderService
+- `ios/.../SettingsView.swift` - **Changed from Stepper to dialog with Picker** (single BLE write on confirm)
+- `ios/.../BLEManager.swift` - Added `setDailyGoal()` method with debounce, updates HydrationReminderService, **fixed read-modify-write pattern**
 
-### Important Note
-Issue #84 (calibration circular dependency fix) is now merged into this branch. This means:
-- Firmware now validates incoming BLE scale_factor (100-800 ADC/g range)
-- iOS app must use read-modify-write pattern when updating BottleConfig
-- See [Plan 062](Plans/062-calibration-circular-dependency.md) for iOS app guidance
+### Issue Resolved: Calibration Corruption on Goal Setting
+When testing, setting the daily goal corrupted calibration data because `writeBottleConfig()` was sending hardcoded `scaleFactor: 1.0`. The firmware (with Issue #84 fix) rejected this invalid value, so the goal was never saved.
+
+**Fix (Phase 3)**: iOS app now stores calibration values (`lastKnownScaleFactor`, `lastKnownTareWeightGrams`) when reading bottle config on connection, and preserves them when writing config updates. This implements the read-modify-write pattern recommended in Plan 062.
 
 ---
 
 ## Recently Completed
 
+- **Daily Goal Setting from iOS App (Issue #83)** - [Plan 062](Plans/062-daily-goal-setting.md) ✅ COMPLETE (ready for PR)
 - **Calibration Circular Dependency Fix (Issue #84)** - [Plan 062](Plans/062-calibration-circular-dependency.md) ✅ COMPLETE (PR #85)
   - Fixed circular dependency preventing recalibration with corrupt calibration data
   - Added scale factor bounds validation (100-800 ADC/g) in config.h
@@ -74,7 +93,11 @@ Issue #84 (calibration circular dependency fix) is now merged into this branch. 
 
 To resume from this progress file:
 ```
-Resume from PROGRESS.md - working on daily goal setting (Issue #83), code complete, ready for device testing. Master merged (includes Issue #84 fix).
+Resume from PROGRESS.md - daily goal setting (Issue #83) COMPLETE.
+
+Session 13 completed:
+- All phases complete, device testing passed
+- Ready to create PR for Issue #83 and merge to master
 ```
 
 ---

@@ -511,6 +511,14 @@ void displaySetDailyGoal(uint16_t goal_ml) {
     }
 }
 
+bool displayCheckGoalChanged() {
+    if (g_daily_goal_changed) {
+        g_daily_goal_changed = false;
+        return true;
+    }
+    return false;
+}
+
 bool displayNeedsUpdate(float current_water_ml,
                        uint16_t current_daily_ml,
                        bool time_interval_elapsed,
