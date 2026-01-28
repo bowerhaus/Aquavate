@@ -5,6 +5,7 @@
 
 #include "calibration.h"
 #include "config.h"
+#include "gestures.h"
 
 #if ENABLE_STANDALONE_CALIBRATION
 
@@ -48,6 +49,11 @@ void calibrationInit() {
 
 void calibrationStart() {
     Serial.println("Calibration: Starting...");
+
+    // Enable accelerometer-only stability detection for calibration
+    // This bypasses ml-based weight stability to allow calibration with corrupt/missing calibration data
+    gesturesSetCalibrationMode(true);
+
     g_state = CAL_TRIGGERED;
     g_state_start_time = millis();
     g_empty_adc = 0;
@@ -105,6 +111,7 @@ CalibrationState calibrationUpdate(GestureType gesture, int32_t load_reading) {
                 Serial.println("Calibration: Empty bottle timeout");
                 g_state = CAL_ERROR;
                 g_result.error_message = "Timeout - try again";
+                gesturesSetCalibrationMode(false);  // Reset on error
                 break;
             }
 
@@ -171,6 +178,7 @@ CalibrationState calibrationUpdate(GestureType gesture, int32_t load_reading) {
                 Serial.println("Calibration: Full bottle timeout");
                 g_state = CAL_ERROR;
                 g_result.error_message = "Timeout - try again";
+                gesturesSetCalibrationMode(false);  // Reset on error
                 break;
             }
 
@@ -292,6 +300,7 @@ CalibrationState calibrationUpdate(GestureType gesture, int32_t load_reading) {
                     Serial.println("Calibration: Invalid scale factor");
                     g_state = CAL_ERROR;
                     g_result.error_message = "Invalid scale factor";
+                    gesturesSetCalibrationMode(false);  // Reset on error
                     break;
                 }
 
@@ -308,6 +317,7 @@ CalibrationState calibrationUpdate(GestureType gesture, int32_t load_reading) {
                     Serial.println("Calibration: Failed to save");
                     g_state = CAL_ERROR;
                     g_result.error_message = "Save failed";
+                    gesturesSetCalibrationMode(false);  // Reset on error
                     break;
                 }
 
@@ -317,6 +327,9 @@ CalibrationState calibrationUpdate(GestureType gesture, int32_t load_reading) {
                 g_result.final_state = CAL_COMPLETE;
                 g_state = CAL_COMPLETE;
                 g_state_start_time = millis();
+
+                // Disable calibration mode - calibration complete
+                gesturesSetCalibrationMode(false);
 
                 Serial.println("Calibration: Complete!");
             }
@@ -357,6 +370,10 @@ CalibrationResult calibrationGetResult() {
 
 void calibrationCancel() {
     Serial.println("Calibration: Cancelled");
+
+    // Disable calibration mode - return to normal weight stability detection
+    gesturesSetCalibrationMode(false);
+
     g_state = CAL_IDLE;
     g_empty_adc = 0;
     g_full_adc = 0;

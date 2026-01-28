@@ -45,6 +45,10 @@ static uint32_t g_shake_start_time = 0;
 static bool g_shake_active = false;
 static bool g_shake_triggered = false;
 
+// Calibration mode flag - when true, skip ml-based weight stability check for UPRIGHT_STABLE
+// This allows calibration to proceed even with corrupt/missing calibration data
+static bool g_calibration_mode = false;
+
 // Default configuration
 static GestureConfig getDefaultConfig() {
     GestureConfig config;
@@ -292,18 +296,29 @@ GestureType gesturesUpdate(float weight_ml) {
                 }
             }
 
-            // Check if weight is stable (not fluctuating)
-            // Allow ~6ml variance (weight_ml is in ml, so direct comparison)
-            float weight_delta = fabs(weight_ml - g_last_stable_weight);
-            bool weight_stable = (weight_delta < 6.0f);
+            // Check weight stability - depends on calibration mode
+            bool weight_stable;
+            float weight_delta = 0.0f;
 
-            // If weight is stable, update the baseline (tracks gradual changes)
-            if (weight_stable) {
-                g_last_stable_weight = weight_ml;
+            if (g_calibration_mode) {
+                // In calibration mode, skip ml-based weight stability check
+                // This allows calibration to proceed even with corrupt/missing calibration data
+                // (Since ml values are calculated from calibration, they can't be trusted during calibration)
+                weight_stable = true;
             } else {
-                // Weight changed significantly - reset timer
-                g_upright_start_time = millis();
-                g_last_stable_weight = weight_ml;
+                // Normal mode: check if weight is stable (not fluctuating)
+                // Allow ~6ml variance (weight_ml is in ml, so direct comparison)
+                weight_delta = fabs(weight_ml - g_last_stable_weight);
+                weight_stable = (weight_delta < 6.0f);
+
+                // If weight is stable, update the baseline (tracks gradual changes)
+                if (weight_stable) {
+                    g_last_stable_weight = weight_ml;
+                } else {
+                    // Weight changed significantly - reset timer
+                    g_upright_start_time = millis();
+                    g_last_stable_weight = weight_ml;
+                }
             }
 
             // Check if held stable long enough
@@ -313,7 +328,11 @@ GestureType gesturesUpdate(float weight_ml) {
                 static unsigned long last_weight_debug = 0;
                 if (millis() - last_weight_debug >= 1000) {
                     last_weight_debug = millis();
-                    if (!weight_stable) {
+                    if (g_calibration_mode) {
+                        Serial.print("Gestures: UPRIGHT stable (calibration mode - accel only) - duration=");
+                        Serial.print(upright_duration);
+                        Serial.println("ms (need 2000ms)");
+                    } else if (!weight_stable) {
                         Serial.print("Gestures: UPRIGHT stable but weight NOT stable - delta=");
                         Serial.print(weight_delta, 1);
                         Serial.println("ml (need <6ml)");
@@ -420,4 +439,21 @@ void gesturesReset() {
     g_shake_active = false;
     g_shake_triggered = false;
     g_shake_start_time = 0;
+}
+
+void gesturesSetCalibrationMode(bool enabled) {
+    g_calibration_mode = enabled;
+    if (enabled) {
+        // Reset weight stability tracking when entering calibration mode
+        g_upright_active = false;
+        g_upright_start_time = 0;
+        g_last_stable_weight = 0.0f;
+        Serial.println("Gestures: Calibration mode ENABLED (accelerometer-only stability)");
+    } else {
+        Serial.println("Gestures: Calibration mode DISABLED (normal weight stability)");
+    }
+}
+
+bool gesturesIsCalibrationMode() {
+    return g_calibration_mode;
 }
