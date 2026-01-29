@@ -255,6 +255,8 @@ class BLEManager: NSObject, ObservableObject {
     private var connectionTimer: Timer?
     private var idleDisconnectTimer: Timer?
     private var goalWriteTask: Task<Void, Never>?
+    private var keepAliveCount = 0
+    private var keepAlivePingTimer: Timer?
 
     /// How long to stay connected after sync when app is in foreground (seconds)
     private let idleDisconnectInterval: TimeInterval = 60.0
@@ -505,6 +507,20 @@ class BLEManager: NSObject, ObservableObject {
             return
         }
 
+        // Resume keep-alive pings if still active (e.g. Settings was open when backgrounded)
+        if keepAliveCount > 0 && keepAlivePingTimer == nil {
+            if connectionState.isConnected {
+                sendPingCommand()
+            }
+            keepAlivePingTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] _ in
+                Task { @MainActor in
+                    if self?.connectionState.isConnected == true {
+                        self?.sendPingCommand()
+                    }
+                }
+            }
+        }
+
         // Small delay to let Bluetooth stabilize after app activation
         Task {
             try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s
@@ -518,6 +534,10 @@ class BLEManager: NSObject, ObservableObject {
     /// Disconnect after a short delay to allow bottle to sleep
     func appDidEnterBackground() {
         logger.info("App entered background")
+
+        // Suspend keep-alive pings so normal background disconnect can proceed
+        keepAlivePingTimer?.invalidate()
+        keepAlivePingTimer = nil
 
         // Cancel any pending auto-reconnect attempts
         foregroundScanTimer?.invalidate()
@@ -625,6 +645,12 @@ class BLEManager: NSObject, ObservableObject {
     /// Start or reset the idle disconnect timer
     /// After the interval, automatically disconnects to save bottle battery
     func startIdleDisconnectTimer() {
+        // Don't start idle timer while keep-alive is active
+        guard keepAliveCount == 0 else {
+            logger.info("Idle disconnect timer suppressed (keep-alive active, count: \(self.keepAliveCount))")
+            return
+        }
+
         // Cancel existing timer
         idleDisconnectTimer?.invalidate()
 
@@ -645,6 +671,40 @@ class BLEManager: NSObject, ObservableObject {
     func cancelIdleDisconnectTimer() {
         idleDisconnectTimer?.invalidate()
         idleDisconnectTimer = nil
+    }
+
+    /// Request the connection stay alive (cancels idle timer, sends periodic pings).
+    /// Calls must be balanced with endKeepAlive().
+    func beginKeepAlive() {
+        keepAliveCount += 1
+        cancelIdleDisconnectTimer()
+
+        if connectionState.isConnected {
+            sendPingCommand()
+        }
+        if keepAlivePingTimer == nil {
+            keepAlivePingTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] _ in
+                Task { @MainActor in
+                    if self?.connectionState.isConnected == true {
+                        self?.sendPingCommand()
+                    }
+                }
+            }
+        }
+        logger.info("Keep-alive began (count: \(self.keepAliveCount))")
+    }
+
+    /// Release a keep-alive request. When all requests are released, idle timer resumes.
+    func endKeepAlive() {
+        keepAliveCount = max(0, keepAliveCount - 1)
+        if keepAliveCount == 0 {
+            keepAlivePingTimer?.invalidate()
+            keepAlivePingTimer = nil
+            if connectionState.isConnected {
+                startIdleDisconnectTimer()
+            }
+        }
+        logger.info("Keep-alive ended (count: \(self.keepAliveCount))")
     }
 
     // MARK: - Private Methods
