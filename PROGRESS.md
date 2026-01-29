@@ -1,6 +1,6 @@
 # Aquavate - Active Development Progress
 
-**Last Updated:** 2026-01-28 (Session 14)
+**Last Updated:** 2026-01-29 (Session 20)
 **Current Branch:** `settings-option1-disclosure-groups`
 **GitHub Issue:** #87
 **Plan:** [063-settings-page-redesign.md](Plans/063-settings-page-redesign.md)
@@ -11,63 +11,65 @@
 
 **Settings Page Redesign (Issue #87)** - Redesign the settings page with progressive disclosure, clearer connection states, and logical hierarchy.
 
-### Approach
+### Decision
 
-Iterative implementation: 5 layout options, each on its own branch off `master`, for side-by-side comparison. User picks favourite or hybrid for final version.
+User chose **Option 1 (DisclosureGroup layout)** as the preferred approach, with significant cleanup applied. The other 4 options (on their own branches) are no longer being pursued.
 
-### Shared Principles (all options)
-- Disabled + banner when disconnected (never hidden)
-- Calibrate Bottle always visible at top level
-- No DEBUG controls in production sections — separate Debug section at bottom
-- Connection status merged into Device section (no standalone section)
-- Keep-alive while on Settings — cancel idle disconnect timer on appear, send periodic pings (30s), restart idle timer on disappear
+### What Was Done This Session (Session 20)
 
-### Branches & Progress
+Started from the existing `settings-option1-disclosure-groups` branch and applied:
 
-| # | Branch | Option | Status |
-|---|--------|--------|--------|
-| 1 | `settings-option1-disclosure-groups` | Collapsible Sections (DisclosureGroup) | ✅ Built (uncommitted on branch) |
-| 2 | `settings-option2-essential-advanced` | Essential + Advanced Split | ⬜ Pending |
-| 3 | `settings-option3-connection-cards` | Connection-Aware Cards | ⬜ Pending |
-| 4 | `settings-option4-category-tabs` | Category Tabs | ⬜ Pending |
-| 5 | `settings-option5-smart-contextual` | Smart Contextual (sub-pages) | ⬜ Pending |
+1. **Removed Items** (decided during earlier Option 2 review, now applied to Option 1):
+   - Sync Time command (auto-syncs on connect)
+   - Current Weight, Device Name, Bottle Capacity, Time Set flag, Last Synced, Unsynced Records, Syncing progress displays
+   - Health Status, Notification Status, Current Status (hydration urgency) rows
+   - Danger Zone section header (Clear History moved into Commands)
+   - Debug section (scan/connect/disconnect/cancel controls)
+   - Bottle Details DisclosureGroup
+   - Entire Device Info DisclosureGroup
 
-### Implementation Log
+2. **Relocated Items:**
+   - Calibrated status + Calibrate Bottle → moved to Device Settings section (top)
+   - Clear Device History → moved into Commands DisclosureGroup (red destructive button with confirmation alert)
+   - Earlier Reminders toggle → moved from Debug into Reminder Options
+   - Sync to Health → moved from Notifications into Goals & Tracking
+   - Reminders Today → moved outside Reminder Options DisclosureGroup (standalone row below Hydration Reminders toggle)
 
-- [x] Plan created (063-settings-page-redesign.md)
-- [x] GitHub issue created (#87)
-- [x] Base branch created: `settings-page-redesign` from `master`
-- [x] Option 1: Implemented and builds successfully (not yet committed — user stages manually)
-- [ ] Option 1: User review in simulator
-- [ ] Option 2: Implement and build
-- [ ] Option 3: Implement and build
-- [ ] Option 4: Implement and build
-- [ ] Option 5: Implement and build
-- [ ] User selects preferred option
-- [ ] Final implementation on clean branch
-- [ ] PR created referencing #87
+3. **Keep-Alive Fix Added:**
+   - BLEManager: `beginKeepAlive()` / `endKeepAlive()` API with reference counting
+   - BLEManager: `keepAliveCount` + `keepAlivePingTimer` private state
+   - BLEManager: Guard in `startIdleDisconnectTimer()` (no-op while keep-alive active)
+   - BLEManager: Ping timer suspend/resume in `appDidEnterBackground()`/`appDidBecomeActive()`
+   - SettingsView: Simplified to `.onAppear { bleManager.beginKeepAlive() }` / `.onDisappear { bleManager.endKeepAlive() }`
 
-### Option 1 Details (current branch)
+4. **Layout Tweaks (user-directed):**
+   - Shake to Empty moved to bottom of Device Settings section
+   - Reminder Options placed immediately below Hydration Reminders toggle
+   - Reminders Today shown as standalone row (not inside DisclosureGroup)
 
-Layout: 6 sections (down from 9):
-1. **Device** — compact connection status + battery in one row, disconnection banner, errors/warnings
-2. **Goals & Tracking** — Daily Goal + Calibrate Bottle (always visible, disabled when disconnected) + collapsible Bottle Details
-3. **Notifications** — Reminders toggle + Health toggle + collapsible Reminder Options (status, limits, back-on-track)
-4. **Device Settings** — Shake to Empty + collapsible Device Info + collapsible Commands + collapsible Danger Zone (whole section disabled at 50% opacity when disconnected, with footer text)
-5. **Diagnostics** — Sleep Analysis (unchanged, works offline)
+### Current Layout (5 sections)
+
+1. **Device** — compact connection status + battery, disconnected banner, errors/warnings
+2. **Goals & Tracking** — Daily Goal, Sync to Health toggle
+3. **Notifications** — Hydration Reminders toggle, Reminders Today (standalone), Reminder Options DisclosureGroup (Limit Daily, Earlier Reminders, Back On Track)
+4. **Device Settings** (disabled/dimmed when disconnected) — Calibrated status, Calibrate Bottle, Commands DisclosureGroup (Tare, Reset Daily, Sync History, Clear Device History with confirmation), Shake to Empty
+5. **Diagnostics** — Sleep Mode Analysis
 6. **About** — GitHub link
-7. **Debug** (#if DEBUG) — scan/connect/disconnect + test mode
-
-Key features:
-- DisclosureGroups for progressive disclosure (all collapsed by default)
-- Keep-alive mechanism: cancels idle timer on appear, pings every 30s, restarts timer on disappear
-- Device Settings section always visible but disabled/dimmed when disconnected
 
 ### Uncommitted Files
 
-- `ios/Aquavate/Aquavate/Views/SettingsView.swift` — Option 1 implementation
-- `Plans/063-settings-page-redesign.md` — Plan file (new)
-- `PROGRESS.md` — This file
+- `ios/Aquavate/Aquavate/Views/SettingsView.swift` — Option 1 with all cleanup + keep-alive
+- `ios/Aquavate/Aquavate/Services/BLEManager.swift` — Keep-alive API added
+
+### Build Status
+
+Build verified successfully after all changes.
+
+### What's Next
+
+- User reviews on device
+- User decides if further tweaks needed
+- Commit and create PR referencing #87
 
 ---
 
@@ -89,12 +91,21 @@ To resume from this progress file:
 ```
 Resume from PROGRESS.md - Settings Page Redesign (Issue #87).
 
-Session 14: Iterative settings redesign with 5 layout options.
-Currently on branch: settings-option1-disclosure-groups (has uncommitted changes).
-Option 1 is built and ready for user review in simulator.
-Next step: User reviews Option 1, then implement Options 2-5 on separate branches.
-Each new option branch should be created from master (not from option1).
-Read the plan at Plans/063-settings-page-redesign.md for full details of all 5 options.
+Session 20: Applied full cleanup to Option 1 (DisclosureGroup layout) on branch settings-option1-disclosure-groups.
+Currently on branch: settings-option1-disclosure-groups (has uncommitted changes in SettingsView.swift and BLEManager.swift).
+
+What was done:
+- Applied all "Removed Items" from earlier review (removed Sync Time, Current Weight, Device Name, Bottle Capacity, Time Set, Last Synced, Unsynced Records, Syncing progress, Health Status, Notification Status, Current Status, Danger Zone section, Debug section, Bottle Details, Device Info DisclosureGroup)
+- Relocated: Calibrated + Calibrate Bottle to Device Settings, Clear History into Commands with confirmation alert, Earlier Reminders into Reminder Options, Sync to Health into Goals & Tracking, Reminders Today as standalone row
+- Added BLEManager keep-alive API (beginKeepAlive/endKeepAlive with reference counting, periodic pings, background suspend/resume)
+- SettingsView uses beginKeepAlive/endKeepAlive instead of local timer
+- Layout tweaks: Shake to Empty at bottom of Device Settings, Reminder Options right after Hydration Reminders, Reminders Today outside DisclosureGroup
+- Build verified successfully
+
+What's next:
+- User reviews on device
+- Further tweaks if needed
+- Commit and PR referencing #87
 ```
 
 ---
