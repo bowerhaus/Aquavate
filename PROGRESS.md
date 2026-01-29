@@ -1,25 +1,15 @@
 # Aquavate - Active Development Progress
 
-**Last Updated:** 2026-01-29 (Session 20)
-**Current Branch:** `settings-option5-smart-contextual`
-**GitHub Issue:** #87
-**Plan:** Plans/063-settings-page-redesign.md (not yet created as file)
+**Last Updated:** 2026-01-29 (Session 21)
+**Current Branch:** `display-redraw-on-wake`
+**GitHub Issue:** #88
+**Plan:** [Plans/063-display-redraw-on-wake.md](Plans/063-display-redraw-on-wake.md)
 
 ---
 
 ## Current Task
 
-No active task. Settings Page Redesign (Issue #87) is complete — awaiting PR merge.
-
-### Approach
-
-Iterative implementation: 5 layout options, each on its own branch off `master`, for side-by-side comparison. User picks favourite or hybrid for final version.
-
-### Shared Principles (all options)
-- Disabled + banner when disconnected (never hidden)
-- Calibrate Bottle always visible at top level
-- Connection status merged into Device section (no standalone section)
-- Keep-alive while on Settings via `beginKeepAlive()` / `endKeepAlive()` API in BLEManager
+No active task. Display redraw fix (Issue #88) is complete — awaiting PR merge.
 
 ### Removed Items (all options — decided during Option 2 review)
 
@@ -212,7 +202,8 @@ Files changed (keep-alive):
 
 ## Recently Completed
 
-- **Settings Page Redesign (Issue #87)** - Plan 063 ✅ COMPLETE — Option 5 (Smart Contextual sub-pages) selected. Keep-alive fix, Health/Notification status flags, error message cleanup. iOS-UX-PRD updated.
+- **Display Redraw on Wake Fix (Issue #88)** - [Plan 063](Plans/063-display-redraw-on-wake.md) ✅ COMPLETE — Persisted daily goal in RTC memory, removed dual flag check in displayNeedsUpdate().
+- **Settings Page Redesign (Issue #87)** - Plan 063 ✅ COMPLETE (PR #89) — Option 5 (Smart Contextual sub-pages) selected. Keep-alive fix, Health/Notification status flags, error message cleanup. iOS-UX-PRD updated.
 - **Daily Goal Setting from iOS App (Issue #83)** - [Plan 062](Plans/062-daily-goal-setting.md) ✅ COMPLETE (PR #86)
 - **Calibration Circular Dependency Fix (Issue #84)** - [Plan 062](Plans/062-calibration-circular-dependency.md) ✅ COMPLETE (PR #85)
 - **Faded Blue Behind Indicator (Issue #81)** - [Plan 061](Plans/061-faded-blue-behind-indicator.md) ✅ COMPLETE
@@ -229,12 +220,10 @@ To resume from this progress file:
 ```
 Resume from PROGRESS.md — no active task.
 
-Session 20: Settings Page Redesign (Issue #87) completed.
-- Option 5 (Smart Contextual) selected after reviewing all 5 options on device
-- Final tweaks: reinstated Health/Notification status flags, removed error message row, updated info text
-- BLEManager keep-alive fix committed
-- iOS-UX-PRD.md Section 2.6 updated to reflect new Settings layout
-- PR created referencing #87
+Session 21: Display redraw on wake fix (Issue #88) completed.
+- Persisted g_daily_goal_ml in RTC memory so it survives deep sleep
+- Removed redundant dual-check of g_daily_goal_changed from displayNeedsUpdate()
+- Build successful, PR created.
 ```
 
 ---

@@ -44,6 +44,7 @@ RTC_DATA_ATTR uint8_t rtc_display_hour = 0;
 RTC_DATA_ATTR uint8_t rtc_display_minute = 0;
 RTC_DATA_ATTR uint8_t rtc_display_battery = 0;
 RTC_DATA_ATTR uint32_t rtc_wake_count = 0;
+RTC_DATA_ATTR uint16_t rtc_display_daily_goal = 0;
 
 // Bitmap data (moved from main.cpp)
 // Water drop icon bitmap (60x60 pixels)
@@ -552,13 +553,6 @@ bool displayNeedsUpdate(float current_water_ml,
         needs_update = true;
     }
 
-    // 2b. Daily goal changed (from BLE config update)
-    if (g_daily_goal_changed) {
-        Serial.println("Display: Daily goal changed - triggering update");
-        g_daily_goal_changed = false;  // Clear flag
-        needs_update = true;
-    }
-
     // 3. Time check (always check if time is valid, update if hour changed or 15+ min elapsed)
     if (g_time_valid) {
         struct timeval tv;
@@ -663,6 +657,7 @@ void displaySaveToRTC() {
     rtc_display_hour = g_display_state.hour;
     rtc_display_minute = g_display_state.minute;
     rtc_display_battery = g_display_state.battery_percent;
+    rtc_display_daily_goal = g_daily_goal_ml;
     rtc_display_magic = RTC_MAGIC_DISPLAY;  // Mark as valid
     rtc_wake_count++;  // Increment wake counter
 
@@ -686,6 +681,7 @@ bool displayRestoreFromRTC() {
     g_display_state.hour = rtc_display_hour;
     g_display_state.minute = rtc_display_minute;
     g_display_state.battery_percent = rtc_display_battery;
+    g_daily_goal_ml = rtc_display_daily_goal;
 
     Serial.printf("Display: Restored from RTC (wake #%lu) - %.0fml, %uml daily, %02u:%02u, %u%% batt\n",
                   rtc_wake_count, rtc_display_water_ml, rtc_display_daily_ml,
