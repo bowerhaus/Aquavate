@@ -1,10 +1,11 @@
 # Aquavate iOS App - UX Product Requirements Document
 
-**Version:** 1.18
-**Date:** 2026-01-28
-**Status:** Approved (Faded Blue Behind Indicator)
+**Version:** 1.19
+**Date:** 2026-01-29
+**Status:** Approved (Settings Page Redesign)
 
 **Changelog:**
+- **v1.19 (2026-01-29):** Settings page redesigned with Apple Settings-style sub-pages (Issue #87). Main page shows category rows with contextual summaries; drill-down to Goals & Health, Device Information, Device Controls, Reminder Options. Added BLE keep-alive, Health/Notification status flags. Removed error message display, unused status rows. See Section 2.6.
 - **v1.18 (2026-01-28):** Simplified behind-target indicator to faded blue (Issue #81). Replaced amber/red gradient with 30% opacity blue. Removes visual distinction between urgency levels while keeping deficit text. See Section 2.9.
 - **v1.17 (2026-01-27):** Bottle-driven calibration (Issue #30). iOS sends START/CANCEL commands, bottle runs state machine and broadcasts state changes, iOS mirrors with rich UI. Simplified to 4 screens: Welcome → Empty → Full → Complete. See Section 2.3.
 - **v1.16 (2026-01-26):** Unified Sessions view in Activity Stats (Issue #74). Replaced confusing separate "Recent Motion Wakes" and "Backpack Sessions" sections with single chronological "Sessions" list. Summary changed from "Since Last Charge" to "Last 7 Days". See Section 2.7.
@@ -488,111 +489,108 @@ Sarah's Bluetooth is accidentally turned off. When she opens the app, she sees a
 
 ---
 
-### 2.6 Settings Screen
+### 2.6 Settings Screen (Redesigned 2026-01-29, Issue #87)
 
 **Purpose:** Device configuration and app preferences
 
-**Layout:**
+**Architecture:** Apple Settings-style with main page showing category rows with contextual summaries. Each category is a NavigationLink that drills down to a dedicated sub-page. Keep-alive prevents BLE idle disconnect while Settings is open.
+
+**Main Page Layout:**
 ```
 ┌─────────────────────────────────┐
 │  Settings                       │
 │                                 │
-│  BOTTLE CONFIGURATION           │  ← Section header
+│  DEVICE STATUS                  │
 │  ┌─────────────────────────────┐│
-│  │ Device      Aquavate-A3F2   ││  ← Shows connected/last device name
+│  │ 📶 ● Aquavate-A3F2    🔋85%││  ← Connection dot + battery
 │  ├─────────────────────────────┤│
-│  │ Capacity           750ml    ││
-│  ├─────────────────────────────┤│
-│  │ Daily Goal        2000ml    ││  ← Tappable to edit
+│  │ ℹ️ Some options require     ││  ← Info banner (when disconnected)
+│  │    connection to the bottle ││
+│  │    to be displayed. Pull to ││
+│  │    refresh on Home to       ││
+│  │    connect.                 ││
 │  └─────────────────────────────┘│
 │                                 │
-│  DEVICE                         │
 │  ┌─────────────────────────────┐│
-│  │ 🔋 Battery            85%   ││  ← Green/orange/red by level
+│  │ 🎯 Goals & Health       →  ││  ← NavigationLink
+│  │    2000ml goal · Reminders  ││  ← Contextual summary
+│  │    on · Health sync on      ││
 │  ├─────────────────────────────┤│
-│  │ 📶 Status    ● Connected    ││
+│  │ ⚙️ Device Information   →  ││
+│  │    Calibrated               ││  ← Or "Not calibrated" (orange)
 │  ├─────────────────────────────┤│
-│  │ ↻ Last Sync      2:45 PM    ││
+│  │ 🎚 Device Controls      →  ││
+│  │    Tare, reset, sync,      ││  ← Or "Requires connection"
+│  │    gestures                 ││
 │  ├─────────────────────────────┤│
-│  │ ⏱ Device Time      ✓ Set    ││  ← Warning if not set
-│  └─────────────────────────────┘│
-│                                 │
-│  DEVICE COMMANDS                │
-│  ┌─────────────────────────────┐│
-│  │ 🔧 Calibrate Bottle         ││  ← Opens calibration wizard (NEW)
-│  ├─────────────────────────────┤│
-│  │ ⚖️ Tare Bottle              ││  ← Quick tare only (keeps scale factor)
-│  ├─────────────────────────────┤│
-│  │ 🔄 Reset Daily Total        ││
-│  ├─────────────────────────────┤│
-│  │ 🗑 Clear History     ⚠️     ││  ← Destructive (red text)
-│  └─────────────────────────────┘│
-│                                 │
-│  GESTURES                       │
-│  ┌─────────────────────────────┐│
-│  │ 👋 Shake to Empty    [ON]   ││  ← Toggle (default ON)
-│  │    Shake bottle while       ││  ← Description text
-│  │    inverted to reset level  ││
-│  └─────────────────────────────┘│
-│                                 │
-│  APPLE HEALTH                   │
-│  ┌─────────────────────────────┐│
-│  │ ❤️ Sync to Health    [OFF]  ││  ← Toggle (triggers auth prompt)
-│  ├─────────────────────────────┤│
-│  │ Status          Connected   ││  ← Shows after auth granted
-│  └─────────────────────────────┘│
-│                                 │
-│  PREFERENCES                    │
-│  ┌─────────────────────────────┐│
-│  │ 🔔 Notifications     [ON]   ││  ← Toggle
-│  └─────────────────────────────┘│
-│                                 │
-│  DIAGNOSTICS                    │
-│  ┌─────────────────────────────┐│
-│  │ 📊 Activity Stats       →   ││  ← Opens ActivityStatsView
+│  │ 🔔 Reminder Options     →  ││  ← Only when reminders enabled
+│  │    3/10 sent today          ││
 │  └─────────────────────────────┘│
 │                                 │
 │  ABOUT                          │
 │  ┌─────────────────────────────┐│
-│  │ 🔗 GitHub Repository    →   ││
+│  │ 🔗 GitHub Repository    →  ││
 │  └─────────────────────────────┘│
 │                                 │
 └─────────────────────────────────┘
 ```
 
-**Command Actions (Updated 2026-01-20):**
+**Sub-Pages:**
+
+**Goals & Health** (`GoalsSettingsPage`):
+- **Daily Goal** section — Tappable row opens wheel picker sheet (1000–4000ml in 250ml steps). Disabled when disconnected.
+- **Notifications** section — Hydration Reminders toggle + Notification Status (Authorized / Not Authorized)
+- **Health** section — Sync to Health toggle + Health Status (Authorized / Not Authorized). Shows "HealthKit not available" on iPad.
+
+**Device Information** (`DeviceInformationPage`):
+- **Calibration** section — Calibrated status (Yes/No) + Calibrate Bottle link (opens CalibrationViewWrapper). Disabled + dimmed when disconnected with footer hint.
+- **Diagnostics** section — Sleep Mode Analysis (ActivityStatsView). Works offline.
+
+**Device Controls** (`DeviceControlsPage`):
+- **Commands** section — Tare (Zero Scale), Reset Daily Total, Sync Drink History (conditional, when unsynced records exist), Clear Device History (destructive, with confirmation alert). All disabled when disconnected with footer hint.
+- **Gestures** section — Shake to Empty toggle with description. Disabled when disconnected.
+
+**Reminder Options** (`ReminderOptionsPage`) — only accessible when reminders enabled:
+- Reminders Today count (with limit if enabled)
+- Limit Daily Reminders toggle
+- Earlier Reminders toggle
+- Back On Track Alerts toggle
+
+**Command Actions:**
 
 | Command | Tap Behavior | Confirmation |
 |---------|--------------|--------------|
-| Calibrate Bottle | Opens Calibration Wizard modal (NEW) | None (wizard has own confirm flow) |
-| Tare Bottle | Sends TARE_NOW (0x01) - Quick tare keeping scale factor | None (instant) |
+| Calibrate Bottle | Opens Calibration Wizard modal | None (wizard has own confirm flow) |
+| Tare (Zero Scale) | Sends TARE_NOW (0x01) | None (instant) |
 | Reset Daily Total | Sends RESET_DAILY (0x05) + deletes today's CoreData records | None (instant) |
-| Clear History | Sends CLEAR_HISTORY (0x06) | Alert: "This cannot be undone." |
+| Clear Device History | Sends CLEAR_HISTORY (0x06) | Alert: "This will permanently delete all drink history stored on the device. This cannot be undone." |
+| Sync Drink History | Starts drink sync | None (instant) |
 
-**Command Feedback:**
-- Success: Green banner "Bottle tared" (2s)
-- Failure: Red banner "Command failed. Try again." (4s)
-- Disconnected: Alert "Connect to bottle first"
+**Contextual Summaries (main page):**
 
-**Connection Controls (Updated 2026-01-18):**
-- Connection controls (Scan/Connect/Disconnect buttons) wrapped in `#if DEBUG`
-- **Debug builds:** Full connection controls visible for testing
-- **Release builds:** Users connect via pull-to-refresh on Home screen
-- Device Info and Device Commands sections remain visible in all builds
+| Category | Connected | Disconnected |
+|----------|-----------|--------------|
+| Goals & Health | "2000ml goal · Reminders on · Health sync on" | Same (works offline) |
+| Device Information | "Calibrated" or "Not calibrated" (orange) | "Calibration, sleep analysis" |
+| Device Controls | "Tare, reset, sync, gestures" or "3 unsynced records" | "Requires connection" |
+| Reminder Options | "3/10 sent today" or "3 sent today" | Same (works offline) |
 
-**Device Time Warning:**
-If `time_valid` flag is false:
-```
-│  │ ⏱ Device Time    ⚠️ Not Set ││  ← Orange warning icon
-```
-- Tap row → Sends time sync command automatically
+**Connection Behavior:**
+- Keep-alive via `beginKeepAlive()` / `endKeepAlive()` API prevents idle disconnect while Settings is open
+- Periodic BLE pings (30s) keep firmware awake
+- When app enters background, keep-alive suspends so normal 5s background disconnect proceeds
+- When app returns to foreground with Settings still open, keep-alive resumes
 
-**Apple Health Integration (Added 2026-01-21):**
+**Removed Items (Issue #87):**
+The following were removed from the settings UI. Underlying code remains for internal use:
+- Sync Time command (auto-syncs on connect), Current Weight, Device Name, Bottle Capacity, Time Set flag, Last Synced, Unsynced Records count, Syncing progress, Current Status (hydration urgency), Danger Zone section header, Debug section (scan/connect/disconnect/cancel), Error message display in Device Status
+
+**Apple Health Integration:**
 
 | Element | Behavior |
 |---------|----------|
 | Toggle "Sync to Health" | When enabled, triggers iOS HealthKit authorization prompt |
-| Status row | Shows "Connected" (green checkmark) or "Not Authorized" (orange warning) |
+| Health Status row | Shows green checkmark "Authorized" or orange "Not Authorized" |
 | iPad handling | Section shows "HealthKit not available on this device" (gray text) |
 
 **Sync Behavior:**
@@ -1794,7 +1792,7 @@ Watch notifications include haptic feedback via `WKInterfaceDevice.current().pla
 | Calibration Wizard | 🔄 Updated | 4.7 | Two-point calibration (updated 2026-01-17) |
 | Home Screen | ✅ Complete | 4.2-4.6 | Wire BLE data, target visualization (Issue #27) |
 | History Screen | ✅ Complete | 4.3-4.4 | Wire CoreData |
-| Settings Screen | ✅ Complete | 4.2-4.5 | Calibrate, Diagnostics, Hydration Reminders |
+| Settings Screen | ✅ Complete | 4.2-4.5 | Redesigned with sub-pages (Issue #87). Calibrate, Diagnostics, Hydration Reminders |
 | Activity Stats | ✅ Complete | - | Battery diagnostics with offline support (Issue #36, 2026-01-24) |
 | Watch App | ✅ Complete | - | Companion app + complications (Issue #27, 2026-01-24) |
 
