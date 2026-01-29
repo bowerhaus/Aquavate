@@ -1,6 +1,6 @@
 # Aquavate - Active Development Progress
 
-**Last Updated:** 2026-01-29 (Session 19)
+**Last Updated:** 2026-01-29 (Session 20)
 **Current Branch:** `settings-option5-smart-contextual`
 **GitHub Issue:** #87
 **Plan:** Plans/063-settings-page-redesign.md (not yet created as file)
@@ -9,7 +9,7 @@
 
 ## Current Task
 
-**Settings Page Redesign (Issue #87)** - Redesign the settings page with progressive disclosure, clearer connection states, and logical hierarchy.
+No active task. Settings Page Redesign (Issue #87) is complete — awaiting PR merge.
 
 ### Approach
 
@@ -34,11 +34,14 @@ These items have been removed from the settings UI across all options. The under
 - Last Synced display
 - Unsynced Records display
 - Syncing progress display
-- Health Status (HealthKit authorized/not)
 - Current Status (hydration urgency)
-- Notification Status (authorized/not)
 - Danger Zone section header
 - Debug section (scan/connect/disconnect/cancel)
+- Error message display in Device Status section (disconnected reason, connection timeout, etc.)
+
+**Reinstated (session 20):**
+- Health Status (HealthKit authorized/not) → added to Health section in Goals & Health sub-page
+- Notification Status (authorized/not) → added to Notifications section in Goals & Health sub-page
 
 **Relocated:**
 - Calibrated flag → moved to Device Setup section (above Calibrate Bottle)
@@ -54,7 +57,7 @@ These items have been removed from the settings UI across all options. The under
 | 2 | `settings-option2-essential-advanced` | Essential + Advanced Split | ✅ Built (uncommitted on branch, HAS keep-alive fix + background handling) |
 | 3 | `settings-option3-connection-cards` | Connection-Aware Cards | ✅ Built (committed on branch, HAS keep-alive fix) |
 | 4 | `settings-option4-category-tabs` | Category Tabs | ✅ Built (committed on branch, HAS keep-alive fix) |
-| 5 | `settings-option5-smart-contextual` | Smart Contextual (sub-pages) | ✅ Built (uncommitted on branch, HAS keep-alive fix) |
+| 5 | `settings-option5-smart-contextual` | Smart Contextual (sub-pages) | ✅ **SELECTED** — Built (uncommitted on branch, HAS keep-alive fix) |
 
 ### Implementation Log
 
@@ -62,18 +65,19 @@ These items have been removed from the settings UI across all options. The under
 - [x] GitHub issue created (#87)
 - [x] Base branch created: `settings-page-redesign` from `master`
 - [x] Option 1: Implemented (DisclosureGroup layout — 6 sections with collapsible sub-groups)
-- [ ] Option 1: User review on device
+- [x] Option 1: User review on device
 - [x] Option 2: Implemented (Essential + Advanced Split — 4 top-level sections + single Advanced expander)
-- [ ] Option 2: User review on device
+- [x] Option 2: User review on device
 - [x] Option 3: Implemented (Connection-Aware Cards — connection badges + visual dimming)
-- [ ] Option 3: User review on device
+- [x] Option 3: User review on device
 - [x] Option 4: Implemented (Category Tabs — segmented picker with 3 tabs)
-- [ ] Option 4: User review on device
+- [x] Option 4: User review on device
 - [x] Option 5: Implemented (Smart Contextual — sub-pages with contextual summaries)
-- [ ] Option 5: User review on device
-- [ ] User selects preferred option
-- [ ] Final implementation on clean branch
-- [ ] PR created referencing #87
+- [x] Option 5: User review on device
+- [x] User selects preferred option → **Option 5 (Smart Contextual)**
+- [x] Session 20 tweaks: reinstated Health/Notification status flags, removed error message row, updated disconnected info text
+- [x] Final implementation on clean branch (commit + PR)
+- [x] PR created referencing #87
 
 ### Option 1 Details (branch: settings-option1-disclosure-groups)
 
@@ -208,6 +212,7 @@ Files changed (keep-alive):
 
 ## Recently Completed
 
+- **Settings Page Redesign (Issue #87)** - Plan 063 ✅ COMPLETE — Option 5 (Smart Contextual sub-pages) selected. Keep-alive fix, Health/Notification status flags, error message cleanup. iOS-UX-PRD updated.
 - **Daily Goal Setting from iOS App (Issue #83)** - [Plan 062](Plans/062-daily-goal-setting.md) ✅ COMPLETE (PR #86)
 - **Calibration Circular Dependency Fix (Issue #84)** - [Plan 062](Plans/062-calibration-circular-dependency.md) ✅ COMPLETE (PR #85)
 - **Faded Blue Behind Indicator (Issue #81)** - [Plan 061](Plans/061-faded-blue-behind-indicator.md) ✅ COMPLETE
@@ -222,31 +227,13 @@ Files changed (keep-alive):
 
 To resume from this progress file:
 ```
-Resume from PROGRESS.md - Settings Page Redesign (Issue #87).
+Resume from PROGRESS.md — no active task.
 
-Session 18: Built Option 5 (Smart Contextual) on branch settings-option5-smart-contextual.
-Currently on branch: settings-option5-smart-contextual (has uncommitted changes).
-
-What was done this session:
-- Created settings-option5-smart-contextual branch from master
-- Applied BLEManager keep-alive changes (beginKeepAlive/endKeepAlive)
-- Implemented Option 5: Smart Contextual (sub-pages) layout
-- Key concept: Apple Settings-style with main page showing category rows with contextual summaries
-- Categories: Goals & Health, Device Setup, Device Controls, Reminder Options, Sleep Mode Analysis
-- Each category is a NavigationLink that drills down to a dedicated sub-page
-- Contextual summaries show live status (goal value, calibration state, unsynced count, reminders sent)
-- Applied all "Removed Items" decisions from Option 2 review
-- Build verified successfully
-
-What's done overall:
-- All 5 options are built (on their respective branches)
-- Options 2, 3, 4, and 5 have BLEManager keep-alive fix
-- Option 1 does NOT have the keep-alive fix or UI cleanup yet
-
-What's next:
-- User reviews all 5 Options on device
-- User selects preferred option or hybrid
-- Final implementation on clean branch
+Session 20: Settings Page Redesign (Issue #87) completed.
+- Option 5 (Smart Contextual) selected after reviewing all 5 options on device
+- Final tweaks: reinstated Health/Notification status flags, removed error message row, updated info text
+- BLEManager keep-alive fix committed
+- iOS-UX-PRD.md Section 2.6 updated to reflect new Settings layout
 - PR created referencing #87
 ```
 

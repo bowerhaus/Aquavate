@@ -97,29 +97,12 @@ struct SettingsView: View {
                         HStack {
                             Image(systemName: "info.circle")
                                 .foregroundStyle(.blue)
-                            Text("Pull to refresh on Home to connect your bottle")
+                            Text("Some options require connection to the bottle to be displayed. Pull to refresh on Home to connect.")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
                     }
 
-                    if let error = bleManager.errorMessage {
-                        HStack {
-                            Image(systemName: "exclamationmark.triangle")
-                                .foregroundStyle(.orange)
-                            Text(error)
-                                .foregroundStyle(.secondary)
-                                .font(.caption)
-                            Spacer()
-                            Button {
-                                bleManager.errorMessage = nil
-                            } label: {
-                                Image(systemName: "xmark.circle.fill")
-                                    .foregroundStyle(.secondary)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
 
                     if !bleManager.isBluetoothReady && bleManager.connectionState == .disconnected {
                         HStack {
@@ -375,6 +358,16 @@ private struct GoalsSettingsPage: View {
                         Task { try? await notificationManager.requestAuthorization() }
                     }
                 }
+
+                HStack {
+                    Image(systemName: notificationManager.isAuthorized ? "checkmark.circle.fill" : "xmark.circle")
+                        .foregroundStyle(notificationManager.isAuthorized ? .green : .orange)
+                    Text("Notification Status")
+                    Spacer()
+                    Text(notificationManager.isAuthorized ? "Authorized" : "Not Authorized")
+                        .foregroundStyle(.secondary)
+                        .font(.subheadline)
+                }
             }
 
             Section("Health") {
@@ -397,6 +390,16 @@ private struct GoalsSettingsPage: View {
                                 }
                             }
                         }
+                    }
+
+                    HStack {
+                        Image(systemName: healthKitManager.isAuthorized ? "checkmark.circle.fill" : "xmark.circle")
+                            .foregroundStyle(healthKitManager.isAuthorized ? .green : .orange)
+                        Text("Health Status")
+                        Spacer()
+                        Text(healthKitManager.isAuthorized ? "Authorized" : "Not Authorized")
+                            .foregroundStyle(.secondary)
+                            .font(.subheadline)
                     }
                 } else {
                     HStack {
