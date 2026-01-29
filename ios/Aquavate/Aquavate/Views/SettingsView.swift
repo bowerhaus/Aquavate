@@ -17,8 +17,18 @@ struct SettingsView: View {
     @State private var isGoalPickerPresented = false
     @State private var selectedGoalMl: Int = 2000
 
+    // Advanced section expansion state
+    @State private var isAdvancedExpanded = false
+
+    // Clear history confirmation
+    @State private var showClearHistoryAlert = false
+
     // Goal options: 1000ml to 4000ml in 250ml steps
     private let goalOptions = stride(from: 1000, through: 4000, by: 250).map { $0 }
+
+    private var isConnected: Bool {
+        bleManager.connectionState.isConnected
+    }
 
     private var connectionStatusColor: Color {
         switch bleManager.connectionState {
@@ -32,7 +42,7 @@ struct SettingsView: View {
     }
 
     private var connectionStatusText: String {
-        if let deviceName = bleManager.connectedDeviceName, bleManager.connectionState.isConnected {
+        if let deviceName = bleManager.connectedDeviceName, isConnected {
             return deviceName
         }
         return bleManager.connectionState.rawValue
@@ -67,81 +77,46 @@ struct SettingsView: View {
     var body: some View {
         NavigationView {
             List {
-                // Device Connection Section
-                Section("Device Connection") {
+                // MARK: - Device Status
+                Section("Device Status") {
+                    // Compact connection status + battery in one row
                     HStack {
                         Image(systemName: "bluetooth")
                             .foregroundStyle(.blue)
-                        Text("Status")
+                        if bleManager.connectionState == .scanning || bleManager.connectionState == .connecting {
+                            ProgressView()
+                                .scaleEffect(0.7)
+                        } else {
+                            Circle()
+                                .fill(connectionStatusColor)
+                                .frame(width: 8, height: 8)
+                        }
+                        Text(connectionStatusText)
+                            .font(.subheadline)
                         Spacer()
-                        HStack(spacing: 4) {
-                            if bleManager.connectionState == .scanning || bleManager.connectionState == .connecting {
-                                ProgressView()
-                                    .scaleEffect(0.7)
-                            } else {
-                                Circle()
-                                    .fill(connectionStatusColor)
-                                    .frame(width: 8, height: 8)
+                        if isConnected {
+                            HStack(spacing: 4) {
+                                Image(systemName: batteryIconName)
+                                    .foregroundStyle(batteryColor)
+                                Text("\(bleManager.batteryPercent)%")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
                             }
-                            Text(connectionStatusText)
+                        }
+                    }
+
+                    // Disconnected banner
+                    if !isConnected && bleManager.connectionState == .disconnected {
+                        HStack {
+                            Image(systemName: "info.circle")
+                                .foregroundStyle(.blue)
+                            Text("Pull to refresh on Home to connect your bottle")
+                                .font(.caption)
                                 .foregroundStyle(.secondary)
-                                .font(.subheadline)
                         }
                     }
 
-                    #if DEBUG
-                    // Connection controls only visible in debug builds
-                    // Release builds use pull-to-refresh on HomeView for sync
-                    if bleManager.connectionState.isConnected {
-                        Button(role: .destructive) {
-                            bleManager.disconnect()
-                        } label: {
-                            HStack {
-                                Image(systemName: "xmark.circle")
-                                Text("Disconnect")
-                            }
-                        }
-                    } else if bleManager.connectionState == .disconnected {
-                        Button {
-                            bleManager.startScanning()
-                        } label: {
-                            HStack {
-                                Image(systemName: "antenna.radiowaves.left.and.right")
-                                Text("Scan for Device")
-                            }
-                        }
-                        .disabled(!bleManager.isBluetoothReady)
-                    } else {
-                        Button(role: .cancel) {
-                            bleManager.stopScanning()
-                        } label: {
-                            HStack {
-                                Image(systemName: "xmark")
-                                Text("Cancel")
-                            }
-                        }
-                    }
-
-                    // Show discovered devices if scanning found multiple
-                    if !bleManager.discoveredDevices.isEmpty && bleManager.connectionState == .scanning {
-                        ForEach(Array(bleManager.discoveredDevices.keys.sorted()), id: \.self) { deviceName in
-                            Button {
-                                bleManager.connect(toDeviceNamed: deviceName)
-                            } label: {
-                                HStack {
-                                    Image(systemName: "drop.fill")
-                                        .foregroundStyle(.blue)
-                                    Text(deviceName)
-                                    Spacer()
-                                    Image(systemName: "chevron.right")
-                                        .foregroundStyle(.secondary)
-                                        .font(.caption)
-                                }
-                            }
-                        }
-                    }
-                    #endif
-
+                    // Error message
                     if let error = bleManager.errorMessage {
                         HStack {
                             Image(systemName: "exclamationmark.triangle")
@@ -172,240 +147,45 @@ struct SettingsView: View {
                     }
                 }
 
-                // Bottle Configuration
-                Section("Bottle Configuration") {
-                    HStack {
-                        Text("Device")
-                        Spacer()
-                        Text(bleManager.connectedDeviceName ?? "Not connected")
-                            .foregroundStyle(.secondary)
-                    }
-
-                    HStack {
-                        Text("Capacity")
-                        Spacer()
-                        Text("\(bleManager.bottleCapacityMl)ml")
-                            .foregroundStyle(.secondary)
-                    }
-
-                    // Daily Goal - tappable row that opens picker sheet
+                // MARK: - Your Goals
+                Section("Your Goals") {
+                    // Daily Goal
                     Button {
                         selectedGoalMl = bleManager.dailyGoalMl
                         isGoalPickerPresented = true
                     } label: {
                         HStack {
+                            Image(systemName: "target")
+                                .foregroundStyle(.blue)
                             Text("Daily Goal")
                                 .foregroundStyle(.primary)
                             Spacer()
                             Text("\(bleManager.dailyGoalMl)ml")
                                 .foregroundStyle(.secondary)
-                            if bleManager.connectionState.isConnected {
+                            if isConnected {
                                 Image(systemName: "chevron.right")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
                         }
                     }
-                    .disabled(!bleManager.connectionState.isConnected)
-                }
+                    .disabled(!isConnected)
 
-                // Device Info (when connected)
-                if bleManager.connectionState.isConnected {
-                    Section("Device Info") {
+                    // Hydration Reminders toggle
+                    Toggle(isOn: $notificationManager.isEnabled) {
                         HStack {
-                            Image(systemName: batteryIconName)
-                                .foregroundStyle(batteryColor)
-                            Text("Battery")
-                            Spacer()
-                            Text("\(bleManager.batteryPercent)%")
-                                .foregroundStyle(.secondary)
-                        }
-
-                        HStack {
-                            Image(systemName: "scalemass")
-                                .foregroundStyle(.blue)
-                            Text("Current Weight")
-                            Spacer()
-                            Text("\(bleManager.currentWeightG)g")
-                                .foregroundStyle(.secondary)
-                        }
-
-                        HStack {
-                            Image(systemName: bleManager.isCalibrated ? "checkmark.circle.fill" : "exclamationmark.circle")
-                                .foregroundStyle(bleManager.isCalibrated ? .green : .orange)
-                            Text("Calibrated")
-                            Spacer()
-                            Text(bleManager.isCalibrated ? "Yes" : "No")
-                                .foregroundStyle(.secondary)
-                        }
-
-                        HStack {
-                            Image(systemName: bleManager.isTimeValid ? "clock.fill" : "clock.badge.exclamationmark")
-                                .foregroundStyle(bleManager.isTimeValid ? .green : .orange)
-                            Text("Time Set")
-                            Spacer()
-                            Text(bleManager.isTimeValid ? "Yes" : "No")
-                                .foregroundStyle(.secondary)
-                        }
-
-                        if bleManager.unsyncedCount > 0 {
-                            HStack {
-                                Image(systemName: "arrow.triangle.2.circlepath")
-                                    .foregroundStyle(.orange)
-                                Text("Unsynced Records")
-                                Spacer()
-                                Text("\(bleManager.unsyncedCount)")
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-
-                        // Sync status
-                        if bleManager.syncState.isActive {
-                            HStack {
-                                ProgressView()
-                                    .scaleEffect(0.7)
-                                Text("Syncing...")
-                                Spacer()
-                                Text("\(Int(bleManager.syncProgress * 100))%")
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-
-                        // Last synced timestamp
-                        if let lastSync = bleManager.lastSyncTime {
-                            HStack {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundStyle(.green)
-                                Text("Last Synced")
-                                Spacer()
-                                Text(lastSync, style: .relative)
-                                    .foregroundStyle(.secondary)
-                                    .font(.caption)
-                            }
-                        }
-                    }
-
-                    // Device Commands
-                    Section("Device Commands") {
-                        Button {
-                            bleManager.sendTareCommand()
-                        } label: {
-                            HStack {
-                                Image(systemName: "arrow.counterclockwise")
-                                    .foregroundStyle(.blue)
-                                Text("Tare (Zero Scale)")
-                            }
-                        }
-
-                        Button {
-                            bleManager.sendResetDailyCommand()
-                            PersistenceController.shared.deleteTodaysDrinkRecords()
-                        } label: {
-                            HStack {
-                                Image(systemName: "arrow.uturn.backward")
-                                    .foregroundStyle(.orange)
-                                Text("Reset Daily Total")
-                            }
-                        }
-
-                        Button {
-                            bleManager.syncDeviceTime()
-                        } label: {
-                            HStack {
-                                Image(systemName: "clock.arrow.circlepath")
-                                    .foregroundStyle(.green)
-                                Text("Sync Time")
-                            }
-                        }
-
-                        NavigationLink {
-                            CalibrationViewWrapper()
-                        } label: {
-                            HStack {
-                                Image(systemName: bleManager.isCalibrated ? "checkmark.seal.fill" : "seal")
-                                    .foregroundStyle(bleManager.isCalibrated ? .green : .orange)
-                                Text("Calibrate Bottle")
-                                Spacer()
-                                if !bleManager.isCalibrated {
-                                    Text("Required")
-                                        .font(.caption)
-                                        .foregroundStyle(.orange)
-                                }
-                            }
-                        }
-
-                        if bleManager.unsyncedCount > 0 && !bleManager.syncState.isActive {
-                            Button {
-                                bleManager.startDrinkSync()
-                            } label: {
-                                HStack {
-                                    Image(systemName: "arrow.triangle.2.circlepath")
-                                        .foregroundStyle(.purple)
-                                    Text("Sync Drink History")
-                                    Spacer()
-                                    Text("\(bleManager.unsyncedCount) records")
-                                        .foregroundStyle(.secondary)
-                                        .font(.caption)
-                                }
-                            }
-                        }
-
-                        Button(role: .destructive) {
-                            bleManager.sendClearHistoryCommand()
-                        } label: {
-                            HStack {
-                                Image(systemName: "trash")
-                                Text("Clear Device History")
-                            }
-                        }
-                    }
-
-                    // Gestures
-                    Section("Gestures") {
-                        Toggle(isOn: Binding(
-                            get: { bleManager.isShakeToEmptyEnabled },
-                            set: { bleManager.setShakeToEmptyEnabled($0) }
-                        )) {
-                            VStack(alignment: .leading, spacing: 4) {
-                                HStack {
-                                    Image(systemName: "hand.wave.fill")
-                                        .foregroundStyle(.orange)
-                                    Text("Shake to Empty")
-                                }
-                                Text("Shake bottle while inverted to reset water level to zero")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-
-                }
-
-                // Activity Stats (Battery Analysis) - Outside connected block for offline viewing
-                Section("Diagnostics") {
-                    NavigationLink {
-                        ActivityStatsView()
-                    } label: {
-                        HStack {
-                            Image(systemName: "moon.zzz")
+                            Image(systemName: "bell.fill")
                                 .foregroundStyle(.purple)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Sleep Mode Analysis")
-                                Text("View wake events and backpack sessions")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            if bleManager.activityFetchState.isLoading {
-                                ProgressView()
-                                    .scaleEffect(0.7)
-                            }
+                            Text("Hydration Reminders")
                         }
                     }
-                }
+                    .onChange(of: notificationManager.isEnabled) { _, enabled in
+                        if enabled {
+                            Task { try? await notificationManager.requestAuthorization() }
+                        }
+                    }
 
-                // Apple Health Integration
-                Section("Apple Health") {
+                    // Apple Health toggle
                     if healthKitManager.isHealthKitAvailable {
                         Toggle(isOn: $healthKitManager.isEnabled) {
                             HStack {
@@ -426,18 +206,6 @@ struct SettingsView: View {
                                 }
                             }
                         }
-
-                        if healthKitManager.isEnabled {
-                            HStack {
-                                Image(systemName: healthKitManager.isAuthorized ? "checkmark.circle.fill" : "exclamationmark.circle")
-                                    .foregroundStyle(healthKitManager.isAuthorized ? .green : .orange)
-                                Text("Status")
-                                Spacer()
-                                Text(healthKitManager.isAuthorized ? "Connected" : "Not Authorized")
-                                    .foregroundStyle(.secondary)
-                                    .font(.subheadline)
-                            }
-                        }
                     } else {
                         HStack {
                             Image(systemName: "heart.slash")
@@ -448,87 +216,228 @@ struct SettingsView: View {
                     }
                 }
 
-                // Hydration Reminders
-                Section("Hydration Reminders") {
-                    Toggle(isOn: $notificationManager.isEnabled) {
-                        HStack {
-                            Image(systemName: "bell.fill")
-                                .foregroundStyle(.purple)
-                            Text("Hydration Reminders")
-                        }
-                    }
-                    .onChange(of: notificationManager.isEnabled) { _, enabled in
-                        if enabled {
-                            Task { try? await notificationManager.requestAuthorization() }
-                        }
+                // MARK: - Device Setup
+                Section {
+                    HStack {
+                        Image(systemName: bleManager.isCalibrated ? "checkmark.circle.fill" : "exclamationmark.circle")
+                            .foregroundStyle(isConnected ? (bleManager.isCalibrated ? .green : .orange) : .secondary)
+                        Text("Calibrated")
+                        Spacer()
+                        Text(isConnected ? (bleManager.isCalibrated ? "Yes" : "No") : "—")
+                            .foregroundStyle(.secondary)
                     }
 
-                    if notificationManager.isEnabled {
+                    // Calibrate Bottle - always visible at top level
+                    NavigationLink {
+                        CalibrationViewWrapper()
+                    } label: {
                         HStack {
-                            Image(systemName: notificationManager.isAuthorized ? "checkmark.circle.fill" : "exclamationmark.circle")
-                                .foregroundStyle(notificationManager.isAuthorized ? .green : .orange)
-                            Text("Status")
+                            Image(systemName: bleManager.isCalibrated ? "checkmark.seal.fill" : "seal")
+                                .foregroundStyle(isConnected ? (bleManager.isCalibrated ? .green : .orange) : .secondary)
+                            Text("Calibrate Bottle")
                             Spacer()
-                            Text(notificationManager.isAuthorized ? "Authorized" : "Not Authorized")
-                                .foregroundStyle(.secondary)
-                                .font(.subheadline)
-                        }
-
-                        HStack {
-                            Image(systemName: "drop.fill")
-                                .foregroundStyle(hydrationReminderService.currentUrgency.color)
-                            Text("Current Status")
-                            Spacer()
-                            Text(hydrationReminderService.currentUrgency.description)
-                                .foregroundStyle(.secondary)
-                                .font(.subheadline)
-                        }
-
-                        HStack {
-                            Image(systemName: "bell.badge")
-                                .foregroundStyle(.secondary)
-                            Text("Reminders Today")
-                            Spacer()
-                            if notificationManager.dailyLimitEnabled {
-                                Text("\(notificationManager.remindersSentToday)/\(NotificationManager.maxRemindersPerDay)")
+                            if !isConnected {
+                                Text("Requires connection")
+                                    .font(.caption)
                                     .foregroundStyle(.secondary)
-                                    .font(.subheadline)
-                            } else {
-                                Text("\(notificationManager.remindersSentToday)")
-                                    .foregroundStyle(.secondary)
-                                    .font(.subheadline)
-                            }
-                        }
-
-                        Toggle(isOn: $notificationManager.dailyLimitEnabled) {
-                            HStack {
-                                Image(systemName: "number.circle")
-                                    .foregroundStyle(.blue)
-                                Text("Limit Daily Reminders")
-                            }
-                        }
-
-                        Toggle(isOn: $notificationManager.backOnTrackEnabled) {
-                            HStack {
-                                Image(systemName: "arrow.up.heart.fill")
-                                    .foregroundStyle(.green)
-                                Text("Back On Track Alerts")
+                            } else if !bleManager.isCalibrated {
+                                Text("Required")
+                                    .font(.caption)
+                                    .foregroundStyle(.orange)
                             }
                         }
                     }
-
-                    #if DEBUG
-                    Toggle(isOn: $hydrationReminderService.testModeEnabled) {
-                        HStack {
-                            Image(systemName: "timer")
-                                .foregroundStyle(.orange)
-                            Text("Test Mode (Earlier Reminders)")
-                        }
+                    .disabled(!isConnected)
+                } header: {
+                    Text("Device Setup")
+                } footer: {
+                    if !isConnected {
+                        Text("Connect your bottle to calibrate and configure")
                     }
-                    #endif
                 }
 
-                // About
+                // MARK: - Advanced
+                Section {
+                    DisclosureGroup(isExpanded: $isAdvancedExpanded) {
+                        // --- Reminder Options ---
+                        if notificationManager.isEnabled {
+                            HStack {
+                                Text("Reminder Options")
+                                    .font(.subheadline)
+                                    .fontWeight(.semibold)
+                                    .foregroundStyle(.secondary)
+                                    .textCase(.uppercase)
+                            }
+                            .listRowSeparator(.hidden, edges: .top)
+
+                            HStack {
+                                Image(systemName: "bell.badge")
+                                    .foregroundStyle(.secondary)
+                                Text("Reminders Today")
+                                Spacer()
+                                if notificationManager.dailyLimitEnabled {
+                                    Text("\(notificationManager.remindersSentToday)/\(NotificationManager.maxRemindersPerDay)")
+                                        .foregroundStyle(.secondary)
+                                        .font(.subheadline)
+                                } else {
+                                    Text("\(notificationManager.remindersSentToday)")
+                                        .foregroundStyle(.secondary)
+                                        .font(.subheadline)
+                                }
+                            }
+
+                            Toggle(isOn: $notificationManager.dailyLimitEnabled) {
+                                HStack {
+                                    Image(systemName: "number.circle")
+                                        .foregroundStyle(.blue)
+                                    Text("Limit Daily Reminders")
+                                }
+                            }
+
+                            Toggle(isOn: $hydrationReminderService.testModeEnabled) {
+                                HStack {
+                                    Image(systemName: "timer")
+                                        .foregroundStyle(.orange)
+                                    Text("Earlier Reminders")
+                                }
+                            }
+
+                            Toggle(isOn: $notificationManager.backOnTrackEnabled) {
+                                HStack {
+                                    Image(systemName: "arrow.up.heart.fill")
+                                        .foregroundStyle(.green)
+                                    Text("Back On Track Alerts")
+                                }
+                            }
+                        }
+
+                        // --- Device Commands ---
+                        HStack {
+                            Text("Commands")
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(.secondary)
+                                .textCase(.uppercase)
+                        }
+                        .listRowSeparator(.hidden, edges: .top)
+
+                        Button {
+                            bleManager.sendTareCommand()
+                        } label: {
+                            HStack {
+                                Image(systemName: "arrow.counterclockwise")
+                                    .foregroundStyle(.blue)
+                                Text("Tare (Zero Scale)")
+                            }
+                        }
+                        .disabled(!isConnected)
+
+                        Button {
+                            bleManager.sendResetDailyCommand()
+                            PersistenceController.shared.deleteTodaysDrinkRecords()
+                        } label: {
+                            HStack {
+                                Image(systemName: "arrow.uturn.backward")
+                                    .foregroundStyle(.orange)
+                                Text("Reset Daily Total")
+                            }
+                        }
+                        .disabled(!isConnected)
+
+                        if bleManager.unsyncedCount > 0 && !bleManager.syncState.isActive {
+                            Button {
+                                bleManager.startDrinkSync()
+                            } label: {
+                                HStack {
+                                    Image(systemName: "arrow.triangle.2.circlepath")
+                                        .foregroundStyle(.purple)
+                                    Text("Sync Drink History")
+                                    Spacer()
+                                    Text("\(bleManager.unsyncedCount) records")
+                                        .foregroundStyle(.secondary)
+                                        .font(.caption)
+                                }
+                            }
+                            .disabled(!isConnected)
+                        }
+
+                        Button(role: .destructive) {
+                            showClearHistoryAlert = true
+                        } label: {
+                            HStack {
+                                Image(systemName: "trash")
+                                Text("Clear Device History")
+                            }
+                        }
+                        .disabled(!isConnected)
+
+                        // --- Gestures ---
+                        HStack {
+                            Text("Gestures")
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(.secondary)
+                                .textCase(.uppercase)
+                        }
+                        .padding(.top, 8)
+
+                        Toggle(isOn: Binding(
+                            get: { bleManager.isShakeToEmptyEnabled },
+                            set: { bleManager.setShakeToEmptyEnabled($0) }
+                        )) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack {
+                                    Image(systemName: "hand.wave.fill")
+                                        .foregroundStyle(.orange)
+                                    Text("Shake to Empty")
+                                }
+                                Text("Shake bottle while inverted to reset water level to zero")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .disabled(!isConnected)
+
+                        // --- Diagnostics ---
+                        HStack {
+                            Text("Diagnostics")
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(.secondary)
+                                .textCase(.uppercase)
+                        }
+                        .padding(.top, 8)
+
+                        NavigationLink {
+                            ActivityStatsView()
+                        } label: {
+                            HStack {
+                                Image(systemName: "moon.zzz")
+                                    .foregroundStyle(.purple)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Sleep Mode Analysis")
+                                    Text("View wake events and backpack sessions")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                if bleManager.activityFetchState.isLoading {
+                                    ProgressView()
+                                        .scaleEffect(0.7)
+                                }
+                            }
+                        }
+
+                    } label: {
+                        HStack {
+                            Image(systemName: "gearshape.2")
+                                .foregroundStyle(.gray)
+                            Text("Advanced")
+                        }
+                    }
+                }
+
+                // MARK: - About
                 Section("About") {
                     Link(destination: URL(string: "https://github.com/bowerhaus/Aquavate")!) {
                         HStack {
@@ -540,8 +449,23 @@ struct SettingsView: View {
                         }
                     }
                 }
+
             }
             .navigationTitle("Settings")
+            .alert("Clear Device History", isPresented: $showClearHistoryAlert) {
+                Button("Cancel", role: .cancel) { }
+                Button("Clear", role: .destructive) {
+                    bleManager.sendClearHistoryCommand()
+                }
+            } message: {
+                Text("This will permanently delete all drink history stored on the device. This cannot be undone.")
+            }
+            .onAppear {
+                bleManager.beginKeepAlive()
+            }
+            .onDisappear {
+                bleManager.endKeepAlive()
+            }
             .sheet(isPresented: $isGoalPickerPresented) {
                 NavigationView {
                     VStack(spacing: 20) {
