@@ -1,6 +1,6 @@
 # Aquavate - Active Development Progress
 
-**Last Updated:** 2026-01-29 (Session 15)
+**Last Updated:** 2026-01-29 (Session 16)
 **Current Branch:** `settings-option2-essential-advanced`
 **GitHub Issue:** #87
 **Plan:** [063-settings-page-redesign.md](Plans/063-settings-page-redesign.md)
@@ -149,20 +149,30 @@ To resume from this progress file:
 ```
 Resume from PROGRESS.md - Settings Page Redesign (Issue #87).
 
-Session 15: Iterative settings redesign with 5 layout options.
+Session 16: Continued settings redesign on Option 2 branch.
 Currently on branch: settings-option2-essential-advanced (has uncommitted changes).
 
-What's done:
+What was done this session:
+- Tidied Option 2 settings by removing many items from the UI (see "Removed Items" section)
+- Removed: Disconnect, Cancel, Scan from Debug; Sync Time from Commands; Current Weight,
+  Device Name, Capacity, Time Set, Last Synced, Unsynced Records, Syncing from Device Info;
+  Health Status, Current Status, Notification Status from Reminder Options; entire Debug section
+- Relocated: Calibrated flag → Device Setup; Clear Device History → Commands (with confirmation
+  alert); Earlier Reminders → Reminder Options; Reminder Options moved above Commands
+- Removed entire Device Info subsection and Danger Zone subsection from Advanced
+- Updated PROGRESS.md with "Removed Items" shared decisions applying to all options
+
+What's done overall:
 - Options 1 and 2 are built (uncommitted on their respective branches)
-- BLEManager keep-alive fix implemented on option2 branch (beginKeepAlive/endKeepAlive API
-  with ref counting, background suspend/resume of ping timer)
-- Option 1 branch does NOT have the keep-alive fix yet
+- Option 2 has had significant UI cleanup this session
+- BLEManager keep-alive fix implemented on option2 branch
+- Option 1 branch does NOT have the keep-alive fix or UI cleanup yet
 
 What's next:
-- User reviews Options 1 & 2 on device
-- Implement Options 3-5 on separate branches from master
+- User reviews Option 2 on device
+- Decide whether to build Options 3-5 or proceed with Option 2
+- If building other options, apply the same "Removed Items" decisions
 - Each new option branch needs the BLEManager keep-alive changes too
-- Read Plans/063-settings-page-redesign.md for full details of all 5 options
 ```
 
 ---
