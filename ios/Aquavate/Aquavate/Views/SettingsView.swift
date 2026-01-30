@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UniformTypeIdentifiers
 
 // MARK: - Settings View (Option 5: Smart Contextual)
 
@@ -194,6 +195,24 @@ struct SettingsView: View {
                         }
                     }
 
+                    // Data (Export & Import)
+                    NavigationLink {
+                        DataSettingsPage()
+                    } label: {
+                        HStack {
+                            Image(systemName: "externaldrive.fill")
+                                .foregroundStyle(.green)
+                                .frame(width: 28)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Data")
+                                Text(dataSummary)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                        }
+                    }
+
                 }
 
                 // About
@@ -303,6 +322,11 @@ struct SettingsView: View {
             return "\(notificationManager.remindersSentToday)/\(NotificationManager.maxRemindersPerDay) sent today"
         }
         return "\(notificationManager.remindersSentToday) sent today"
+    }
+
+    private var dataSummary: String {
+        let count = (try? PersistenceController.shared.viewContext.count(for: CDDrinkRecord.fetchRequest())) ?? 0
+        return "\(count) drink records"
     }
 }
 
@@ -642,6 +666,377 @@ private struct ReminderOptionsPage: View {
         .navigationTitle("Reminder Options")
         .navigationBarTitleDisplayMode(.inline)
     }
+}
+
+// MARK: - Data Sub-Page
+
+private struct DataSettingsPage: View {
+    @StateObject private var backupManager = BackupManager()
+
+    // Import flow state
+    @State private var showFileImporter = false
+    @State private var pendingBackup: AquavateBackup?
+    @State private var backupSummary: BackupSummary?
+    @State private var showImportPreview = false
+
+    // Export flow state
+    @State private var exportFileURL: URL?
+    @State private var showShareSheet = false
+
+    // Alerts
+    @State private var showSuccessAlert = false
+    @State private var showErrorAlert = false
+    @State private var errorMessage = ""
+    @State private var successMessage = ""
+    @State private var showReplaceConfirmation = false
+
+    // Data counts
+    @State private var bottleCount = 0
+    @State private var drinkCount = 0
+    @State private var motionEventCount = 0
+    @State private var backpackSessionCount = 0
+
+    var body: some View {
+        List {
+            // MARK: Current Data Summary
+            Section("Your Data") {
+                dataCountRow(icon: "drop.fill", color: .blue, label: "Bottles", count: bottleCount)
+                dataCountRow(icon: "cup.and.saucer.fill", color: .cyan, label: "Drink Records", count: drinkCount)
+                dataCountRow(icon: "moon.zzz", color: .purple, label: "Wake Events", count: motionEventCount)
+                dataCountRow(icon: "backpack.fill", color: .orange, label: "Backpack Sessions", count: backpackSessionCount)
+            }
+
+            // MARK: Export
+            Section {
+                Button {
+                    exportBackup()
+                } label: {
+                    HStack {
+                        Image(systemName: "square.and.arrow.up")
+                            .foregroundStyle(.blue)
+                        Text("Export Backup")
+                        Spacer()
+                        if backupManager.isExporting {
+                            ProgressView()
+                                .scaleEffect(0.7)
+                        }
+                    }
+                }
+                .disabled(backupManager.isExporting)
+            } header: {
+                Text("Export")
+            } footer: {
+                Text("Creates a JSON file containing all your data. Share via AirDrop, Files, email, or any other app.")
+            }
+
+            // MARK: Import
+            Section {
+                Button {
+                    showFileImporter = true
+                } label: {
+                    HStack {
+                        Image(systemName: "square.and.arrow.down")
+                            .foregroundStyle(.green)
+                        Text("Import Backup")
+                        Spacer()
+                        if backupManager.isImporting {
+                            ProgressView()
+                                .scaleEffect(0.7)
+                        }
+                    }
+                }
+                .disabled(backupManager.isImporting)
+            } header: {
+                Text("Import")
+            } footer: {
+                Text("Restore from a previously exported Aquavate backup file.")
+            }
+        }
+        .navigationTitle("Data")
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear { loadDataCounts() }
+        .fileImporter(
+            isPresented: $showFileImporter,
+            allowedContentTypes: [.json],
+            allowsMultipleSelection: false
+        ) { result in
+            handleFileImport(result)
+        }
+        .sheet(isPresented: $showImportPreview) {
+            if let summary = backupSummary {
+                ImportPreviewSheet(
+                    summary: summary,
+                    onMerge: { performImport(mode: .merge) },
+                    onReplace: { showReplaceConfirmation = true },
+                    onCancel: {
+                        showImportPreview = false
+                        pendingBackup = nil
+                        backupSummary = nil
+                    }
+                )
+            }
+        }
+        .sheet(isPresented: $showShareSheet) {
+            if let url = exportFileURL {
+                ShareSheet(activityItems: [url])
+            }
+        }
+        .alert("Replace All Data?", isPresented: $showReplaceConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Replace", role: .destructive) {
+                showImportPreview = false
+                performImport(mode: .replace)
+            }
+        } message: {
+            Text("This will permanently delete all existing data and replace it with the backup contents. This cannot be undone.")
+        }
+        .alert("Import Complete", isPresented: $showSuccessAlert) {
+            Button("OK") { }
+        } message: {
+            Text(successMessage)
+        }
+        .alert("Error", isPresented: $showErrorAlert) {
+            Button("OK") { }
+        } message: {
+            Text(errorMessage)
+        }
+    }
+
+    // MARK: - Helper Views
+
+    private func dataCountRow(icon: String, color: Color, label: String, count: Int) -> some View {
+        HStack {
+            Image(systemName: icon)
+                .foregroundStyle(color)
+                .frame(width: 28)
+            Text(label)
+            Spacer()
+            Text("\(count)")
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    // MARK: - Actions
+
+    private func loadDataCounts() {
+        let context = PersistenceController.shared.viewContext
+        bottleCount = (try? context.count(for: CDBottle.fetchRequest())) ?? 0
+        drinkCount = (try? context.count(for: CDDrinkRecord.fetchRequest())) ?? 0
+        motionEventCount = (try? context.count(for: CDMotionWakeEvent.fetchRequest())) ?? 0
+        backpackSessionCount = (try? context.count(for: CDBackpackSession.fetchRequest())) ?? 0
+    }
+
+    private func exportBackup() {
+        Task {
+            do {
+                let (data, filename) = try await backupManager.createBackup()
+                let tempDir = FileManager.default.temporaryDirectory
+                let fileURL = tempDir.appendingPathComponent(filename)
+                try data.write(to: fileURL)
+                exportFileURL = fileURL
+                showShareSheet = true
+            } catch {
+                errorMessage = error.localizedDescription
+                showErrorAlert = true
+            }
+        }
+    }
+
+    private func handleFileImport(_ result: Result<[URL], Error>) {
+        switch result {
+        case .success(let urls):
+            guard let url = urls.first else { return }
+
+            guard url.startAccessingSecurityScopedResource() else {
+                errorMessage = "Cannot access the selected file."
+                showErrorAlert = true
+                return
+            }
+            defer { url.stopAccessingSecurityScopedResource() }
+
+            do {
+                let data = try Data(contentsOf: url)
+                let (backup, summary) = try backupManager.parseBackup(from: data)
+                pendingBackup = backup
+                backupSummary = summary
+                showImportPreview = true
+            } catch let error as BackupError {
+                errorMessage = error.localizedDescription
+                showErrorAlert = true
+            } catch {
+                errorMessage = "Failed to read backup file: \(error.localizedDescription)"
+                showErrorAlert = true
+            }
+
+        case .failure(let error):
+            errorMessage = "File selection failed: \(error.localizedDescription)"
+            showErrorAlert = true
+        }
+    }
+
+    private func performImport(mode: ImportMode) {
+        guard let backup = pendingBackup else { return }
+
+        Task {
+            do {
+                let result = try await backupManager.importBackup(backup, mode: mode)
+
+                let modeText = mode == .merge ? "merged" : "replaced"
+                var parts: [String] = []
+                if result.bottlesImported > 0 { parts.append("\(result.bottlesImported) bottle(s)") }
+                if result.drinksImported > 0 { parts.append("\(result.drinksImported) drink(s)") }
+                if result.motionEventsImported > 0 { parts.append("\(result.motionEventsImported) wake event(s)") }
+                if result.backpackSessionsImported > 0 { parts.append("\(result.backpackSessionsImported) session(s)") }
+
+                if parts.isEmpty {
+                    successMessage = "Import complete. No new data to import (all records already exist)."
+                } else {
+                    successMessage = "Successfully \(modeText): \(parts.joined(separator: ", "))."
+                }
+                if result.duplicatesSkipped > 0 {
+                    successMessage += " \(result.duplicatesSkipped) duplicate(s) skipped."
+                }
+
+                showImportPreview = false
+                pendingBackup = nil
+                backupSummary = nil
+                showSuccessAlert = true
+                loadDataCounts()
+            } catch {
+                showImportPreview = false
+                errorMessage = error.localizedDescription
+                showErrorAlert = true
+            }
+        }
+    }
+}
+
+// MARK: - Import Preview Sheet
+
+private struct ImportPreviewSheet: View {
+    let summary: BackupSummary
+    let onMerge: () -> Void
+    let onReplace: () -> Void
+    let onCancel: () -> Void
+
+    var body: some View {
+        NavigationView {
+            List {
+                Section("Backup Info") {
+                    HStack {
+                        Text("Export Date")
+                        Spacer()
+                        Text(summary.exportDate, style: .date)
+                            .foregroundStyle(.secondary)
+                    }
+                    HStack {
+                        Text("App Version")
+                        Spacer()
+                        Text(summary.appVersion)
+                            .foregroundStyle(.secondary)
+                    }
+                    HStack {
+                        Text("Format Version")
+                        Spacer()
+                        Text("v\(summary.formatVersion)")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Section("Contents") {
+                    HStack {
+                        Image(systemName: "drop.fill").foregroundStyle(.blue)
+                        Text("Bottles")
+                        Spacer()
+                        Text("\(summary.bottleCount)")
+                            .foregroundStyle(.secondary)
+                    }
+                    HStack {
+                        Image(systemName: "cup.and.saucer.fill").foregroundStyle(.cyan)
+                        Text("Drink Records")
+                        Spacer()
+                        Text("\(summary.drinkRecordCount)")
+                            .foregroundStyle(.secondary)
+                    }
+                    HStack {
+                        Image(systemName: "moon.zzz").foregroundStyle(.purple)
+                        Text("Wake Events")
+                        Spacer()
+                        Text("\(summary.motionWakeEventCount)")
+                            .foregroundStyle(.secondary)
+                    }
+                    HStack {
+                        Image(systemName: "backpack.fill").foregroundStyle(.orange)
+                        Text("Backpack Sessions")
+                        Spacer()
+                        Text("\(summary.backpackSessionCount)")
+                            .foregroundStyle(.secondary)
+                    }
+                    if summary.hasSettings {
+                        HStack {
+                            Image(systemName: "gearshape.fill").foregroundStyle(.gray)
+                            Text("App Settings")
+                            Spacer()
+                            Text("Included")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+
+                Section("Import Mode") {
+                    Button {
+                        onMerge()
+                    } label: {
+                        HStack {
+                            Image(systemName: "plus.circle.fill")
+                                .foregroundStyle(.green)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Merge")
+                                    .foregroundStyle(.primary)
+                                Text("Add new records, skip duplicates")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+
+                    Button(role: .destructive) {
+                        onReplace()
+                    } label: {
+                        HStack {
+                            Image(systemName: "arrow.triangle.2.circlepath")
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Replace All")
+                                Text("Delete existing data, import everything")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Import Preview")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { onCancel() }
+                }
+            }
+        }
+        .presentationDetents([.large])
+    }
+}
+
+// MARK: - Share Sheet
+
+private struct ShareSheet: UIViewControllerRepresentable {
+    let activityItems: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
 #Preview {
