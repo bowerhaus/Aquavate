@@ -1,10 +1,11 @@
 # Aquavate iOS App - UX Product Requirements Document
 
-**Version:** 1.19
-**Date:** 2026-01-29
-**Status:** Approved (Settings Page Redesign)
+**Version:** 1.20
+**Date:** 2026-01-30
+**Status:** Approved (Import/Export)
 
 **Changelog:**
+- **v1.20 (2026-01-30):** Added Data import/export backup to Settings (Issue #93). New "Data" category row on main Settings page with DataSettingsPage sub-page. Export as versioned JSON, import with Merge (skip duplicates) or Replace (clear and restore) modes. ImportPreviewSheet for reviewing backup before import. See Section 2.6.
 - **v1.19 (2026-01-29):** Settings page redesigned with Apple Settings-style sub-pages (Issue #87). Main page shows category rows with contextual summaries; drill-down to Goals & Health, Device Information, Device Controls, Reminder Options. Added BLE keep-alive, Health/Notification status flags. Removed error message display, unused status rows. See Section 2.6.
 - **v1.18 (2026-01-28):** Simplified behind-target indicator to faded blue (Issue #81). Replaced amber/red gradient with 30% opacity blue. Removes visual distinction between urgency levels while keeping deficit text. See Section 2.9.
 - **v1.17 (2026-01-27):** Bottle-driven calibration (Issue #30). iOS sends START/CANCEL commands, bottle runs state machine and broadcasts state changes, iOS mirrors with rich UI. Simplified to 4 screens: Welcome → Empty → Full → Complete. See Section 2.3.
@@ -525,6 +526,9 @@ Sarah's Bluetooth is accidentally turned off. When she opens the app, she sees a
 │  ├─────────────────────────────┤│
 │  │ 🔔 Reminder Options     →  ││  ← Only when reminders enabled
 │  │    3/10 sent today          ││
+│  ├─────────────────────────────┤│
+│  │ 💾 Data                 →  ││
+│  │    42 drink records         ││  ← Record count summary
 │  └─────────────────────────────┘│
 │                                 │
 │  ABOUT                          │
@@ -556,6 +560,14 @@ Sarah's Bluetooth is accidentally turned off. When she opens the app, she sees a
 - Earlier Reminders toggle
 - Back On Track Alerts toggle
 
+**Data** (`DataSettingsPage`):
+- **Your Data** section — Count rows for bottles, drink records, wake events, backpack sessions (with icons)
+- **Export** section — "Export Backup" button exports all app data as versioned JSON (`Aquavate-Backup-YYYY-MM-DD.json`). Opens share sheet via `UIActivityViewController`. Footer explains what's included.
+- **Import** section — "Import Backup" button opens `.fileImporter` for JSON files. Shows `ImportPreviewSheet` with backup info (date, version, content counts) and two import modes:
+  - **Merge** — Adds new records, skips duplicates (by UUID)
+  - **Replace All** — Destructive (confirmation alert), clears all data before importing
+- **Format:** Versioned JSON with `formatVersion: 1`, includes bottles, drink records, wake events, backpack sessions, and app settings (daily goal, notification preferences, HealthKit sync). Excludes device-specific fields (`peripheralIdentifier`, `batteryPercent`, etc.).
+
 **Command Actions:**
 
 | Command | Tap Behavior | Confirmation |
@@ -574,6 +586,7 @@ Sarah's Bluetooth is accidentally turned off. When she opens the app, she sees a
 | Device Information | "Calibrated" or "Not calibrated" (orange) | "Calibration, sleep analysis" |
 | Device Controls | "Tare, reset, sync, gestures" or "3 unsynced records" | "Requires connection" |
 | Reminder Options | "3/10 sent today" or "3 sent today" | Same (works offline) |
+| Data | "42 drink records" (count of drink records) | Same (works offline) |
 
 **Connection Behavior:**
 - Keep-alive via `beginKeepAlive()` / `endKeepAlive()` API prevents idle disconnect while Settings is open
@@ -1811,7 +1824,7 @@ Watch notifications include haptic feedback via `WKInterfaceDevice.current().pla
 
 This UX PRD defines the complete user experience for the Aquavate iOS app. Upon approval, Phase 4 implementation will begin following both this document and the technical plan in [Plans/014-ios-ble-coredata-integration.md](../Plans/014-ios-ble-coredata-integration.md).
 
-**Document Status:** Approved (v1.10)
+**Document Status:** Approved (v1.20)
 
 **Update Note (2026-01-24 - Activity Stats Persistence):**
 - Activity stats now persist in CoreData (Issue #36 Comment)
