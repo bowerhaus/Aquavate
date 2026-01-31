@@ -44,7 +44,7 @@ pio device monitor         # Serial monitor
 **Important Implementation Details:**
 - ADXL343 INT1 pin must be wired to ESP32 GPIO 27 (not just I2C)
 - ADXL343 needs always-on 3V power (not STEMMA QT which powers down)
-- Wake-on-tilt threshold: 0.80g (0x32)
+- Wake-on-tilt threshold: 0.5g (0x08) — ACTIVITY_WAKE_THRESHOLD in config.h
 - Deep sleep: Dual modes (normal 30s with motion wake, extended 60s with timer wake)
 - RTC memory: Used for display state and drink baseline persistence across sleep
 - NVS: Circular buffer with 600 records (30 days history)

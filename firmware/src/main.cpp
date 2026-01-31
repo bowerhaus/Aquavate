@@ -187,7 +187,7 @@ void testInterruptState() {
     // Read interrupt registers (ADXL343 auto-clears on read)
     uint8_t int_source = readAccelReg(0x30);  // INT_SOURCE register
     uint8_t int_enable = readAccelReg(0x2E);  // INT_ENABLE register
-    uint8_t thresh_act = readAccelReg(0x1C);  // THRESH_ACT register
+    uint8_t thresh_act = readAccelReg(0x24);  // THRESH_ACT register
     uint8_t act_inact_ctl = readAccelReg(0x27);  // ACT_INACT_CTL register
     int pin_state = digitalRead(PIN_ACCEL_INT);
 
@@ -228,7 +228,7 @@ void configureADXL343Interrupt() {
     pinMode(PIN_ACCEL_INT, INPUT_PULLDOWN);  // Active-high interrupt
 
     // ADXL343 Register Definitions
-    const uint8_t THRESH_ACT = 0x1C;        // Activity threshold (NOTE: wrong address, see Issue #98)
+    const uint8_t THRESH_ACT = 0x24;        // Activity threshold
     const uint8_t THRESH_TAP = 0x1D;        // Tap threshold
     const uint8_t DUR = 0x21;               // Tap duration
     const uint8_t LATENT = 0x22;            // Tap latency (for double-tap)
@@ -245,13 +245,11 @@ void configureADXL343Interrupt() {
     writeAccelReg(DATA_FORMAT, 0x00);       // ±2g, 13-bit resolution, right-justified
     Serial.println("1. Data format: ±2g range");
 
-    // Step 2: Set activity threshold - EXTREMELY HIGH to only detect pick-up
+    // Step 2: Set activity threshold for tilt/motion wake
     // AC-coupled mode detects CHANGES in acceleration (motion)
-    // Threshold = 3.0g = 3000 mg (extremely aggressive - only very strong deliberate motion)
     // Scale = 62.5 mg/LSB
-    // Value = 3000 / 62.5 = 48 (0x30)
-    writeAccelReg(THRESH_ACT, 0x30);        // ~3.0g activity threshold
-    Serial.println("2. Activity threshold: 0x30 (3.0g)");
+    writeAccelReg(THRESH_ACT, ACTIVITY_WAKE_THRESHOLD);
+    Serial.printf("2. Activity threshold: 0x%02X (%.1fg)\n", ACTIVITY_WAKE_THRESHOLD, ACTIVITY_WAKE_THRESHOLD * 0.0625f);
 
     // Step 3: Set double-tap latency (wait after first tap before window opens)
     // Scale = 1.25 ms/LSB, 100ms = 80 (0x50)
@@ -305,7 +303,7 @@ void configureADXL343Interrupt() {
     Serial.printf("11. Cleared INT_SOURCE: 0x%02X\n", int_source);
 
     Serial.println("\n=== Configuration Complete ===");
-    Serial.println("Sleep wake: Single-tap OR activity (>3.0g)");
+    Serial.printf("Sleep wake: Single-tap OR activity (>%.1fg)\n", ACTIVITY_WAKE_THRESHOLD * 0.0625f);
     Serial.println("Awake: Double-tap detected via INT_SOURCE polling\n");
 }
 
