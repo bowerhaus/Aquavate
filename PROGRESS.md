@@ -1,18 +1,19 @@
 # Aquavate - Active Development Progress
 
-**Last Updated:** 2026-01-31 (Session 24)
-**Current Branch:** `fix-adxl343-register-addresses`
+**Last Updated:** 2026-01-31 (Session 28)
+**Current Branch:** `master`
 
 ---
 
 ## Current Task
 
-None — ready to merge.
+None — ready for next task.
 
 ---
 
 ## Recently Completed
 
+- **Fix Backpack Mode Entry (Issue #97)** - [Plan 067](Plans/067-backpack-mode-entry-fix.md) ✅ COMPLETE — Backpack mode never entered when bottle horizontal. Root cause: per-cycle flags/counters couldn't track state across 30s wake/sleep cycles. Fix: check current gesture (`gesture != GESTURE_UPRIGHT_STABLE`) at sleep time — if not on surface, stay awake and let 180s backpack timer handle it. Four approaches tried; final solution is zero new state, net -1 line.
 - **Fix ADXL343 Register Addresses (Issue #98)** - [Plan 066](Plans/066-fix-adxl343-register-addresses.md) ✅ COMPLETE — Fixed THRESH_ACT register (0x1C → 0x24), separated activity threshold (0.5g) from tap threshold (3.0g), updated PRD.
 - **Double-Tap to Enter Backpack Mode (Issue #99)** - [Plan 065](Plans/065-double-tap-to-sleep.md) ✅ COMPLETE — Double-tap gesture to manually enter extended deep sleep. ADXL343 hardware detection, same 3.0g threshold as wake. PRD updated.
 - **Import/Export Backup (Issue #93)** - [Plan 064](Plans/064-import-export.md) ✅ COMPLETE — JSON backup export/import with Merge and Replace modes. New "Data" category in Settings. iOS-UX-PRD updated.
@@ -32,7 +33,7 @@ None — ready to merge.
 
 To resume from this progress file:
 ```
-Resume from PROGRESS.md — No active task. Last completed: Fix ADXL343 register addresses (Issue #98). THRESH_ACT corrected to 0x24, activity threshold lowered to 0.5g. PR pending merge.
+Resume from PROGRESS.md — No active task. Ready for next task.
 ```
 
 ---

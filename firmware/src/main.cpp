@@ -670,6 +670,7 @@ void setup() {
             g_in_extended_sleep_mode = false;
             g_time_since_stable_start = millis();
             rtc_backpack_screen_shown = false;
+            // Current gesture checked at sleep time (no per-cycle flag needed)
         }
     } else if (wakeup_reason == ESP_SLEEP_WAKEUP_TIMER) {
         // Woke from timer - daily rollover wake (4am reset)
@@ -1201,8 +1202,11 @@ void loop() {
 
     // Check for BLE data activity (sync, commands) and reset activity timeout
     // This ensures device stays awake during active BLE communication
+    // Also reset extended sleep timer so 180s threshold doesn't fire during BLE sync
+    // (Plan 067: prevents 180s backpack mode timer from firing during active BLE session)
     if (bleCheckDataActivity()) {
         wakeTime = millis();
+        g_time_since_stable_start = millis();
     }
 #endif
 
@@ -1994,6 +1998,16 @@ void loop() {
             sleep_blocked = true;
         }
 #endif
+        // Plan 067: If bottle was never placed on a surface (UPRIGHT_STABLE) this
+        // wake cycle, don't sleep — stay awake and let the 180s timer handle
+        // backpack mode entry. This avoids cross-cycle state issues since the
+        // timer runs continuously while awake.
+        if (gesture != GESTURE_UPRIGHT_STABLE && !sleep_blocked) {
+            Serial.println("Sleep deferred - no UPRIGHT_STABLE, waiting for 180s backpack mode timer");
+            wakeTime = millis(); // Reset activity timeout, stay awake
+            sleep_blocked = true;
+        }
+
         // Note: BLE connection alone no longer blocks sleep (Plan 034)
         // Only BLE data activity (sync, commands) resets the activity timeout
         // This prevents the device staying awake forever when connected but idle
