@@ -228,15 +228,17 @@ void configureADXL343Interrupt() {
     pinMode(PIN_ACCEL_INT, INPUT_PULLDOWN);  // Active-high interrupt
 
     // ADXL343 Register Definitions
-    const uint8_t THRESH_ACT = 0x1C;        // Activity threshold
+    const uint8_t THRESH_ACT = 0x1C;        // Activity threshold (NOTE: wrong address, see Issue #98)
     const uint8_t THRESH_TAP = 0x1D;        // Tap threshold
     const uint8_t DUR = 0x21;               // Tap duration
-    const uint8_t TIME_ACT = 0x22;          // Activity duration
+    const uint8_t LATENT = 0x22;            // Tap latency (for double-tap)
+    const uint8_t WINDOW = 0x23;            // Tap window (for double-tap)
     const uint8_t ACT_INACT_CTL = 0x27;     // Axis enable for activity/inactivity
     const uint8_t TAP_AXES = 0x2A;          // Axis participation for tap
     const uint8_t POWER_CTL = 0x2D;         // Power control
     const uint8_t INT_ENABLE = 0x2E;        // Interrupt enable
     const uint8_t INT_MAP = 0x2F;           // Interrupt mapping
+    const uint8_t INT_SOURCE = 0x30;        // Interrupt source (read to clear)
     const uint8_t DATA_FORMAT = 0x31;       // Data format
 
     // Step 1: Configure data format (±2g range)
@@ -251,11 +253,15 @@ void configureADXL343Interrupt() {
     writeAccelReg(THRESH_ACT, 0x30);        // ~3.0g activity threshold
     Serial.println("2. Activity threshold: 0x30 (3.0g)");
 
-    // Step 3: Set activity duration - require very sustained motion
-    // At 12.5 Hz sample rate: 1 LSB = 1/12.5 = 80ms
-    // Value = 20 → 1600ms (~1.6 seconds) of sustained motion required
-    writeAccelReg(TIME_ACT, 0x14);          // 20 samples = ~1600ms
-    Serial.println("3. Activity duration: 0x14 (~1600ms)");
+    // Step 3: Set double-tap latency (wait after first tap before window opens)
+    // Scale = 1.25 ms/LSB, 100ms = 80 (0x50)
+    writeAccelReg(LATENT, TAP_WAKE_LATENT);
+    Serial.printf("3. Tap latency: 0x%02X (%.0fms)\n", TAP_WAKE_LATENT, TAP_WAKE_LATENT * 1.25f);
+
+    // Step 3b: Set double-tap window (time for second tap after latency)
+    // Scale = 1.25 ms/LSB, 300ms = 240 (0xF0)
+    writeAccelReg(WINDOW, TAP_WAKE_WINDOW);
+    Serial.printf("3b. Tap window: 0x%02X (%.0fms)\n", TAP_WAKE_WINDOW, TAP_WAKE_WINDOW * 1.25f);
 
     // Step 4: Enable all axes for activity detection (AC-coupled)
     // Bits: 7=ACT_acdc(1=AC), 6-4=ACT_X/Y/Z (111=all axes)
@@ -282,20 +288,25 @@ void configureADXL343Interrupt() {
     writeAccelReg(POWER_CTL, 0x08);         // Measurement mode (bit 3)
     Serial.println("8. Power mode: measurement");
 
-    // Step 9: Enable activity AND single-tap interrupts
+    // Step 9: Enable activity + single-tap + double-tap interrupts
     // Bit 4 = Activity (0x10)
+    // Bit 5 = Double-tap (0x20)
     // Bit 6 = Single-tap (0x40)
-    // Combined = 0x50
-    writeAccelReg(INT_ENABLE, 0x50);        // Activity + single-tap interrupts
-    Serial.println("9. Interrupt enable: activity + single-tap");
+    // Combined = 0x70
+    writeAccelReg(INT_ENABLE, 0x70);        // Activity + single-tap + double-tap interrupts
+    Serial.println("9. Interrupt enable: activity + single-tap + double-tap");
 
     // Step 10: Route all interrupts to INT1 pin
     writeAccelReg(INT_MAP, 0x00);           // All interrupts to INT1
     Serial.println("10. Interrupt routing: INT1");
 
+    // Step 11: Clear any pending interrupts
+    uint8_t int_source = readAccelReg(INT_SOURCE);
+    Serial.printf("11. Cleared INT_SOURCE: 0x%02X\n", int_source);
+
     Serial.println("\n=== Configuration Complete ===");
-    Serial.println("Wake condition: Single-tap OR sustained motion (>3.0g)");
-    Serial.println("Expected: Firm tap or deliberate shake wakes device\n");
+    Serial.println("Sleep wake: Single-tap OR activity (>3.0g)");
+    Serial.println("Awake: Double-tap detected via INT_SOURCE polling\n");
 }
 
 // Configure ADXL343 for double-tap detection (backpack mode wake)
@@ -1258,6 +1269,15 @@ void loop() {
     // Read accelerometer and get gesture (ONCE)
     if (adxlReady) {
         sensors.gesture = gesturesUpdate(sensors.water_ml);
+
+        // Check for hardware double-tap (ADXL343 INT_SOURCE bit 5)
+        // Reading INT_SOURCE clears all interrupt flags - safe during awake mode
+        // since the interrupt pin is only used as a wake source from deep sleep
+        uint8_t int_source = readAccelReg(0x30);  // INT_SOURCE
+        if (int_source & 0x20) {  // Bit 5 = DOUBLE_TAP
+            sensors.gesture = GESTURE_DOUBLE_TAP;
+            Serial.println("=== DOUBLE-TAP DETECTED (hardware) ===");
+        }
     }
 
     // NOW use snapshot for all logic below
@@ -1281,6 +1301,31 @@ void loop() {
             Serial.println("Main: Shake gesture detected - bottle emptied pending");
             // Reset extended sleep timer - shake is unambiguous user interaction
             g_time_since_stable_start = millis();
+        }
+    }
+
+    // Handle double-tap gesture (manual extended deep sleep entry)
+    if (gesture == GESTURE_DOUBLE_TAP) {
+        bool sleep_blocked = false;
+
+#if ENABLE_STANDALONE_CALIBRATION
+        if (calibrationIsActive()) {
+            Serial.println("Double-tap: Ignored - standalone calibration in progress");
+            sleep_blocked = true;
+        }
+#endif
+#if ENABLE_BLE
+        if (bleIsCalibrationInProgress()) {
+            Serial.println("Double-tap: Ignored - BLE calibration in progress");
+            sleep_blocked = true;
+        }
+#endif
+
+        if (!sleep_blocked) {
+            Serial.println("=== DOUBLE-TAP → ENTERING BACKPACK MODE ===");
+            g_in_extended_sleep_mode = true;
+            enterExtendedDeepSleep();
+            // Will not return from deep sleep
         }
     }
 
@@ -1615,6 +1660,7 @@ void loop() {
                 case GESTURE_SIDEWAYS_TILT: Serial.print("SIDEWAYS_TILT"); break;
                 case GESTURE_UPRIGHT: Serial.print("UPRIGHT"); break;
                 case GESTURE_SHAKE_WHILE_INVERTED: Serial.print("SHAKE_WHILE_INVERTED"); break;
+                case GESTURE_DOUBLE_TAP: Serial.print("DOUBLE_TAP"); break;
                 default: Serial.print("NONE"); break;
             }
             Serial.println(")");
@@ -1806,6 +1852,7 @@ void loop() {
                 case GESTURE_UPRIGHT_STABLE: Serial.print("UPRIGHT_STABLE"); break;
                 case GESTURE_SIDEWAYS_TILT: Serial.print("SIDEWAYS_TILT"); break;
                 case GESTURE_SHAKE_WHILE_INVERTED: Serial.print("SHAKE_WHILE_INVERTED"); break;
+                case GESTURE_DOUBLE_TAP: Serial.print("DOUBLE_TAP"); break;
                 default: Serial.print("NONE"); break;
             }
 

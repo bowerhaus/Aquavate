@@ -1,6 +1,6 @@
 # Aquavate - Active Development Progress
 
-**Last Updated:** 2026-01-30 (Session 23)
+**Last Updated:** 2026-01-31 (Session 24)
 **Current Branch:** `master`
 
 ---
@@ -13,6 +13,7 @@ No active task. Ready for next issue.
 
 ## Recently Completed
 
+- **Double-Tap to Enter Backpack Mode (Issue #99)** - [Plan 065](Plans/065-double-tap-to-sleep.md) ✅ COMPLETE — Double-tap gesture to manually enter extended deep sleep. ADXL343 hardware detection, same 3.0g threshold as wake. PRD updated.
 - **Import/Export Backup (Issue #93)** - [Plan 064](Plans/064-import-export.md) ✅ COMPLETE — JSON backup export/import with Merge and Replace modes. New "Data" category in Settings. iOS-UX-PRD updated.
 - **Display Redraw on Wake Fix (Issue #88)** - [Plan 063](Plans/063-display-redraw-on-wake.md) ✅ COMPLETE — Persisted daily goal in RTC memory, removed dual flag check in displayNeedsUpdate().
 - **Settings Page Redesign (Issue #87)** - Plan 063 ✅ COMPLETE (PR #89) — Option 5 (Smart Contextual sub-pages) selected. Keep-alive fix, Health/Notification status flags, error message cleanup. iOS-UX-PRD updated.
@@ -30,7 +31,7 @@ No active task. Ready for next issue.
 
 To resume from this progress file:
 ```
-Resume from PROGRESS.md — No active task. Last completed: Import/Export (Issue #93).
+Resume from PROGRESS.md — No active task. Last completed: Double-tap to enter backpack mode (Issue #99). Related: ADXL343 register bug (Issue #98, separate PR pending).
 ```
 
 ---
