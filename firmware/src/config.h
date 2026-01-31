@@ -139,6 +139,9 @@ extern uint8_t g_daily_intake_display_mode;
 #define DISPLAY_SLEEP_INDICATOR     0
 #define EXTENDED_SLEEP_INDICATOR    1           // Show "Zzzz" before extended sleep (1=enabled)
 
+// Activity detection for normal sleep wake (ADXL343 AC-coupled activity interrupt)
+#define ACTIVITY_WAKE_THRESHOLD     0x08    // 0.5g threshold (8 x 62.5mg/LSB) - detects tilt to pour
+
 // Tap detection for backpack mode wake (ADXL343 double-tap interrupt)
 #define TAP_WAKE_THRESHOLD          0x30    // 3.0g threshold (48 x 62.5mg/LSB) - firm tap required
 #define TAP_WAKE_DURATION           0x10    // 10ms max duration (16 x 625us/LSB) - short sharp tap
