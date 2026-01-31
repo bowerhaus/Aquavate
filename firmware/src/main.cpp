@@ -63,6 +63,7 @@ bool g_in_extended_sleep_mode = false;          // Currently using extended slee
 uint32_t g_time_since_stable_threshold_sec = TIME_SINCE_STABLE_THRESHOLD_SEC; // Time without stability before extended sleep (3 min)
 uint32_t g_extended_sleep_timer_sec = 60;       // Timer wake interval for extended sleep (legacy, tap-wake replaced this)
 bool g_force_display_clear_sleep = false;       // Flag to clear Zzzz indicator on wake from extended sleep
+bool g_wake_was_useful = false;                // Track if current wake cycle had user interaction
 bool g_rollover_wake_pending = false;           // Flag to process 4am rollover after initialization
 
 // RTC memory persistence (survives deep sleep)
@@ -72,6 +73,7 @@ RTC_DATA_ATTR unsigned long rtc_time_since_stable_start = 0;
 RTC_DATA_ATTR bool rtc_backpack_screen_shown = false;  // Track if backpack mode screen shown (Issue #38)
 RTC_DATA_ATTR bool rtc_rollover_wake_pending = false;  // True if rollover timer was set for 4am wake
 RTC_DATA_ATTR bool rtc_tap_wake_enabled = false;       // True if in backpack mode expecting tap wake
+RTC_DATA_ATTR uint8_t rtc_spurious_wake_count = 0;    // Consecutive non-stable wakes (for backpack mode entry)
 
 // Sync timeout tracking - regular variable, set at wake time
 // Only extend timeout if NEW drinks recorded during this wake session
@@ -663,6 +665,7 @@ void setup() {
             g_time_since_stable_start = millis();
             rtc_backpack_screen_shown = false;
             g_force_display_clear_sleep = true;
+            rtc_spurious_wake_count = 0;  // Deliberate tap wake - reset counter
             // rtc_tap_wake_enabled cleared after accel reconfig below
         } else {
             // Woke from motion - was in normal sleep, return to normal mode
@@ -670,6 +673,7 @@ void setup() {
             g_in_extended_sleep_mode = false;
             g_time_since_stable_start = millis();
             rtc_backpack_screen_shown = false;
+            g_wake_was_useful = false;  // Will be set true if UPRIGHT_STABLE/drink/BLE activity
         }
     } else if (wakeup_reason == ESP_SLEEP_WAKEUP_TIMER) {
         // Woke from timer - daily rollover wake (4am reset)
@@ -680,6 +684,7 @@ void setup() {
         g_in_extended_sleep_mode = false;
         rtc_backpack_screen_shown = false;
         rtc_tap_wake_enabled = false;
+        rtc_spurious_wake_count = 0;  // Fresh boot - reset counter
     }
 
     Serial.print("Aquavate v");
@@ -1201,8 +1206,13 @@ void loop() {
 
     // Check for BLE data activity (sync, commands) and reset activity timeout
     // This ensures device stays awake during active BLE communication
+    // Also reset extended sleep timer so 180s threshold doesn't fire during BLE sync
+    // (Plan 067: prevents re-entering backpack mode during active BLE session)
+    // Note: BLE activity does NOT count as useful wake for spurious counter —
+    // only physical interaction (UPRIGHT_STABLE, drink) resets that counter.
     if (bleCheckDataActivity()) {
         wakeTime = millis();
+        g_time_since_stable_start = millis();
     }
 #endif
 
@@ -1698,6 +1708,8 @@ void loop() {
                     if (drink_recorded) {
                         // Reset extended sleep timer - drink is unambiguous user interaction
                         g_time_since_stable_start = millis();
+                        g_wake_was_useful = true;
+                        rtc_spurious_wake_count = 0;
                     }
                 }
 
@@ -1936,6 +1948,8 @@ void loop() {
     // Reset extended sleep timer whenever this occurs (not just after threshold)
     if (gesture == GESTURE_UPRIGHT_STABLE) {
         g_time_since_stable_start = millis();
+        g_wake_was_useful = true;
+        rtc_spurious_wake_count = 0;
     }
 
     if (!g_in_extended_sleep_mode
@@ -2040,6 +2054,23 @@ void loop() {
                 readAccelReg(0x30);  // INT_SOURCE register
                 Serial.print("INT pin before sleep: ");
                 Serial.println(digitalRead(PIN_ACCEL_INT));
+            }
+
+            // Check for spurious wake pattern (Plan 067: backpack mode entry fix)
+            if (!g_wake_was_useful) {
+                rtc_spurious_wake_count++;
+                Serial.printf("Non-stable wake #%d/%d\n",
+                              rtc_spurious_wake_count, SPURIOUS_WAKE_THRESHOLD);
+
+                if (rtc_spurious_wake_count >= SPURIOUS_WAKE_THRESHOLD) {
+                    Serial.println("Bottle not in use - entering extended sleep (backpack mode)");
+                    g_in_extended_sleep_mode = true;
+                    rtc_spurious_wake_count = 0;
+                    enterExtendedDeepSleep();
+                    // Does not return
+                }
+            } else {
+                rtc_spurious_wake_count = 0;
             }
 
             enterDeepSleep();

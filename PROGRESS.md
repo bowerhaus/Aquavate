@@ -1,13 +1,32 @@
 # Aquavate - Active Development Progress
 
-**Last Updated:** 2026-01-31 (Session 24)
-**Current Branch:** `fix-adxl343-register-addresses`
+**Last Updated:** 2026-01-31 (Session 25)
+**Current Branch:** `backpack-mode-entry-fix`
 
 ---
 
 ## Current Task
 
-None — ready to merge.
+**Fix Backpack Mode Entry (Issue #97)** - [Plan 067](Plans/067-backpack-mode-entry-fix.md)
+
+Backpack mode never entered when bottle is horizontal. Root cause: `g_time_since_stable_start` reset on every motion wake (main.cpp:662), making the 180s threshold unreachable across short 30s wake/sleep cycles.
+
+**Solution:** Track consecutive non-stable wake cycles. After 4 wakes without UPRIGHT_STABLE / drink / BLE activity, enter extended sleep instead of normal sleep.
+
+### Progress
+- [x] Plan created (067-backpack-mode-entry-fix.md)
+- [x] Branch created (`backpack-mode-entry-fix` from `master`)
+- [x] GitHub issue created (#97)
+- [x] Add RTC variable (`rtc_spurious_wake_count`) and config constant (`SPURIOUS_WAKE_THRESHOLD`)
+- [x] Modify wake handling in setup() — init `g_wake_was_useful`, preserve/reset counter
+- [x] Add useful-wake markers at UPRIGHT_STABLE, drink detection, BLE activity
+- [x] Add spurious wake check before sleep entry — redirect to extended sleep after threshold
+- [x] Build firmware (SUCCESS — IRAM 94.0%, RAM 11.6%, Flash 59.2%)
+- [ ] User testing
+
+### Files to Modify
+- `firmware/src/main.cpp` — RTC var, wake handling, useful markers, sleep entry decision
+- `firmware/src/config.h` — `SPURIOUS_WAKE_THRESHOLD` constant
 
 ---
 
@@ -32,7 +51,7 @@ None — ready to merge.
 
 To resume from this progress file:
 ```
-Resume from PROGRESS.md — No active task. Last completed: Fix ADXL343 register addresses (Issue #98). THRESH_ACT corrected to 0x24, activity threshold lowered to 0.5g. PR pending merge.
+Resume from PROGRESS.md — Working on: Fix backpack mode entry (Issue #97, Plan 067). Branch: backpack-mode-entry-fix. Solution: spurious wake counter — track consecutive non-stable wakes, enter extended sleep after 4. Check progress checklist above for current step.
 ```
 
 ---
