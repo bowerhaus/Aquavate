@@ -17,6 +17,7 @@ enum GestureType {
     GESTURE_UPRIGHT_STABLE,       // Upright + weight stable for 2s (for drink tracking)
     GESTURE_SIDEWAYS_TILT,        // |X| or |Y| > 0.5g (confirmation)
     GESTURE_SHAKE_WHILE_INVERTED, // Shake while inverted for 1.5s (shake to empty)
+    GESTURE_DOUBLE_TAP,           // Hardware double-tap detected (manual backpack mode trigger)
 };
 
 // Gesture detection configuration
