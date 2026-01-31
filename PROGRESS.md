@@ -1,37 +1,19 @@
 # Aquavate - Active Development Progress
 
-**Last Updated:** 2026-01-31 (Session 25)
-**Current Branch:** `backpack-mode-entry-fix`
+**Last Updated:** 2026-01-31 (Session 28)
+**Current Branch:** `master`
 
 ---
 
 ## Current Task
 
-**Fix Backpack Mode Entry (Issue #97)** - [Plan 067](Plans/067-backpack-mode-entry-fix.md)
-
-Backpack mode never entered when bottle is horizontal. Root cause: `g_time_since_stable_start` reset on every motion wake (main.cpp:662), making the 180s threshold unreachable across short 30s wake/sleep cycles.
-
-**Solution:** Track consecutive non-stable wake cycles. After 4 wakes without UPRIGHT_STABLE / drink / BLE activity, enter extended sleep instead of normal sleep.
-
-### Progress
-- [x] Plan created (067-backpack-mode-entry-fix.md)
-- [x] Branch created (`backpack-mode-entry-fix` from `master`)
-- [x] GitHub issue created (#97)
-- [x] Add RTC variable (`rtc_spurious_wake_count`) and config constant (`SPURIOUS_WAKE_THRESHOLD`)
-- [x] Modify wake handling in setup() — init `g_wake_was_useful`, preserve/reset counter
-- [x] Add useful-wake markers at UPRIGHT_STABLE, drink detection, BLE activity
-- [x] Add spurious wake check before sleep entry — redirect to extended sleep after threshold
-- [x] Build firmware (SUCCESS — IRAM 94.0%, RAM 11.6%, Flash 59.2%)
-- [ ] User testing
-
-### Files to Modify
-- `firmware/src/main.cpp` — RTC var, wake handling, useful markers, sleep entry decision
-- `firmware/src/config.h` — `SPURIOUS_WAKE_THRESHOLD` constant
+None — ready for next task.
 
 ---
 
 ## Recently Completed
 
+- **Fix Backpack Mode Entry (Issue #97)** - [Plan 067](Plans/067-backpack-mode-entry-fix.md) ✅ COMPLETE — Backpack mode never entered when bottle horizontal. Root cause: per-cycle flags/counters couldn't track state across 30s wake/sleep cycles. Fix: check current gesture (`gesture != GESTURE_UPRIGHT_STABLE`) at sleep time — if not on surface, stay awake and let 180s backpack timer handle it. Four approaches tried; final solution is zero new state, net -1 line.
 - **Fix ADXL343 Register Addresses (Issue #98)** - [Plan 066](Plans/066-fix-adxl343-register-addresses.md) ✅ COMPLETE — Fixed THRESH_ACT register (0x1C → 0x24), separated activity threshold (0.5g) from tap threshold (3.0g), updated PRD.
 - **Double-Tap to Enter Backpack Mode (Issue #99)** - [Plan 065](Plans/065-double-tap-to-sleep.md) ✅ COMPLETE — Double-tap gesture to manually enter extended deep sleep. ADXL343 hardware detection, same 3.0g threshold as wake. PRD updated.
 - **Import/Export Backup (Issue #93)** - [Plan 064](Plans/064-import-export.md) ✅ COMPLETE — JSON backup export/import with Merge and Replace modes. New "Data" category in Settings. iOS-UX-PRD updated.
@@ -51,7 +33,7 @@ Backpack mode never entered when bottle is horizontal. Root cause: `g_time_since
 
 To resume from this progress file:
 ```
-Resume from PROGRESS.md — Working on: Fix backpack mode entry (Issue #97, Plan 067). Branch: backpack-mode-entry-fix. Solution: spurious wake counter — track consecutive non-stable wakes, enter extended sleep after 4. Check progress checklist above for current step.
+Resume from PROGRESS.md — No active task. Ready for next task.
 ```
 
 ---

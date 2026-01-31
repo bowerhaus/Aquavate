@@ -132,7 +132,6 @@ extern uint8_t g_daily_intake_display_mode;
 // When bottle hasn't been stable (UPRIGHT_STABLE) for threshold duration,
 // switch to tap-based wake instead of motion wake to conserve battery
 #define TIME_SINCE_STABLE_THRESHOLD_SEC 180     // 3 minutes without stability triggers backpack mode
-#define SPURIOUS_WAKE_THRESHOLD         4       // Consecutive non-stable wakes before extended sleep
 
 // Display "Zzzz" indicator before entering deep sleep
 // 0 = No display update before sleep (saves battery, no flash)
