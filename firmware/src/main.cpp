@@ -98,6 +98,9 @@ bool g_rtc_ds3231_present = false;  // DS3231 RTC detected (future)
 // Shake to empty gesture state (shake-while-inverted)
 bool g_cancel_drink_pending = false;  // Set when shake gesture detected, cleared on upright stable
 
+// Double-tap gating (reset each wake cycle)
+bool g_has_been_upright_stable = false;  // Gate for double-tap backpack entry
+
 // Runtime debug control (non-persistent, reset on boot)
 // Global enable flag
 bool g_debug_enabled = DEBUG_ENABLED;
@@ -1323,11 +1326,13 @@ void loop() {
         }
 #endif
 
-        if (!sleep_blocked) {
+        if (!sleep_blocked && g_has_been_upright_stable) {
             Serial.println("=== DOUBLE-TAP → ENTERING BACKPACK MODE ===");
             g_in_extended_sleep_mode = true;
             enterExtendedDeepSleep();
             // Will not return from deep sleep
+        } else if (!sleep_blocked && !g_has_been_upright_stable) {
+            Serial.println("Double-tap: Ignored - bottle not yet placed on surface this wake cycle");
         }
     }
 
@@ -1939,6 +1944,7 @@ void loop() {
     // UPRIGHT_STABLE is an unambiguous user interaction - bottle placed on surface
     // Reset extended sleep timer whenever this occurs (not just after threshold)
     if (gesture == GESTURE_UPRIGHT_STABLE) {
+        g_has_been_upright_stable = true;  // Enable double-tap backpack entry
         g_time_since_stable_start = millis();
     }
 

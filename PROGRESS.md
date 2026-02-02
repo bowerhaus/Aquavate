@@ -1,6 +1,6 @@
 # Aquavate - Active Development Progress
 
-**Last Updated:** 2026-01-31 (Session 28)
+**Last Updated:** 2026-02-02 (Session 29)
 **Current Branch:** `master`
 
 ---
@@ -13,6 +13,7 @@ None — ready for next task.
 
 ## Recently Completed
 
+- **Fix False Double-Tap Triggering Backpack Mode (Issue #103)** - [Plan 068](Plans/068-false-double-tap-backpack-fix.md) ✅ COMPLETE — Setting bottle down on hard surface created bounce pattern matching ADXL343 double-tap, falsely entering backpack mode. Fix: gate double-tap handler on `g_has_been_upright_stable` flag — bottle must have settled on surface (2s stability) before double-tap can trigger backpack mode. ~5 lines changed.
 - **Fix Backpack Mode Entry (Issue #97)** - [Plan 067](Plans/067-backpack-mode-entry-fix.md) ✅ COMPLETE — Backpack mode never entered when bottle horizontal. Root cause: per-cycle flags/counters couldn't track state across 30s wake/sleep cycles. Fix: check current gesture (`gesture != GESTURE_UPRIGHT_STABLE`) at sleep time — if not on surface, stay awake and let 180s backpack timer handle it. Four approaches tried; final solution is zero new state, net -1 line.
 - **Fix ADXL343 Register Addresses (Issue #98)** - [Plan 066](Plans/066-fix-adxl343-register-addresses.md) ✅ COMPLETE — Fixed THRESH_ACT register (0x1C → 0x24), separated activity threshold (0.5g) from tap threshold (3.0g), updated PRD.
 - **Double-Tap to Enter Backpack Mode (Issue #99)** - [Plan 065](Plans/065-double-tap-to-sleep.md) ✅ COMPLETE — Double-tap gesture to manually enter extended deep sleep. ADXL343 hardware detection, same 3.0g threshold as wake. PRD updated.
