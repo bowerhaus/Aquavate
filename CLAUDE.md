@@ -148,6 +148,10 @@ cd firmware
 
 **Note:** The user will handle firmware uploads and device restarts manually. Do not attempt to upload firmware or wait for upload confirmation - just build and inform the user when ready.
 
+### Git Commits and Pull Requests
+
+**IMPORTANT:** Never create git commits or pull requests unless the user explicitly asks you to. Always wait for an explicit instruction like "commit this" or "create a PR" before running any git commit or PR creation commands.
+
 ### iOS Build Commands
 ```bash
 cd ios/Aquavate

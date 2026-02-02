@@ -158,7 +158,7 @@ When the bottle hasn't been placed on a stable surface (UPRIGHT_STABLE) for 3 mi
 - Immediate "waking" feedback shown before sensor initialization
 - After wake, ADXL343 restored to normal motion detection
 
-**Manual entry:** User can also double-tap the bottle while awake to immediately enter backpack mode (same 3.0g threshold as wake). This allows entering backpack mode without waiting for the 3-minute auto-detection. Blocked during calibration.
+**Manual entry:** User can also double-tap the bottle while awake to immediately enter backpack mode (same 3.0g threshold as wake). This allows entering backpack mode without waiting for the 3-minute auto-detection. Blocked during calibration. Gated on prior UPRIGHT_STABLE detection within the current wake cycle to prevent false triggers from the impact of setting the bottle down on a surface.
 
 #### Stability Detection (Both Combined)
 1. Detect vertical orientation: Z-axis dominant (>0.9g), X/Y near zero
