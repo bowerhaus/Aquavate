@@ -727,6 +727,50 @@ void displayBackpackMode() {
     g_display_ptr->display();
 }
 
+// Display full-screen low battery lockout screen (Issue #68)
+void displayLowBattery() {
+    if (g_display_ptr == nullptr) return;
+
+    g_display_ptr->clearBuffer();
+    g_display_ptr->setTextColor(EPD_BLACK);
+
+    // Draw large battery outline centered (80x40px)
+    // Display is 250x122, center at (125, 35)
+    int bx = 85;   // Battery body left
+    int by = 10;    // Battery body top
+    int bw = 80;    // Battery body width
+    int bh = 40;    // Battery body height
+
+    // Battery body outline (thick 3px border)
+    for (int i = 0; i < 3; i++) {
+        g_display_ptr->drawRect(bx + i, by + i, bw - 2*i, bh - 2*i, EPD_BLACK);
+    }
+
+    // Battery terminal nub on right side
+    g_display_ptr->fillRect(bx + bw, by + 12, 6, 16, EPD_BLACK);
+
+    // Exclamation mark "!" inside battery (textSize=3)
+    g_display_ptr->setTextSize(3);
+    g_display_ptr->setCursor(bx + 31, by + 9);
+    g_display_ptr->print("!");
+
+    // "charge me" text below battery (textSize=3, centered)
+    g_display_ptr->setTextSize(3);
+    const char* title = "charge me";
+    int title_width = strlen(title) * 18;  // 18px per char at textSize=3
+    g_display_ptr->setCursor((250 - title_width) / 2, 60);
+    g_display_ptr->print(title);
+
+    // "battery too low to operate" note at bottom (textSize=1)
+    g_display_ptr->setTextSize(1);
+    const char* note = "battery too low to operate";
+    int note_width = strlen(note) * 6;  // 6px per char at textSize=1
+    g_display_ptr->setCursor((250 - note_width) / 2, 105);
+    g_display_ptr->print(note);
+
+    g_display_ptr->display();
+}
+
 // Display immediate feedback when waking from tap (shows "waking" text)
 void displayTapWakeFeedback() {
     if (g_display_ptr == nullptr) return;

@@ -138,6 +138,7 @@ After cutting, verify LED no longer illuminates when board is powered.
 | **Measuring** | Vertical + stable | Take weight readings, calculate drink | ~80mA |
 | **Advertising** | After measurement | BLE advertising for iOS connection | ~20mA |
 | **Connected** | iOS app connects | Sync drink history, receive config | ~30mA |
+| **Low Battery Lockout** | Battery < 20% | Full-screen "charge me", timer-only sleep (15-min checks) | ~100µA |
 
 ### 2. Measurement Logic
 
@@ -270,6 +271,21 @@ typedef struct {
 - Battery icon with fill level
 - BLE icon when advertising/connected
 - Warning icon for low battery (<20%)
+- Full-screen "charge me" lockout screen when battery < lockout threshold (default 20%)
+
+#### Low Battery Lockout (Issue #68)
+Two-tier battery warning system with hysteresis:
+
+| Level | Default | Trigger | Behavior |
+|-------|---------|---------|----------|
+| **Warning** | 25% | Battery < lockout + 5% | BLE flag set → iOS shows banner + push notification. Bottle still works. |
+| **Lockout** | 20% | Battery < lockout threshold | Full-screen "charge me" on e-paper. No BLE, no drink detection. Timer-only deep sleep. |
+| **Recovery** | 25% | Battery >= lockout + 5% | Lockout clears, normal operation resumes. |
+
+- Lockout threshold configurable via serial command `SET BATTERY LOCKOUT THRESHOLD <pct>` (persisted in NVS)
+- During lockout: 15-minute health check wake interval for fast recovery detection
+- No BLE advertising during lockout (conserves remaining battery)
+- iOS warned at 25% while bottle still operational (BLE flag `BLE_FLAG_LOW_BATTERY` 0x20)
 
 ### 6. Calibration
 
@@ -431,7 +447,7 @@ Smart reminders based on whether user is on pace to meet daily goal:
 - Hydration reminders (pace-based, during active hours)
 - Goal achieved celebration ("Goal Reached! 💧")
 - Back on track (optional, when user catches up after falling behind)
-- Low battery warning (from puck status)
+- Low battery warning (from BLE flag when battery < 25%, Issue #68)
 - Sync reminder if not connected for 24h
 
 See [Plans/036-watch-hydration-reminders.md](../Plans/036-watch-hydration-reminders.md) for full implementation details.

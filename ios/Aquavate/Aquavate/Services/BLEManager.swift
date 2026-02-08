@@ -134,6 +134,9 @@ class BLEManager: NSObject, ObservableObject {
     /// Whether calibration ADC result is ready to read
     @Published private(set) var isCalResultReady: Bool = false
 
+    /// Whether battery is below warning threshold (lockout + offset)
+    @Published private(set) var isLowBattery: Bool = false
+
     /// Raw ADC value from calibration measurement (only valid when isCalResultReady is true)
     @Published private(set) var calibrationRawADC: Int32?
 
@@ -1180,6 +1183,16 @@ extension BLEManager: CBPeripheralDelegate {
         unsyncedCount = Int(state.unsyncedCount)
         lastStateUpdateTime = Date()
 
+        // Detect low battery transition and post notification
+        let wasLowBattery = isLowBattery
+        isLowBattery = state.isLowBattery
+        if isLowBattery && !wasLowBattery {
+            logger.warning("Low battery detected: \(state.batteryPercent)%")
+            NotificationCenter.default.post(name: .bottleLowBatteryDetected,
+                                           object: nil,
+                                           userInfo: ["batteryPercent": Int(state.batteryPercent)])
+        }
+
         // Handle calibration result - when cal_result_ready is set, extract raw ADC from encoded fields
         if state.isCalResultReady {
             calibrationRawADC = state.calibrationRawADC
@@ -1192,7 +1205,7 @@ extension BLEManager: CBPeripheralDelegate {
         }
 
         logger.info("Current State: weight=\(state.currentWeightG)g, level=\(state.bottleLevelMl)ml, daily=\(state.dailyTotalMl)ml, battery=\(state.batteryPercent)%, unsynced=\(state.unsyncedCount)")
-        logger.debug("  Flags: timeValid=\(state.isTimeValid), calibrated=\(state.isCalibrated), stable=\(state.isStable), calMeasuring=\(state.isCalMeasuring), calResultReady=\(state.isCalResultReady)")
+        logger.debug("  Flags: timeValid=\(state.isTimeValid), calibrated=\(state.isCalibrated), stable=\(state.isStable), calMeasuring=\(state.isCalMeasuring), calResultReady=\(state.isCalResultReady), lowBattery=\(state.isLowBattery)")
 
         // Check if we have a pending delete confirmation
         // The bottle sends a Current State notification after processing DELETE_DRINK_RECORD
@@ -2159,4 +2172,10 @@ extension BLEManager: CBPeripheralDelegate {
         logger.error("performSyncOnly: sync timeout")
         return .syncFailed("Sync timeout")
     }
+}
+
+// MARK: - Notification Names
+
+extension Notification.Name {
+    static let bottleLowBatteryDetected = Notification.Name("bottleLowBatteryDetected")
 }

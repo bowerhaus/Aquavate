@@ -47,7 +47,7 @@ struct __attribute__((packed)) BLE_CurrentState {
     uint16_t bottle_level_ml;    // Water level after last event
     uint16_t daily_total_ml;     // Today's cumulative intake
     uint8_t  battery_percent;    // 0-100
-    uint8_t  flags;              // Bit 0: time_valid, Bit 1: calibrated, Bit 2: stable, Bit 3: cal_measuring, Bit 4: cal_result_ready
+    uint8_t  flags;              // Bit 0: time_valid, Bit 1: calibrated, Bit 2: stable, Bit 3: cal_measuring, Bit 4: cal_result_ready, Bit 5: low_battery
     uint16_t unsynced_count;     // Records pending sync
 };
 
@@ -120,6 +120,7 @@ struct __attribute__((packed)) BLE_Command {
 #define BLE_FLAG_STABLE                 0x04  // Bit 2: Weight reading is stable
 #define BLE_FLAG_CAL_MEASURING          0x08  // Bit 3: Calibration measurement in progress
 #define BLE_FLAG_CAL_RESULT_READY       0x10  // Bit 4: Calibration ADC result available
+#define BLE_FLAG_LOW_BATTERY            0x20  // Bit 5: Battery below warning threshold (lockout + offset)
 
 // Device Settings Characteristic (4 bytes)
 struct __attribute__((packed)) BLE_DeviceSettings {

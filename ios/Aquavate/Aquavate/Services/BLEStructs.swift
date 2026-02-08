@@ -71,6 +71,11 @@ struct BLECurrentState {
         (flags & 0x10) != 0
     }
 
+    /// Whether battery is below warning threshold (bit 5)
+    var isLowBattery: Bool {
+        (flags & 0x20) != 0
+    }
+
     /// Extract raw ADC value when calibration result is ready
     /// The 32-bit ADC value is split across currentWeightG (lower 16 bits) and bottleLevelMl (upper 16 bits)
     var calibrationRawADC: Int32? {

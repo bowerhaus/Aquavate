@@ -89,4 +89,10 @@ bool storageSaveDailyGoal(uint16_t goal_ml);
 // Load daily hydration goal from NVS in ml (default: 2500ml)
 uint16_t storageLoadDailyGoal();
 
+// Save low battery lockout threshold to NVS (5-95%)
+bool storageSaveLowBatteryThreshold(uint8_t percent);
+
+// Load low battery lockout threshold from NVS (default: 20%)
+uint8_t storageLoadLowBatteryThreshold();
+
 #endif // STORAGE_H

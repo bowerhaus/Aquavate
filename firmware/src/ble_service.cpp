@@ -102,6 +102,9 @@ static void bleNotifyCurrentStateUpdate();
 extern bool g_debug_enabled;
 extern bool g_debug_ble;
 
+// Low battery lockout threshold (RTC variable from main.cpp)
+extern uint8_t rtc_low_battery_threshold;
+
 #define BLE_DEBUG(x) if (g_debug_enabled && g_debug_ble) { Serial.print("[BLE] "); Serial.println(x); }
 #define BLE_DEBUG_F(fmt, ...) if (g_debug_enabled && g_debug_ble) { Serial.printf("[BLE] " fmt "\n", ##__VA_ARGS__); }
 
@@ -979,6 +982,9 @@ void bleUpdateCurrentState(uint16_t daily_total_ml, int32_t current_adc,
     if (stable) currentState.flags |= BLE_FLAG_STABLE;
     if (g_cal_measuring) currentState.flags |= BLE_FLAG_CAL_MEASURING;
     if (g_cal_result_ready) currentState.flags |= BLE_FLAG_CAL_RESULT_READY;
+    if (battery_percent < (rtc_low_battery_threshold + LOW_BATTERY_RECOVERY_OFFSET)) {
+        currentState.flags |= BLE_FLAG_LOW_BATTERY;
+    }
 
     // During calibration measurement result, report raw ADC using two fields
     // When cal_result_ready flag is set, iOS should interpret:
@@ -1014,6 +1020,9 @@ void bleUpdateCurrentState(uint16_t daily_total_ml, int32_t current_adc,
                    (previousState.flags & (BLE_FLAG_CAL_MEASURING | BLE_FLAG_CAL_RESULT_READY))) {
             should_notify = true;
             BLE_DEBUG("Current State: Calibration state changed, sending notification");
+        } else if ((currentState.flags & BLE_FLAG_LOW_BATTERY) != (previousState.flags & BLE_FLAG_LOW_BATTERY)) {
+            should_notify = true;
+            BLE_DEBUG("Current State: Low battery flag changed, sending notification");
         }
 
         if (should_notify) {
