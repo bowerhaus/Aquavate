@@ -73,6 +73,8 @@ RTC_DATA_ATTR bool rtc_backpack_screen_shown = false;  // Track if backpack mode
 RTC_DATA_ATTR bool rtc_rollover_wake_pending = false;  // True if rollover timer was set for 4am wake
 RTC_DATA_ATTR bool rtc_tap_wake_enabled = false;       // True if in backpack mode expecting tap wake
 RTC_DATA_ATTR bool rtc_health_check_wake = false;      // True if timer was set for health check (not rollover)
+RTC_DATA_ATTR bool rtc_low_battery_lockout = false;    // True when battery below lockout threshold
+RTC_DATA_ATTR uint8_t rtc_low_battery_threshold = LOW_BATTERY_LOCKOUT_PCT_DEFAULT;  // Cached lockout threshold
 
 // Sync timeout tracking - regular variable, set at wake time
 // Only extend timeout if NEW drinks recorded during this wake session
@@ -745,6 +747,50 @@ void setup() {
     Serial.printf("Battery: %.2fV (%d%%)\n", batteryV, batteryPct);
 
     Serial.println("E-Paper: OK");
+
+    // === Low Battery Lockout Check (early, before sensor init) ===
+    // storageInit() is idempotent - safe to call here and again later
+    storageInit();
+    rtc_low_battery_threshold = storageLoadLowBatteryThreshold();
+    uint8_t recovery_threshold = rtc_low_battery_threshold + LOW_BATTERY_RECOVERY_OFFSET;
+
+    if (rtc_low_battery_lockout) {
+        if (batteryPct >= recovery_threshold) {
+            // Battery recovered - clear lockout and continue normal boot
+            rtc_low_battery_lockout = false;
+            Serial.printf("Battery recovered: %d%% >= %d%% (recovery) — resuming normal operation\n",
+                          batteryPct, recovery_threshold);
+        } else {
+            // Still in lockout - show battery screen and go back to sleep
+            Serial.printf("Still in low battery lockout: %d%% < %d%% (recovery)\n",
+                          batteryPct, recovery_threshold);
+            displayInit(display);
+            displayLowBattery();
+
+            // Timer-only deep sleep (no motion wake) for minimum power consumption
+            uint64_t timer_us = (uint64_t)LOW_BATTERY_CHECK_INTERVAL_SEC * 1000000ULL;
+            esp_sleep_enable_timer_wakeup(timer_us);
+            rtc_health_check_wake = true;
+            Serial.printf("Low battery sleep: %d seconds until next check\n", LOW_BATTERY_CHECK_INTERVAL_SEC);
+            Serial.flush();
+            esp_deep_sleep_start();
+        }
+    } else if (batteryPct < rtc_low_battery_threshold) {
+        // Entering lockout for the first time
+        rtc_low_battery_lockout = true;
+        Serial.printf("=== LOW BATTERY LOCKOUT === %d%% < %d%% threshold\n",
+                      batteryPct, rtc_low_battery_threshold);
+        displayInit(display);
+        displayLowBattery();
+
+        // Timer-only deep sleep (no motion wake) for minimum power consumption
+        uint64_t timer_us = (uint64_t)LOW_BATTERY_CHECK_INTERVAL_SEC * 1000000ULL;
+        esp_sleep_enable_timer_wakeup(timer_us);
+        rtc_health_check_wake = true;
+        Serial.printf("Low battery sleep: %d seconds until next check\n", LOW_BATTERY_CHECK_INTERVAL_SEC);
+        Serial.flush();
+        esp_deep_sleep_start();
+    }
 #endif
 
     // Initialize I2C and NAU7802
@@ -1752,6 +1798,31 @@ void loop() {
                 // Update BLE battery level (separate characteristic)
                 bleUpdateBatteryLevel(battery_pct);
 #endif
+
+                // Loop lockout check: enter lockout if battery drops below threshold
+                if (!rtc_low_battery_lockout && battery_pct < rtc_low_battery_threshold) {
+                    rtc_low_battery_lockout = true;
+                    Serial.printf("=== LOW BATTERY LOCKOUT === %d%% < %d%% threshold\n",
+                                  battery_pct, rtc_low_battery_threshold);
+#if ENABLE_BLE
+                    bleStopAdvertising();
+#endif
+                    displayLowBattery();
+
+                    // Save state before sleeping
+                    displaySaveToRTC();
+                    drinksSaveToRTC();
+                    extendedSleepSaveToRTC();
+                    activityStatsSaveToRTC();
+
+                    // Timer-only deep sleep (no motion wake)
+                    uint64_t timer_us = (uint64_t)LOW_BATTERY_CHECK_INTERVAL_SEC * 1000000ULL;
+                    esp_sleep_enable_timer_wakeup(timer_us);
+                    rtc_health_check_wake = true;
+                    Serial.printf("Low battery sleep: %d seconds until next check\n", LOW_BATTERY_CHECK_INTERVAL_SEC);
+                    Serial.flush();
+                    esp_deep_sleep_start();
+                }
             }
 #endif
         }

@@ -1,10 +1,11 @@
 # Aquavate iOS App - UX Product Requirements Document
 
-**Version:** 1.20
-**Date:** 2026-01-30
-**Status:** Approved (Import/Export)
+**Version:** 1.21
+**Date:** 2026-02-08
+**Status:** Approved (Low Battery Lockout)
 
 **Changelog:**
+- **v1.21 (2026-02-08):** Added low battery warning badge and push notification to HomeView (Issue #68). Red "Low Battery" StatusBadge when BLE flag indicates battery < 25%. Battery icon turns red. Push notification via NotificationManager with fixed identifier (no duplicates). See Section 2.4 and Section 7.
 - **v1.20 (2026-01-30):** Added Data import/export backup to Settings (Issue #93). New "Data" category row on main Settings page with DataSettingsPage sub-page. Export as versioned JSON, import with Merge (skip duplicates) or Replace (clear and restore) modes. ImportPreviewSheet for reviewing backup before import. See Section 2.6.
 - **v1.19 (2026-01-29):** Settings page redesigned with Apple Settings-style sub-pages (Issue #87). Main page shows category rows with contextual summaries; drill-down to Goals & Health, Device Information, Device Controls, Reminder Options. Added BLE keep-alive, Health/Notification status flags. Removed error message display, unused status rows. See Section 2.6.
 - **v1.18 (2026-01-28):** Simplified behind-target indicator to faded blue (Issue #81). Replaced amber/red gradient with 30% opacity blue. Removes visual distinction between urgency levels while keeping deficit text. See Section 2.9.
@@ -376,6 +377,12 @@ Sarah's Bluetooth is accidentally turned off. When she opens the app, she sees a
 | Never connected | Section hidden entirely |
 | Connected | Shows live value (e.g., "56%") |
 | Disconnected with previous data | Shows last known value with "(recent)" suffix (e.g., "56% (recent)") |
+
+**Low Battery Warning (Issue #68):**
+- Red "Low Battery" StatusBadge shown when `bleManager.isLowBattery` (BLE flag bit 5, battery < 25%)
+- Battery icon color changes to red when low battery flag active
+- Push notification triggered on low battery transition via NotificationManager
+- Fixed notification identifier `"bottle-low-battery"` prevents duplicate notifications
 
 **Pull-to-Refresh (Updated 2026-01-18):**
 - If disconnected: Scans and connects to bottle, syncs, stays connected 60s
@@ -1411,7 +1418,7 @@ struct CircularProgressView {
 | 75% | `battery.75` | Green |
 | 50% | `battery.50` | Green |
 | 25% | `battery.25` | Orange |
-| <20% | `battery.25` | Red |
+| <20% (or low battery flag) | `battery.25` | Red |
 | Charging | `battery.100.bolt` | Green |
 
 ---
@@ -1479,7 +1486,7 @@ Deficit = expected - dailyTotalMl
 | Behind pace (overdue) | "Hydration Reminder" | "You're falling behind! Drink Xml to catch up." | iPhone + Watch |
 | Goal achieved | "Goal Reached! 💧" | "Good job! You've hit your daily hydration goal." | iPhone + Watch |
 | Back on track (optional) | "Back On Track! ✓" | "Nice work catching up on your hydration." | iPhone + Watch |
-| Low battery | "Bottle battery low" | "Aquavate at {X}%. Charge soon." | iPhone |
+| Low battery (Issue #68) | "Low Battery" | "Your Aquavate bottle battery is at {X}%. Please charge soon." | iPhone |
 
 **Settings (SettingsView):**
 - Hydration Reminders toggle (main on/off)
@@ -1504,7 +1511,7 @@ Watch notifications include haptic feedback via `WKInterfaceDevice.current().pla
 
 | Trigger | Title | Body | Time | Action |
 |---------|-------|------|------|--------|
-| Low battery | "Bottle battery low" | "Aquavate at {X}%. Charge soon." | When battery < 20% | Open app |
+| Low battery (Issue #68) | "Low Battery" | "Your Aquavate bottle battery is at {X}%. Please charge soon." | BLE flag transition (battery < 25%) | Open app |
 | Sync reminder | "Sync your bottle" | "Haven't synced in 24 hours." | 24h since last sync | Open app |
 
 **Settings:**

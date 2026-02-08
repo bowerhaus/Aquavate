@@ -183,6 +183,11 @@ extern uint8_t g_daily_intake_display_mode;
 #define BATTERY_VOLTAGE_FULL    4.2f  // 100%
 #define BATTERY_VOLTAGE_EMPTY   3.2f  // 0%
 
+// Low Battery Lockout
+#define LOW_BATTERY_LOCKOUT_PCT_DEFAULT  20      // Default lockout threshold (%)
+#define LOW_BATTERY_RECOVERY_OFFSET      5       // Recovery = lockout + this (%)
+#define LOW_BATTERY_CHECK_INTERVAL_SEC   900     // 15 minutes between checks during lockout
+
 // ==================== E-Paper Display ====================
 
 #if defined(BOARD_ADAFRUIT_FEATHER)

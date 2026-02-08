@@ -280,6 +280,35 @@ class NotificationManager: NSObject, ObservableObject, UNUserNotificationCenterD
         }
     }
 
+    /// Schedule a low battery warning notification
+    /// Uses fixed identifier to prevent duplicate notifications
+    func scheduleLowBatteryNotification(batteryPercent: Int) {
+        guard isAuthorized else {
+            print("[Notifications] Cannot schedule low battery notification - not authorized")
+            return
+        }
+
+        let content = UNMutableNotificationContent()
+        content.title = "Low Battery"
+        content.body = "Your Aquavate bottle battery is at \(batteryPercent)%. Please charge soon."
+        content.sound = .default
+
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
+        let request = UNNotificationRequest(
+            identifier: "bottle-low-battery",
+            content: content,
+            trigger: trigger
+        )
+
+        notificationCenter.add(request) { error in
+            if let error = error {
+                print("[Notifications] Failed to schedule low battery notification: \(error.localizedDescription)")
+            } else {
+                print("[Notifications] Scheduled low battery notification (\(batteryPercent)%)")
+            }
+        }
+    }
+
     /// Cancel all pending hydration reminder notifications
     func cancelAllPendingReminders() {
         Task {

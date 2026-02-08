@@ -12,6 +12,7 @@ struct HomeView: View {
     @EnvironmentObject var bleManager: BLEManager
     @EnvironmentObject var healthKitManager: HealthKitManager
     @EnvironmentObject var hydrationReminderService: HydrationReminderService
+    @EnvironmentObject var notificationManager: NotificationManager
     @Environment(\.managedObjectContext) private var viewContext
 
     // Alert state for pull-to-refresh and delete
@@ -222,6 +223,14 @@ struct HomeView: View {
                                 inactiveColor: .gray
                             )
                         }
+                        if bleManager.isLowBattery {
+                            StatusBadge(
+                                label: "Low Battery",
+                                isActive: true,
+                                activeColor: .red,
+                                inactiveColor: .gray
+                            )
+                        }
                         if bleManager.unsyncedCount > 0 {
                             StatusBadge(
                                 label: "\(bleManager.unsyncedCount) unsynced",
@@ -346,6 +355,11 @@ struct HomeView: View {
             // Update predicate when system time changes significantly (e.g., midnight)
             todaysDrinksCD.nsPredicate = todaysPredicate()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .bottleLowBatteryDetected)) { notification in
+            if let batteryPercent = notification.userInfo?["batteryPercent"] as? Int {
+                notificationManager.scheduleLowBatteryNotification(batteryPercent: batteryPercent)
+            }
+        }
     }
 
     // MARK: - Pull-to-Refresh
@@ -392,6 +406,9 @@ struct HomeView: View {
     }
 
     private var batteryColor: Color {
+        if bleManager.isLowBattery {
+            return .red
+        }
         let percent = bleManager.batteryPercent
         if percent > 20 {
             return .green

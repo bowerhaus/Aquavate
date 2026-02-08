@@ -45,6 +45,10 @@ extern uint8_t g_daily_intake_display_mode;
 // Runtime sleep timeout variable (managed in main.cpp)
 extern uint32_t g_sleep_timeout_ms;
 
+// Low battery lockout (RTC variables managed in main.cpp)
+extern bool rtc_low_battery_lockout;
+extern uint8_t rtc_low_battery_threshold;
+
 // Initialize serial command handler
 void serialCommandsInit() {
     cmdBufferPos = 0;
@@ -820,6 +824,46 @@ static void handleTare() {
     }
 }
 
+// Handle SET LOW BATTERY LOCKOUT command
+// Format: SET LOW BATTERY LOCKOUT percent
+static void handleSetLowBatteryLockout(char* args) {
+    int percent;
+    if (!parseInt(args, percent)) {
+        Serial.println("ERROR: Invalid percentage");
+        Serial.println("Usage: SET LOW BATTERY LOCKOUT percent");
+        Serial.println("  5-95 = Lockout threshold (default=20)");
+        Serial.println("Examples:");
+        Serial.println("  SET LOW BATTERY LOCKOUT 20  - Production (default)");
+        Serial.println("  SET LOW BATTERY LOCKOUT 85  - Testing (locks out immediately)");
+        return;
+    }
+
+    if (percent < 5 || percent > 95) {
+        Serial.println("ERROR: Threshold must be 5-95%%");
+        return;
+    }
+
+    // Save to NVS and update RTC variable
+    if (storageSaveLowBatteryThreshold((uint8_t)percent)) {
+        rtc_low_battery_threshold = (uint8_t)percent;
+        Serial.printf("Low battery lockout threshold set: %d%%\n", percent);
+        Serial.printf("Recovery threshold: %d%%\n", percent + LOW_BATTERY_RECOVERY_OFFSET);
+        Serial.println("Setting saved to NVS - persists across reboots");
+    } else {
+        Serial.println("WARNING: Failed to save to NVS");
+    }
+}
+
+// Handle GET LOW BATTERY command
+static void handleGetLowBattery() {
+    Serial.println("\n=== LOW BATTERY STATUS ===");
+    Serial.printf("Lockout threshold: %d%%\n", rtc_low_battery_threshold);
+    Serial.printf("Recovery threshold: %d%%\n", rtc_low_battery_threshold + LOW_BATTERY_RECOVERY_OFFSET);
+    Serial.printf("Check interval: %d seconds\n", LOW_BATTERY_CHECK_INTERVAL_SEC);
+    Serial.printf("Lockout active: %s\n", rtc_low_battery_lockout ? "YES" : "NO");
+    Serial.println("==========================\n");
+}
+
 // Handle GET STATUS command - show all system status
 static void handleGetStatus() {
     extern bool g_calibrated;
@@ -889,6 +933,12 @@ static void handleGetStatus() {
         Serial.print(time_since_stable);
         Serial.println(" seconds");
     }
+
+    // Low battery lockout
+    Serial.printf("Low battery lockout: %s (threshold: %d%%, recovery: %d%%)\n",
+                  rtc_low_battery_lockout ? "ACTIVE" : "inactive",
+                  rtc_low_battery_threshold,
+                  rtc_low_battery_threshold + LOW_BATTERY_RECOVERY_OFFSET);
 
     Serial.println("=====================\n");
 }
@@ -1159,6 +1209,11 @@ static void processCommand(char* cmd) {
             handleDumpDrinks();
             return;
         }
+        const char* pattern6b[] = {"GET", "BATTERY"};
+        if (matchWordsPrefix(words, word_count, pattern6b, 2)) {
+            handleGetLowBattery();
+            return;
+        }
         const char* pattern7[] = {"CLEAR", "DRINKS"};
         if (matchWordsPrefix(words, word_count, pattern7, 2)) {
             handleClearDrinks();
@@ -1223,6 +1278,11 @@ static void processCommand(char* cmd) {
             handleSetExtendedSleepThreshold(reconstructArgs(words, word_count, 4, args));
             return;
         }
+        const char* pattern4[] = {"SET", "BATTERY", "LOCKOUT", "THRESHOLD"};
+        if (matchWordsPrefix(words, word_count, pattern4, 4)) {
+            handleSetLowBatteryLockout(reconstructArgs(words, word_count, 4, args));
+            return;
+        }
     }
 
     // Command not found
@@ -1258,6 +1318,8 @@ static void processCommand(char* cmd) {
     Serial.println("  SET SLEEP TIMEOUT sec         - Normal sleep timeout (0=disable, default=30)");
     Serial.println("  SET EXTENDED SLEEP TIMER sec  - Extended sleep timer wake (default=60)");
     Serial.println("  SET EXTENDED SLEEP THRESHOLD sec - Awake threshold for extended mode (default=120)");
+    Serial.println("  SET BATTERY LOCKOUT THRESHOLD pct - Low battery lockout (5-95, default=20)");
+    Serial.println("  GET BATTERY                   - Show low battery lockout status");
     Serial.println("\nSystem Status:");
     Serial.println("  GET STATUS            - Show all system status and settings");
 }

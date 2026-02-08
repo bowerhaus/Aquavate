@@ -26,6 +26,7 @@ static const char* KEY_EXT_SLEEP_TMR = "ext_sleep_tmr";
 static const char* KEY_EXT_SLEEP_THR = "ext_sleep_thr";
 static const char* KEY_SHAKE_EMPTY_EN = "shake_empty_en";
 static const char* KEY_DAILY_GOAL = "daily_goal_ml";
+static const char* KEY_LOW_BAT_THR = "low_bat_thr";
 
 bool storageInit() {
     if (g_initialized) {
@@ -364,4 +365,38 @@ uint16_t storageLoadDailyGoal() {
 
     DEBUG_PRINTF(g_debug_calibration, "Storage: Loaded daily_goal = %dml\n", goal_ml);
     return goal_ml;
+}
+
+bool storageSaveLowBatteryThreshold(uint8_t percent) {
+    if (!g_initialized) {
+        Serial.println("Storage: Not initialized");
+        return false;
+    }
+
+    // Clamp to valid range
+    if (percent < 5) percent = 5;
+    if (percent > 95) percent = 95;
+
+    g_preferences.putUChar(KEY_LOW_BAT_THR, percent);
+    DEBUG_PRINTF(g_debug_calibration, "Storage: Saved low_battery_threshold = %d%%\n", percent);
+    return true;
+}
+
+uint8_t storageLoadLowBatteryThreshold() {
+    if (!g_initialized) {
+        Serial.printf("Storage: Not initialized, using default low_battery_threshold %d%%\n", LOW_BATTERY_LOCKOUT_PCT_DEFAULT);
+        return LOW_BATTERY_LOCKOUT_PCT_DEFAULT;
+    }
+
+    uint8_t percent = g_preferences.getUChar(KEY_LOW_BAT_THR, LOW_BATTERY_LOCKOUT_PCT_DEFAULT);
+
+    // Validate range and fix if corrupted
+    if (percent < 5 || percent > 95) {
+        Serial.printf("Storage: WARNING - low_battery_threshold %d%% out of range, resetting to %d%%\n", percent, LOW_BATTERY_LOCKOUT_PCT_DEFAULT);
+        percent = LOW_BATTERY_LOCKOUT_PCT_DEFAULT;
+        g_preferences.putUChar(KEY_LOW_BAT_THR, percent);
+    }
+
+    DEBUG_PRINTF(g_debug_calibration, "Storage: Loaded low_battery_threshold = %d%%\n", percent);
+    return percent;
 }
