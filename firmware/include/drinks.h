@@ -37,6 +37,12 @@ struct DailyState {
 void drinksInit();
 
 /**
+ * Check if drink tracking is already initialized
+ * Used to avoid redundant re-initialization (e.g., BLE SET_TIME)
+ */
+bool drinksIsInitialized();
+
+/**
  * Update drink tracking (call every 2 seconds when bottle is stable)
  * Detects drink events, manages aggregation, triggers display updates
  *

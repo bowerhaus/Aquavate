@@ -159,20 +159,23 @@ void drinksInit() {
         memset(&g_daily_state, 0, sizeof(DailyState));
         storageSaveDailyState(g_daily_state);
     } else {
-        DEBUG_PRINTLN(g_debug_drink_tracking, "Loaded daily state from NVS");
-        DEBUG_PRINTF(g_debug_drink_tracking, "  Baseline ADC: %d\n", g_daily_state.last_recorded_adc);
-        DEBUG_PRINTF(g_debug_drink_tracking, "  Last displayed: %dml\n", g_daily_state.last_displayed_total_ml);
+        Serial.printf("Drinks: Init loaded NVS baseline ADC=%d, last_displayed=%dml\n",
+                       g_daily_state.last_recorded_adc, g_daily_state.last_displayed_total_ml);
     }
 
-    // IMPORTANT: Always reset baseline ADC on cold boot
-    // The bottle state may have changed while powered off, so we need to
-    // establish a fresh baseline to avoid false drink detection
-    g_daily_state.last_recorded_adc = 0;
+    // Note: baseline ADC is preserved from NVS (or RTC restore).
+    // drinksUpdate() validates it against -100ml..1000ml range and
+    // re-establishes from the first stable reading if baseline is 0 or invalid.
 
     // Calculate daily totals from records (authoritative source)
     recalculateDailyTotals();
 
     g_drinks_initialized = true;
+}
+
+// Check if drink tracking is already initialized
+bool drinksIsInitialized() {
+    return g_drinks_initialized;
 }
 
 // Get current daily total (computed from records)
@@ -218,8 +221,8 @@ bool drinksUpdate(int32_t current_adc, const CalibrationData& cal) {
     }
 
     if (needs_baseline) {
-        DEBUG_PRINTF(g_debug_drink_tracking, "Drinks: Establishing baseline (ADC=%d, %.1fml)\n",
-                      current_adc, current_ml);
+        Serial.printf("Drinks: Establishing baseline (ADC=%d, %.1fml)\n",
+                       current_adc, current_ml);
         g_daily_state.last_recorded_adc = current_adc;
         storageSaveDailyState(g_daily_state);
         return false;  // Wait for next reading before detecting drinks
@@ -440,7 +443,10 @@ void drinksSaveToRTC() {
 
     rtc_drinks_magic = RTC_MAGIC_DRINKS;  // Mark as valid
 
-    DEBUG_PRINTF(g_debug_drink_tracking, "Drinks: Saved to RTC - baseline ADC=%d (%.0fml)\n",
+    // Also save to NVS so baseline survives power cycles (better fallback)
+    storageSaveDailyState(g_daily_state);
+
+    DEBUG_PRINTF(g_debug_drink_tracking, "Drinks: Saved to RTC + NVS - baseline ADC=%d (%.0fml)\n",
                   rtc_last_stable_adc, rtc_last_stable_water_ml);
 }
 
