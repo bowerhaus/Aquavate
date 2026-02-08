@@ -1,6 +1,6 @@
 # Aquavate - Active Development Progress
 
-**Last Updated:** 2026-02-08 (Session 31)
+**Last Updated:** 2026-02-08 (Session 32)
 **Current Branch:** `master`
 
 ---
@@ -13,6 +13,7 @@ None — ready for next task.
 
 ## Recently Completed
 
+- **Fix: False wakes from table nudges (Issue #110)** - [Plan 070](Plans/070-reduce-single-tap-sensitivity.md) ✅ COMPLETE — Table nudges triggered false wakes from normal sleep. Root cause was activity interrupt threshold (0.5g), not single-tap. Fix: increased `ACTIVITY_WAKE_THRESHOLD` from 0x08 (0.5g) to 0x18 (1.5g). Tap threshold unchanged. PRD updated.
 - **Fix: Auto-recovery after battery depletion (Issue #107)** - [Plan 069](Plans/069-battery-depletion-recovery.md) ✅ COMPLETE — ESP32 could get stuck in deep sleep after battery depletion because ADXL343 loses interrupt config while ESP32 RTC domain persists. Fix: periodic health-check timer wake (every 2 hours) added to both normal and extended deep sleep modes. Device boots normally on health-check wake, auto-sleeps after 30s. Battery impact ~1mAh/day. PRD updated.
 - **Fix False Double-Tap Triggering Backpack Mode (Issue #103)** - [Plan 068](Plans/068-false-double-tap-backpack-fix.md) ✅ COMPLETE — Setting bottle down on hard surface created bounce pattern matching ADXL343 double-tap, falsely entering backpack mode. Fix: gate double-tap handler on `g_has_been_upright_stable` flag — bottle must have settled on surface (2s stability) before double-tap can trigger backpack mode. ~5 lines changed.
 - **Fix Backpack Mode Entry (Issue #97)** - [Plan 067](Plans/067-backpack-mode-entry-fix.md) ✅ COMPLETE — Backpack mode never entered when bottle horizontal. Root cause: per-cycle flags/counters couldn't track state across 30s wake/sleep cycles. Fix: check current gesture (`gesture != GESTURE_UPRIGHT_STABLE`) at sleep time — if not on surface, stay awake and let 180s backpack timer handle it. Four approaches tried; final solution is zero new state, net -1 line.

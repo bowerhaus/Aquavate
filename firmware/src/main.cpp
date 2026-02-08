@@ -307,7 +307,7 @@ void configureADXL343Interrupt() {
     Serial.printf("11. Cleared INT_SOURCE: 0x%02X\n", int_source);
 
     Serial.println("\n=== Configuration Complete ===");
-    Serial.printf("Sleep wake: Single-tap OR activity (>%.1fg)\n", ACTIVITY_WAKE_THRESHOLD * 0.0625f);
+    Serial.printf("Sleep wake: Single-tap (>%.1fg) OR activity (>%.1fg)\n", TAP_WAKE_THRESHOLD * 0.0625f, ACTIVITY_WAKE_THRESHOLD * 0.0625f);
     Serial.println("Awake: Double-tap detected via INT_SOURCE polling\n");
 }
 
