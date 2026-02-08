@@ -72,6 +72,7 @@ RTC_DATA_ATTR unsigned long rtc_time_since_stable_start = 0;
 RTC_DATA_ATTR bool rtc_backpack_screen_shown = false;  // Track if backpack mode screen shown (Issue #38)
 RTC_DATA_ATTR bool rtc_rollover_wake_pending = false;  // True if rollover timer was set for 4am wake
 RTC_DATA_ATTR bool rtc_tap_wake_enabled = false;       // True if in backpack mode expecting tap wake
+RTC_DATA_ATTR bool rtc_health_check_wake = false;      // True if timer was set for health check (not rollover)
 
 // Sync timeout tracking - regular variable, set at wake time
 // Only extend timeout if NEW drinks recorded during this wake session
@@ -441,10 +442,16 @@ void enterExtendedDeepSleep() {
     configureADXL343TapWake();
     rtc_tap_wake_enabled = true;
 
-    Serial.println("Entering extended sleep - wake on double-tap only");
+    // Add periodic health-check timer (ESP32 supports multiple wake sources)
+    uint64_t timer_us = (uint64_t)HEALTH_CHECK_WAKE_INTERVAL_SEC * 1000000ULL;
+    esp_sleep_enable_timer_wakeup(timer_us);
+    rtc_health_check_wake = true;
+    Serial.printf("Health-check timer set: %d seconds\n", HEALTH_CHECK_WAKE_INTERVAL_SEC);
+
+    Serial.println("Entering extended sleep - wake on double-tap or health-check timer");
     Serial.flush();
 
-    // Configure tap interrupt as sole wake source
+    // Configure tap interrupt as wake source (alongside timer)
     esp_sleep_enable_ext0_wakeup((gpio_num_t)PIN_ACCEL_INT, 1);  // Wake on HIGH
 
     // Enter deep sleep
@@ -501,20 +508,26 @@ void enterDeepSleep() {
     // Wake on HIGH level (interrupt pin goes HIGH when tilted)
     esp_sleep_enable_ext0_wakeup((gpio_num_t)PIN_ACCEL_INT, 1);
 
-    // Configure timer wake for daily rollover (4am)
-    // ESP32 supports multiple wake sources - wakes on whichever triggers first
+    // Configure timer wake: use minimum of rollover time and health-check interval
+    uint32_t timer_seconds = HEALTH_CHECK_WAKE_INTERVAL_SEC;
+    rtc_health_check_wake = true;
+
     uint32_t seconds_until_rollover = getSecondsUntilRollover();
     if (seconds_until_rollover > 0 && seconds_until_rollover < 24 * 3600) {
-        // Add 60-second buffer to ensure we're past the 4am boundary
-        uint64_t timer_us = (uint64_t)(seconds_until_rollover + 60) * 1000000ULL;
-        esp_sleep_enable_timer_wakeup(timer_us);
+        uint32_t rollover_with_buffer = seconds_until_rollover + 60;
+        if (rollover_with_buffer < timer_seconds) {
+            timer_seconds = rollover_with_buffer;
+            rtc_health_check_wake = false;  // This is a rollover wake
+        }
         rtc_rollover_wake_pending = true;
-        Serial.printf("Rollover timer set: %lu seconds (%lu hours)\n",
-                      seconds_until_rollover + 60, (seconds_until_rollover + 60) / 3600);
     } else {
         rtc_rollover_wake_pending = false;
-        Serial.println("Rollover timer NOT set (time invalid or >24h away)");
     }
+
+    uint64_t timer_us = (uint64_t)timer_seconds * 1000000ULL;
+    esp_sleep_enable_timer_wakeup(timer_us);
+    Serial.printf("Sleep timer set: %lu seconds (%s)\n", timer_seconds,
+                  rtc_health_check_wake ? "health check" : "rollover");
 
     // Enter deep sleep
     esp_deep_sleep_start();
@@ -645,7 +658,7 @@ void setup() {
             Serial.println(" triggered wake");
             break;
         case ESP_SLEEP_WAKEUP_TIMER:
-            Serial.println("Woke up from timer (extended sleep mode)");
+            Serial.println(rtc_health_check_wake ? "Woke up from timer (health check)" : "Woke up from timer (rollover)");
             break;
         case ESP_SLEEP_WAKEUP_UNDEFINED:
             Serial.println("Not from deep sleep (power on/reset/upload)");
@@ -676,8 +689,17 @@ void setup() {
             // Current gesture checked at sleep time (no per-cycle flag needed)
         }
     } else if (wakeup_reason == ESP_SLEEP_WAKEUP_TIMER) {
-        // Woke from timer - daily rollover wake (4am reset)
-        Serial.println("Timer wake detected (daily rollover)");
+        if (rtc_health_check_wake) {
+            Serial.println("Timer wake detected (health check)");
+            // Health check: go through normal boot, will auto-sleep after inactivity timeout
+            if (rtc_tap_wake_enabled) {
+                // Was in extended sleep - stay in backpack mode context
+                Serial.println("  (from backpack mode - will re-evaluate)");
+            }
+            g_time_since_stable_start = millis();
+        } else {
+            Serial.println("Timer wake detected (daily rollover)");
+        }
     } else {
         // Power on/reset - initialize continuous awake tracking
         g_time_since_stable_start = millis();
@@ -1088,7 +1110,12 @@ void setup() {
                 displayForceUpdate(water_ml, daily_total, hour, minute, battery_pct, false);
             }
         } else if (wakeup_reason == ESP_SLEEP_WAKEUP_TIMER) {
-            activityStatsRecordTimerWake();
+            if (rtc_health_check_wake) {
+                // Health-check wake — record as visible individual event
+                activityStatsRecordWakeStart(WAKE_REASON_TIMER);
+            } else {
+                activityStatsRecordTimerWake();
+            }
         }
     } else {
         Serial.println("Display state tracking initialized (power on/reset)");

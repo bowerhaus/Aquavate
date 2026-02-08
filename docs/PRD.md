@@ -147,13 +147,18 @@ After cutting, verify LED no longer illuminates when board is powered.
 - **Rollover wake:** Timer-based wake at midnight daily reset to refresh display with 0ml daily total
   - Ensures display shows correct daily total even if bottle sleeps through rollover
   - Returns to sleep immediately after display refresh (no BLE advertising)
+- **Health-check wake:** Periodic timer wake (every 2 hours) in both normal and extended sleep modes
+  - Ensures device auto-recovers after battery depletion + recharge (ADXL343 loses interrupt config when power drops)
+  - Device boots normally, auto-sleeps after 30s inactivity timeout
+  - In normal sleep, timer is `min(rollover, health-check)` — rollover takes priority when closer
+  - Battery impact: ~1mAh/day (negligible vs 400-1000mAh LiPo)
 - **Double-tap wake (backpack mode only):** ADXL343 double-tap interrupt for waking from extended sleep
 
 #### Backpack Mode (Extended Sleep)
 When the bottle hasn't been placed on a stable surface (UPRIGHT_STABLE) for 3 minutes, it enters "backpack mode":
 - Display shows "backpack mode" with instructions: "double-tap firmly to wake up"
 - ADXL343 reconfigured from motion detection to double-tap detection
-- No periodic timer wakes (maximum battery savings)
+- Health-check timer wake every 2 hours (auto-recovery from battery depletion)
 - User double-taps bottle firmly to exit backpack mode
 - Immediate "waking" feedback shown before sensor initialization
 - After wake, ADXL343 restored to normal motion detection
