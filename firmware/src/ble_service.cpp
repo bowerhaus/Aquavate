@@ -163,7 +163,8 @@ class BottleConfigCallbacks : public NimBLECharacteristicCallbacks {
 
 // Forward declarations for time handling
 extern bool g_time_valid;
-void drinksInit();  // Re-initialize drink tracking when time becomes valid
+void drinksInit();          // Initialize drink tracking when time becomes valid
+bool drinksIsInitialized(); // Check if already initialized
 
 // Command characteristic callbacks
 class CommandCallbacks : public NimBLECharacteristicCallbacks {
@@ -175,7 +176,9 @@ class CommandCallbacks : public NimBLECharacteristicCallbacks {
         std::string value = pCharacteristic->getValue();
 
         // Check for SET_TIME command (5 bytes)
+        // Note: SET_TIME is housekeeping, not user interaction — don't reset activity timeout
         if (value.length() == sizeof(BLE_SetTimeCommand) && value[0] == BLE_CMD_SET_TIME) {
+            g_ble_data_activity = false;  // Undo the activity flag set above
             BLE_SetTimeCommand timeCmd;
             memcpy(&timeCmd, value.data(), sizeof(BLE_SetTimeCommand));
 
@@ -193,8 +196,13 @@ class CommandCallbacks : public NimBLECharacteristicCallbacks {
                 g_time_valid = true;
                 storageSaveTimeValid(true);
 
-                // Re-initialize drink tracking now that time is valid
-                drinksInit();
+                // Initialize drink tracking if not already initialized
+                if (!drinksIsInitialized()) {
+                    drinksInit();
+                    Serial.println("[BLE] SET_TIME: initialized drink tracking");
+                } else {
+                    Serial.println("[BLE] SET_TIME: drink tracking already initialized, skipped drinksInit");
+                }
 
                 // Log the time we set (using gmtime_r to avoid IRAM overhead)
                 time_t now = time(NULL);

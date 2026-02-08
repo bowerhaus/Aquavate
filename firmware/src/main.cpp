@@ -1011,11 +1011,20 @@ void setup() {
 #if defined(BOARD_ADAFRUIT_FEATHER)
     displayInit(display);
 
-    // Restore state from RTC memory if waking from deep sleep
+    // Try to restore drink baseline from RTC on ALL boot types.
+    // RTC memory survives EN-pin resets (e.g. serial monitor reconnect).
+    // The magic number check inside drinksRestoreFromRTC() handles true
+    // power cycles (RTC cleared → magic invalid → returns false, NVS fallback used).
+    bool drinks_restored = drinksRestoreFromRTC();
+    if (drinks_restored) {
+        Serial.println("Drinks: Baseline restored from RTC");
+    } else {
+        Serial.println("Drinks: No RTC baseline (power cycle) - using NVS fallback");
+    }
+
+    // Restore other state from RTC memory if waking from deep sleep
     if (wakeup_reason == ESP_SLEEP_WAKEUP_EXT0 || wakeup_reason == ESP_SLEEP_WAKEUP_TIMER) {
-        // Attempt to restore display state from RTC memory
         bool display_restored = displayRestoreFromRTC();
-        bool drinks_restored = drinksRestoreFromRTC();
         bool activity_restored = activityStatsRestoreFromRTC();
 
         if (display_restored && drinks_restored) {
