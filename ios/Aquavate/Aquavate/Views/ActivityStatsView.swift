@@ -16,7 +16,7 @@ import CoreData
 
 enum SessionType {
     case normal(drinkTaken: Bool)
-    case backpack(timerWakes: Int16)
+    case backpack(timerWakes: Int32)
 }
 
 struct UnifiedSession: Identifiable {

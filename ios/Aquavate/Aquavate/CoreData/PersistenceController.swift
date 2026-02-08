@@ -70,7 +70,7 @@ struct PersistenceController {
         }
 
         // Create sample motion wake events
-        let sampleMotionEvents: [(minutesAgo: Int, durationSec: Int16, sleepType: Int16, drinkTaken: Bool)] = [
+        let sampleMotionEvents: [(minutesAgo: Int, durationSec: Int32, sleepType: Int16, drinkTaken: Bool)] = [
             (5, 45, 0, true),      // 5 min ago, 45s awake, normal sleep, drink taken
             (30, 30, 0, false),    // 30 min ago, 30s awake, normal sleep, no drink
             (90, 60, 0, true),     // 1.5 hours ago, 60s awake, normal sleep, drink taken
@@ -93,7 +93,7 @@ struct PersistenceController {
         }
 
         // Create sample backpack sessions
-        let sampleBackpackSessions: [(hoursAgo: Int, durationMin: Int, timerWakes: Int16, exitReason: Int16)] = [
+        let sampleBackpackSessions: [(hoursAgo: Int, durationMin: Int, timerWakes: Int32, exitReason: Int16)] = [
             (3, 45, 3, 0),   // 3 hours ago, 45 min duration, 3 timer wakes, exited by motion
             (12, 120, 8, 0), // 12 hours ago, 2 hour duration, 8 timer wakes, exited by motion
         ]
@@ -388,7 +388,7 @@ struct PersistenceController {
             let record = CDMotionWakeEvent(context: context)
             record.id = UUID()
             record.timestamp = Date(timeIntervalSince1970: TimeInterval(event.timestamp))
-            record.durationSec = Int16(event.durationSec)
+            record.durationSec = Int32(event.durationSec)
             record.wakeReason = Int16(event.wakeReason)
             record.sleepType = Int16(event.sleepType & 0x7F)  // Mask off drink taken flag
             record.drinkTaken = event.drinkTaken
@@ -414,7 +414,7 @@ struct PersistenceController {
             record.id = UUID()
             record.startTimestamp = Date(timeIntervalSince1970: TimeInterval(session.startTimestamp))
             record.durationSec = Int32(session.durationSec)
-            record.timerWakeCount = Int16(session.timerWakeCount)
+            record.timerWakeCount = Int32(session.timerWakeCount)
             record.exitReason = Int16(session.exitReason)
             record.bottleId = bottleId
         }

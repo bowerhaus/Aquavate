@@ -50,7 +50,7 @@ struct BackupMotionWakeEvent: Codable {
     let id: UUID
     let bottleId: UUID
     let timestamp: Date
-    let durationSec: Int16
+    let durationSec: Int32
     let wakeReason: Int16
     let sleepType: Int16
     let drinkTaken: Bool
@@ -61,7 +61,7 @@ struct BackupBackpackSession: Codable {
     let bottleId: UUID
     let startTimestamp: Date
     let durationSec: Int32
-    let timerWakeCount: Int16
+    let timerWakeCount: Int32
     let exitReason: Int16
 }
 

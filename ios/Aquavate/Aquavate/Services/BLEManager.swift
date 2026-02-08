@@ -1945,9 +1945,9 @@ extension BLEManager: CBPeripheralDelegate {
             return
         }
 
-        // Clear existing activity stats before saving new ones (fresh sync)
-        PersistenceController.shared.clearActivityStats(for: bottleId)
-
+        // Merge new activity stats with existing CoreData records
+        // Uniqueness constraints (timestamp+bottleId) + merge policy handle deduplication,
+        // so historical data is preserved across firmware updates and power cycles
         // Save motion wake events
         if !motionWakeEvents.isEmpty {
             PersistenceController.shared.saveMotionWakeEvents(motionWakeEvents, for: bottleId)
