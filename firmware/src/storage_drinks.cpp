@@ -42,12 +42,12 @@ bool storageInitDrinkFS() {
     }
 
     g_littlefs_mounted = true;
-    Serial.println("LittleFS mounted for drink storage");
+    DEBUG_PRINTLN(g_debug_drink_tracking, "LittleFS mounted for drink storage");
 
     // Print filesystem info
     size_t total = LittleFS.totalBytes();
     size_t used = LittleFS.usedBytes();
-    Serial.printf("LittleFS: %u bytes used / %u bytes total\n", used, total);
+    DEBUG_PRINTF(g_debug_drink_tracking, "LittleFS: %u bytes used / %u bytes total\n", used, total);
 
     return true;
 }

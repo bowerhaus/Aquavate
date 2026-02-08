@@ -501,14 +501,14 @@ void displayInit(ThinkInk_213_Mono_GDEY0213B74& display_ref) {
     g_display_state.last_time_check_ms = 0;
     g_display_state.last_battery_check_ms = 0;
 
-    Serial.println("Display: Initialized state tracking");
+    DEBUG_PRINTLN(g_debug_display, "Display: Initialized state tracking");
 }
 
 void displaySetDailyGoal(uint16_t goal_ml) {
     if (goal_ml != g_daily_goal_ml) {
         g_daily_goal_ml = goal_ml;
         g_daily_goal_changed = true;  // Trigger display update
-        Serial.printf("Display: Daily goal changed to %dml\n", goal_ml);
+        DEBUG_PRINTF(g_debug_display, "Display: Daily goal changed to %dml\n", goal_ml);
     }
 }
 
@@ -531,16 +531,16 @@ bool displayNeedsUpdate(float current_water_ml,
 
     // If display not initialized and water is invalid, skip ALL updates until ADC stabilizes
     if (!g_display_state.initialized && !water_valid) {
-        DEBUG_PRINTF(1, "Display: Waiting for ADC to stabilize (%.1fml invalid)\n", current_water_ml);
+        DEBUG_PRINTF(g_debug_display, "Display: Waiting for ADC to stabilize (%.1fml invalid)\n", current_water_ml);
         return false;
     }
 
     // 1. Water level check (5ml threshold)
     if (!g_display_state.initialized) {
-        DEBUG_PRINTF(1, "Display: Not initialized - forcing update\n");
+        DEBUG_PRINTF(g_debug_display, "Display: Not initialized - forcing update\n");
         needs_update = true;
     } else if (fabs(current_water_ml - g_display_state.water_ml) >= DISPLAY_UPDATE_THRESHOLD_ML) {
-        DEBUG_PRINTF(1, "Display: Water level changed (%.1fml -> %.1fml)\n",
+        DEBUG_PRINTF(g_debug_display, "Display: Water level changed (%.1fml -> %.1fml)\n",
                      g_display_state.water_ml, current_water_ml);
         needs_update = true;
     }
@@ -548,7 +548,7 @@ bool displayNeedsUpdate(float current_water_ml,
     // 2. Daily intake check (50ml threshold)
     if (abs((int)current_daily_ml - (int)g_display_state.daily_total_ml) >=
         DRINK_DISPLAY_UPDATE_THRESHOLD_ML) {
-        DEBUG_PRINTF(1, "Display: Daily intake changed (%dml -> %dml)\n",
+        DEBUG_PRINTF(g_debug_display, "Display: Daily intake changed (%dml -> %dml)\n",
                      g_display_state.daily_total_ml, current_daily_ml);
         needs_update = true;
     }
@@ -564,7 +564,7 @@ bool displayNeedsUpdate(float current_water_ml,
         // Update if: hour changed OR 15+ minutes elapsed since last check
         if (timeinfo.tm_hour != g_display_state.hour ||
             (time_interval_elapsed && abs(timeinfo.tm_min - (int)g_display_state.minute) >= DISPLAY_TIME_UPDATE_THRESHOLD_MIN)) {
-            DEBUG_PRINTF(1, "Display: Time changed (%d:%02d -> %d:%02d)\n",
+            DEBUG_PRINTF(g_debug_display, "Display: Time changed (%d:%02d -> %d:%02d)\n",
                          g_display_state.hour, g_display_state.minute,
                          timeinfo.tm_hour, timeinfo.tm_min);
             needs_update = true;
@@ -580,7 +580,7 @@ bool displayNeedsUpdate(float current_water_ml,
 
         if (abs((int)quantized - (int)g_display_state.battery_percent) >=
             DISPLAY_BATTERY_UPDATE_THRESHOLD) {
-            DEBUG_PRINTF(1, "Display: Battery changed (%d%% -> %d%%)\n",
+            DEBUG_PRINTF(g_debug_display, "Display: Battery changed (%d%% -> %d%%)\n",
                          g_display_state.battery_percent, quantized);
             needs_update = true;
         }
@@ -598,7 +598,7 @@ void displayUpdate(float water_ml, uint16_t daily_total_ml,
         return;
     }
 
-    DEBUG_PRINTF(1, "Display: Updating screen (water=%.1fml, daily=%dml, sleeping=%d)\n",
+    DEBUG_PRINTF(g_debug_display, "Display: Updating screen (water=%.1fml, daily=%dml, sleeping=%d)\n",
                  water_ml, daily_total_ml, sleeping);
 
     // Update display state BEFORE rendering
@@ -618,7 +618,7 @@ void displayUpdate(float water_ml, uint16_t daily_total_ml,
 void displayForceUpdate(float water_ml, uint16_t daily_total_ml,
                        uint8_t hour, uint8_t minute,
                        uint8_t battery_percent, bool sleeping) {
-    DEBUG_PRINTF(1, "Display: Force update triggered\n");
+    DEBUG_PRINTF(g_debug_display, "Display: Force update triggered\n");
     g_display_state.initialized = false;
     displayUpdate(water_ml, daily_total_ml, hour, minute, battery_percent, sleeping);
 }
@@ -647,7 +647,7 @@ void displayMarkInitialized() {
     // 2. If values truly changed (water consumed, time passed), the thresholds will detect it
     // 3. If nothing changed, the thresholds prevent unnecessary updates
 
-    Serial.println("Display: Marked as initialized (wake from sleep - display image preserved)");
+    DEBUG_PRINTLN(g_debug_display, "Display: Marked as initialized (wake from sleep - display image preserved)");
 }
 
 // Save display state to RTC memory before entering deep sleep
@@ -661,7 +661,7 @@ void displaySaveToRTC() {
     rtc_display_magic = RTC_MAGIC_DISPLAY;  // Mark as valid
     rtc_wake_count++;  // Increment wake counter
 
-    Serial.printf("Display: Saved to RTC (wake #%lu) - %.0fml, %uml daily, %02u:%02u, %u%% batt\n",
+    DEBUG_PRINTF(g_debug_display, "Display: Saved to RTC (wake #%lu) - %.0fml, %uml daily, %02u:%02u, %u%% batt\n",
                   rtc_wake_count, rtc_display_water_ml, rtc_display_daily_ml,
                   rtc_display_hour, rtc_display_minute, rtc_display_battery);
 }
@@ -670,7 +670,7 @@ void displaySaveToRTC() {
 // Returns true if valid state was restored, false if power cycle (magic invalid)
 bool displayRestoreFromRTC() {
     if (rtc_display_magic != RTC_MAGIC_DISPLAY) {
-        Serial.println("Display: No valid RTC state (power cycle) - wake count reset");
+        DEBUG_PRINTLN(g_debug_display, "Display: No valid RTC state (power cycle) - wake count reset");
         rtc_wake_count = 0;
         return false;
     }
@@ -683,7 +683,7 @@ bool displayRestoreFromRTC() {
     g_display_state.battery_percent = rtc_display_battery;
     g_daily_goal_ml = rtc_display_daily_goal;
 
-    Serial.printf("Display: Restored from RTC (wake #%lu) - %.0fml, %uml daily, %02u:%02u, %u%% batt\n",
+    DEBUG_PRINTF(g_debug_display, "Display: Restored from RTC (wake #%lu) - %.0fml, %uml daily, %02u:%02u, %u%% batt\n",
                   rtc_wake_count, rtc_display_water_ml, rtc_display_daily_ml,
                   rtc_display_hour, rtc_display_minute, rtc_display_battery);
 
@@ -753,14 +753,14 @@ void displayTapWakeFeedback() {
 
     g_display_ptr->display();
 
-    Serial.println("Display: Tap wake feedback shown (waking)");
+    DEBUG_PRINTLN(g_debug_display, "Display: Tap wake feedback shown (waking)");
 }
 
 // Display NVS storage warning screen (shown when drink save fails)
 void displayNVSWarning() {
     if (g_display_ptr == nullptr) return;
 
-    Serial.println("Display: Showing NVS warning");
+    DEBUG_PRINTLN(g_debug_display, "Display: Showing NVS warning");
 
     g_display_ptr->clearBuffer();
     g_display_ptr->setTextColor(EPD_BLACK);
@@ -787,7 +787,7 @@ void displayNVSWarning() {
 void drawMainScreen() {
     if (g_display_ptr == nullptr) return;
 
-    Serial.println("Drawing main screen...");
+    DEBUG_PRINTLN(g_debug_display, "Drawing main screen...");
     g_display_ptr->clearBuffer();
     g_display_ptr->setTextColor(EPD_BLACK);
 

@@ -56,35 +56,29 @@ void activityStatsInit() {
     g_current_wake = {0, 0, WAKE_REASON_OTHER, false, 0};
     g_activity_initialized = true;
 
-    Serial.println("Activity: Initialized fresh buffer (power cycle)");
+    DEBUG_PRINTLN(g_debug_drink_tracking, "Activity: Initialized fresh buffer (power cycle)");
 }
 
 void activityStatsSaveToRTC() {
     // Buffer is already in RTC memory, just ensure magic is set
     rtc_activity_buffer.magic = RTC_MAGIC_ACTIVITY;
-    Serial.print("Activity: Saved to RTC - ");
-    Serial.print(rtc_activity_buffer.motion_count);
-    Serial.print(" motion events, ");
-    Serial.print(rtc_activity_buffer.session_count);
-    Serial.println(" backpack sessions");
+    DEBUG_PRINTF(g_debug_drink_tracking, "Activity: Saved to RTC - %d motion events, %d backpack sessions\n",
+                  rtc_activity_buffer.motion_count, rtc_activity_buffer.session_count);
 }
 
 bool activityStatsRestoreFromRTC() {
     if (rtc_activity_buffer.magic != RTC_MAGIC_ACTIVITY) {
-        Serial.println("Activity: RTC magic invalid, buffer not restored");
+        DEBUG_PRINTLN(g_debug_drink_tracking, "Activity: RTC magic invalid, buffer not restored");
         return false;
     }
 
     g_activity_initialized = true;
-    Serial.print("Activity: Restored from RTC - ");
-    Serial.print(rtc_activity_buffer.motion_count);
-    Serial.print(" motion events, ");
-    Serial.print(rtc_activity_buffer.session_count);
-    Serial.println(" backpack sessions");
+    DEBUG_PRINTF(g_debug_drink_tracking, "Activity: Restored from RTC - %d motion events, %d backpack sessions\n",
+                  rtc_activity_buffer.motion_count, rtc_activity_buffer.session_count);
 
     if (rtc_activity_buffer.current_session_start != 0) {
-        Serial.print("Activity: In backpack mode, timer wakes: ");
-        Serial.println(rtc_activity_buffer.current_timer_wake_count);
+        DEBUG_PRINTF(g_debug_drink_tracking, "Activity: In backpack mode, timer wakes: %d\n",
+                      rtc_activity_buffer.current_timer_wake_count);
     }
 
     return true;
@@ -108,10 +102,8 @@ void activityStatsRecordWakeStart(WakeReason reason) {
     g_current_wake.recorded = false;
     g_current_wake.drink_count_at_wake = drinksGetDrinkCount();
 
-    Serial.print("Activity: Wake started - reason=");
-    Serial.print(reason);
-    Serial.print(", drinks=");
-    Serial.println(g_current_wake.drink_count_at_wake);
+    DEBUG_PRINTF(g_debug_drink_tracking, "Activity: Wake started - reason=%d, drinks=%d\n",
+                  reason, g_current_wake.drink_count_at_wake);
 }
 
 void activityStatsRecordNormalSleep() {
@@ -131,11 +123,8 @@ void activityStatsRecordNormalSleep() {
     addMotionEvent(event);
     g_current_wake.recorded = true;
 
-    Serial.print("Activity: Recorded motion wake - duration=");
-    Serial.print(event.duration_sec);
-    Serial.print("s, drink=");
-    Serial.print(drink_taken ? "yes" : "no");
-    Serial.println(", entering normal sleep");
+    DEBUG_PRINTF(g_debug_drink_tracking, "Activity: Recorded motion wake - duration=%us, drink=%s, entering normal sleep\n",
+                  event.duration_sec, drink_taken ? "yes" : "no");
 }
 
 void activityStatsRecordExtendedSleep() {
@@ -153,18 +142,15 @@ void activityStatsRecordExtendedSleep() {
         addMotionEvent(event);
         g_current_wake.recorded = true;
 
-        Serial.print("Activity: Recorded motion wake - duration=");
-        Serial.print(event.duration_sec);
-        Serial.print("s, drink=");
-        Serial.print(drink_taken ? "yes" : "no");
-        Serial.println(", entering extended sleep");
+        DEBUG_PRINTF(g_debug_drink_tracking, "Activity: Recorded motion wake - duration=%us, drink=%s, entering extended sleep\n",
+                      event.duration_sec, drink_taken ? "yes" : "no");
     }
 
     // Start tracking backpack session if not already
     if (rtc_activity_buffer.current_session_start == 0) {
         rtc_activity_buffer.current_session_start = getCurrentUnixTime();
         rtc_activity_buffer.current_timer_wake_count = 0;
-        Serial.println("Activity: Started new backpack session");
+        DEBUG_PRINTLN(g_debug_drink_tracking, "Activity: Started new backpack session");
     }
 }
 
@@ -178,8 +164,8 @@ void activityStatsRecordTimerWake() {
     g_current_wake.wake_reason = WAKE_REASON_TIMER;
     g_current_wake.recorded = true;  // Timer wakes don't get individual records
 
-    Serial.print("Activity: Timer wake #");
-    Serial.println(rtc_activity_buffer.current_timer_wake_count);
+    DEBUG_PRINTF(g_debug_drink_tracking, "Activity: Timer wake #%d\n",
+                  rtc_activity_buffer.current_timer_wake_count);
 }
 
 void activityStatsFinalizeBackpackSession(BackpackExitReason reason) {
@@ -198,12 +184,8 @@ void activityStatsFinalizeBackpackSession(BackpackExitReason reason) {
 
     addBackpackSession(session);
 
-    Serial.print("Activity: Finalized backpack session - duration=");
-    Serial.print(session.duration_sec);
-    Serial.print("s, timer wakes=");
-    Serial.print(session.timer_wake_count);
-    Serial.print(", exit reason=");
-    Serial.println(reason);
+    DEBUG_PRINTF(g_debug_drink_tracking, "Activity: Finalized backpack session - duration=%us, timer wakes=%d, exit reason=%d\n",
+                  session.duration_sec, session.timer_wake_count, reason);
 
     // Reset current session tracking
     rtc_activity_buffer.current_session_start = 0;

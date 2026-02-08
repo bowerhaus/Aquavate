@@ -79,21 +79,19 @@ Two prototype configurations are being evaluated:
 - [firmware/platformio.ini](firmware/platformio.ini) - Dual environment config (Adafruit Feather / SparkFun Qwiic)
 
 ### IRAM Constraints (Temporary - ESP32 V2 only)
-The current ESP32 Feather V2 has limited IRAM (131KB). To fit BLE + all features, we use conditional compilation:
+The current ESP32 Feather V2 has limited IRAM (131KB). BLE + serial commands + all features now fit together:
 
 **IOS_MODE flag** in [config.h](firmware/src/config.h) - controls build configuration:
 - `IOS_MODE=1` (Production - default):
   - BLE enabled (iOS app communication)
-  - Serial commands disabled (saves ~3.7KB IRAM)
+  - Serial commands enabled (debug levels `d0`-`d9`, settings via USB)
   - Standalone calibration enabled (bottle-driven, iOS mirrors state via BLE)
-  - IRAM: 125KB / 131KB (95.3%)
+  - IRAM: 121KB / 131KB (92.6%) — ~9.7KB headroom
 - `IOS_MODE=0` (Development/USB mode):
   - BLE disabled (saves ~45.5KB IRAM)
   - Serial commands enabled (USB configuration)
   - Standalone calibration enabled (inverted-hold gesture trigger)
   - IRAM: 82KB / 131KB (62.4%)
-
-See [Plans/020-serial-commands-removal.md](Plans/020-serial-commands-removal.md) for implementation details.
 
 ### Firmware Debug Logging System
 

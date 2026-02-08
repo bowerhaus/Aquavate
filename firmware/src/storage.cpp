@@ -36,7 +36,7 @@ bool storageInit() {
     bool success = g_preferences.begin(NVS_NAMESPACE, false);
     if (success) {
         g_initialized = true;
-        Serial.println("Storage: NVS initialized");
+        DEBUG_PRINTLN(g_debug_calibration, "Storage: NVS initialized");
     } else {
         Serial.println("Storage: Failed to initialize NVS");
     }
@@ -60,7 +60,7 @@ bool storageSaveCalibration(const CalibrationData& cal) {
         return false;
     }
 
-    Serial.println("Storage: Saving calibration...");
+    DEBUG_PRINTLN(g_debug_calibration, "Storage: Saving calibration...");
 
     // Save all fields
     g_preferences.putFloat(KEY_SCALE_FACTOR, cal.scale_factor);
@@ -69,14 +69,10 @@ bool storageSaveCalibration(const CalibrationData& cal) {
     g_preferences.putUInt(KEY_TIMESTAMP, cal.calibration_timestamp);
     g_preferences.putUChar(KEY_VALID, cal.calibration_valid);
 
-    Serial.print("Storage: Saved scale_factor = ");
-    Serial.println(cal.scale_factor);
-    Serial.print("Storage: Saved empty_adc = ");
-    Serial.println(cal.empty_bottle_adc);
-    Serial.print("Storage: Saved full_adc = ");
-    Serial.println(cal.full_bottle_adc);
-    Serial.print("Storage: Valid = ");
-    Serial.println(cal.calibration_valid);
+    DEBUG_PRINTF(g_debug_calibration, "Storage: Saved scale_factor = %.2f\n", cal.scale_factor);
+    DEBUG_PRINTF(g_debug_calibration, "Storage: Saved empty_adc = %d\n", cal.empty_bottle_adc);
+    DEBUG_PRINTF(g_debug_calibration, "Storage: Saved full_adc = %d\n", cal.full_bottle_adc);
+    DEBUG_PRINTF(g_debug_calibration, "Storage: Valid = %d\n", cal.calibration_valid);
 
     return true;
 }
@@ -88,7 +84,7 @@ bool storageLoadCalibration(CalibrationData& cal) {
         return false;
     }
 
-    Serial.println("Storage: Loading calibration...");
+    DEBUG_PRINTLN(g_debug_calibration, "Storage: Loading calibration...");
 
     // Load all fields (with defaults if not found)
     cal.scale_factor = g_preferences.getFloat(KEY_SCALE_FACTOR, 0.0f);
@@ -97,14 +93,10 @@ bool storageLoadCalibration(CalibrationData& cal) {
     cal.calibration_timestamp = g_preferences.getUInt(KEY_TIMESTAMP, 0);
     cal.calibration_valid = g_preferences.getUChar(KEY_VALID, 0);
 
-    Serial.print("Storage: Loaded scale_factor = ");
-    Serial.println(cal.scale_factor);
-    Serial.print("Storage: Loaded empty_adc = ");
-    Serial.println(cal.empty_bottle_adc);
-    Serial.print("Storage: Loaded full_adc = ");
-    Serial.println(cal.full_bottle_adc);
-    Serial.print("Storage: Valid = ");
-    Serial.println(cal.calibration_valid);
+    DEBUG_PRINTF(g_debug_calibration, "Storage: Loaded scale_factor = %.2f\n", cal.scale_factor);
+    DEBUG_PRINTF(g_debug_calibration, "Storage: Loaded empty_adc = %d\n", cal.empty_bottle_adc);
+    DEBUG_PRINTF(g_debug_calibration, "Storage: Loaded full_adc = %d\n", cal.full_bottle_adc);
+    DEBUG_PRINTF(g_debug_calibration, "Storage: Valid = %d\n", cal.calibration_valid);
 
     // Sanity check: validate scale factor is within reasonable bounds
     // This catches corrupt calibration data that could cause circular dependency issues (Issue #84)
@@ -126,7 +118,7 @@ bool storageResetCalibration() {
         return false;
     }
 
-    Serial.println("Storage: Resetting calibration...");
+    DEBUG_PRINTLN(g_debug_calibration, "Storage: Resetting calibration...");
 
     // Set valid flag to 0
     g_preferences.putUChar(KEY_VALID, 0);
@@ -137,7 +129,7 @@ bool storageResetCalibration() {
     g_preferences.putInt(KEY_FULL_ADC, 0);
     g_preferences.putUInt(KEY_TIMESTAMP, 0);
 
-    Serial.println("Storage: Calibration reset");
+    DEBUG_PRINTLN(g_debug_calibration, "Storage: Calibration reset");
     return true;
 }
 
@@ -157,8 +149,7 @@ bool storageSaveTimezone(int8_t utc_offset) {
     }
 
     g_preferences.putChar(KEY_TIMEZONE, utc_offset);
-    Serial.print("Storage: Saved timezone = ");
-    Serial.println(utc_offset);
+    DEBUG_PRINTF(g_debug_calibration, "Storage: Saved timezone = %d\n", utc_offset);
     return true;
 }
 
@@ -169,8 +160,7 @@ int8_t storageLoadTimezone() {
     }
 
     int8_t timezone = g_preferences.getChar(KEY_TIMEZONE, 0);
-    Serial.print("Storage: Loaded timezone = ");
-    Serial.println(timezone);
+    DEBUG_PRINTF(g_debug_calibration, "Storage: Loaded timezone = %d\n", timezone);
     return timezone;
 }
 
@@ -181,8 +171,7 @@ bool storageSaveTimeValid(bool valid) {
     }
 
     g_preferences.putBool(KEY_TIME_VALID, valid);
-    Serial.print("Storage: Saved time_valid = ");
-    Serial.println(valid ? "true" : "false");
+    DEBUG_PRINTF(g_debug_calibration, "Storage: Saved time_valid = %s\n", valid ? "true" : "false");
     return true;
 }
 
@@ -193,8 +182,7 @@ bool storageLoadTimeValid() {
     }
 
     bool valid = g_preferences.getBool(KEY_TIME_VALID, false);
-    Serial.print("Storage: Loaded time_valid = ");
-    Serial.println(valid ? "true" : "false");
+    DEBUG_PRINTF(g_debug_calibration, "Storage: Loaded time_valid = %s\n", valid ? "true" : "false");
     return valid;
 }
 
@@ -205,8 +193,7 @@ bool storageSaveLastBootTime(uint32_t timestamp) {
     }
 
     g_preferences.putUInt(KEY_LAST_BOOT_TIME, timestamp);
-    Serial.print("Storage: Saved last_boot_time = ");
-    Serial.println(timestamp);
+    DEBUG_PRINTF(g_debug_calibration, "Storage: Saved last_boot_time = %u\n", timestamp);
     return true;
 }
 
@@ -217,8 +204,7 @@ uint32_t storageLoadLastBootTime() {
     }
 
     uint32_t timestamp = g_preferences.getUInt(KEY_LAST_BOOT_TIME, 0);
-    Serial.print("Storage: Loaded last_boot_time = ");
-    Serial.println(timestamp);
+    DEBUG_PRINTF(g_debug_calibration, "Storage: Loaded last_boot_time = %u\n", timestamp);
     return timestamp;
 }
 
@@ -229,8 +215,7 @@ bool storageSaveDisplayMode(uint8_t mode) {
     }
 
     g_preferences.putUChar(KEY_DISPLAY_MODE, mode);
-    Serial.print("Storage: Saved display_mode = ");
-    Serial.println(mode);
+    DEBUG_PRINTF(g_debug_calibration, "Storage: Saved display_mode = %d\n", mode);
     return true;
 }
 
@@ -241,8 +226,7 @@ uint8_t storageLoadDisplayMode() {
     }
 
     uint8_t mode = g_preferences.getUChar(KEY_DISPLAY_MODE, 0);
-    Serial.print("Storage: Loaded display_mode = ");
-    Serial.println(mode);
+    DEBUG_PRINTF(g_debug_calibration, "Storage: Loaded display_mode = %d\n", mode);
     return mode;
 }
 
@@ -253,9 +237,7 @@ bool storageSaveSleepTimeout(uint32_t seconds) {
     }
 
     g_preferences.putUInt(KEY_SLEEP_TIMEOUT, seconds);
-    Serial.print("Storage: Saved sleep_timeout = ");
-    Serial.print(seconds);
-    Serial.println(" seconds");
+    DEBUG_PRINTF(g_debug_calibration, "Storage: Saved sleep_timeout = %u seconds\n", seconds);
     return true;
 }
 
@@ -277,9 +259,7 @@ uint32_t storageLoadSleepTimeout() {
     }
 #endif
 
-    Serial.print("Storage: Loaded sleep_timeout = ");
-    Serial.print(seconds);
-    Serial.println(" seconds");
+    DEBUG_PRINTF(g_debug_calibration, "Storage: Loaded sleep_timeout = %u seconds\n", seconds);
     return seconds;
 }
 
@@ -290,9 +270,7 @@ bool storageSaveExtendedSleepTimer(uint32_t seconds) {
     }
 
     g_preferences.putUInt(KEY_EXT_SLEEP_TMR, seconds);
-    Serial.print("Storage: Saved extended_sleep_timer = ");
-    Serial.print(seconds);
-    Serial.println(" seconds");
+    DEBUG_PRINTF(g_debug_calibration, "Storage: Saved extended_sleep_timer = %u seconds\n", seconds);
     return true;
 }
 
@@ -303,9 +281,7 @@ uint32_t storageLoadExtendedSleepTimer() {
     }
 
     uint32_t seconds = g_preferences.getUInt(KEY_EXT_SLEEP_TMR, 60); // Default 60 seconds
-    Serial.print("Storage: Loaded extended_sleep_timer = ");
-    Serial.print(seconds);
-    Serial.println(" seconds");
+    DEBUG_PRINTF(g_debug_calibration, "Storage: Loaded extended_sleep_timer = %u seconds\n", seconds);
     return seconds;
 }
 
@@ -316,9 +292,7 @@ bool storageSaveExtendedSleepThreshold(uint32_t seconds) {
     }
 
     g_preferences.putUInt(KEY_EXT_SLEEP_THR, seconds);
-    Serial.print("Storage: Saved extended_sleep_threshold = ");
-    Serial.print(seconds);
-    Serial.println(" seconds");
+    DEBUG_PRINTF(g_debug_calibration, "Storage: Saved extended_sleep_threshold = %u seconds\n", seconds);
     return true;
 }
 
@@ -329,9 +303,7 @@ uint32_t storageLoadExtendedSleepThreshold() {
     }
 
     uint32_t seconds = g_preferences.getUInt(KEY_EXT_SLEEP_THR, TIME_SINCE_STABLE_THRESHOLD_SEC);
-    Serial.print("Storage: Loaded extended_sleep_threshold = ");
-    Serial.print(seconds);
-    Serial.println(" seconds");
+    DEBUG_PRINTF(g_debug_calibration, "Storage: Loaded extended_sleep_threshold = %u seconds\n", seconds);
     return seconds;
 }
 
@@ -342,8 +314,7 @@ bool storageSaveShakeToEmptyEnabled(bool enabled) {
     }
 
     g_preferences.putBool(KEY_SHAKE_EMPTY_EN, enabled);
-    Serial.print("Storage: Saved shake_to_empty_enabled = ");
-    Serial.println(enabled ? "true" : "false");
+    DEBUG_PRINTF(g_debug_calibration, "Storage: Saved shake_to_empty_enabled = %s\n", enabled ? "true" : "false");
     return true;
 }
 
@@ -354,8 +325,7 @@ bool storageLoadShakeToEmptyEnabled() {
     }
 
     bool enabled = g_preferences.getBool(KEY_SHAKE_EMPTY_EN, false); // Default: disabled
-    Serial.print("Storage: Loaded shake_to_empty_enabled = ");
-    Serial.println(enabled ? "true" : "false");
+    DEBUG_PRINTF(g_debug_calibration, "Storage: Loaded shake_to_empty_enabled = %s\n", enabled ? "true" : "false");
     return enabled;
 }
 
@@ -373,9 +343,7 @@ bool storageSaveDailyGoal(uint16_t goal_ml) {
     }
 
     g_preferences.putUShort(KEY_DAILY_GOAL, goal_ml);
-    Serial.print("Storage: Saved daily_goal = ");
-    Serial.print(goal_ml);
-    Serial.println("ml");
+    DEBUG_PRINTF(g_debug_calibration, "Storage: Saved daily_goal = %dml\n", goal_ml);
     return true;
 }
 
@@ -394,8 +362,6 @@ uint16_t storageLoadDailyGoal() {
         g_preferences.putUShort(KEY_DAILY_GOAL, goal_ml);  // Fix the stored value
     }
 
-    Serial.print("Storage: Loaded daily_goal = ");
-    Serial.print(goal_ml);
-    Serial.println("ml");
+    DEBUG_PRINTF(g_debug_calibration, "Storage: Loaded daily_goal = %dml\n", goal_ml);
     return goal_ml;
 }
