@@ -289,9 +289,9 @@ class BLEManager: NSObject, ObservableObject {
     /// Track if we're in a scan burst (to distinguish from manual scanning)
     private var isAutoReconnectScan: Bool = false
 
-    /// Peripheral we're waiting for iOS to reconnect to in background
-    /// When set, iOS will auto-connect when the device advertises
-    private var pendingBackgroundReconnectPeripheral: CBPeripheral?
+    /// Peripheral we're waiting for iOS to auto-reconnect to
+    /// When set, iOS will auto-connect when the device advertises (foreground or background)
+    private var pendingAutoReconnectPeripheral: CBPeripheral?
 
     /// Reference to HealthKitManager for syncing drinks (set by AquavateApp)
     weak var healthKitManager: HealthKitManager?
@@ -499,7 +499,7 @@ class BLEManager: NSObject, ObservableObject {
     }
 
     /// Called when app becomes active (foreground)
-    /// Attempts brief scan burst to reconnect to known device
+    /// Sets up persistent auto-reconnection and scan burst for known device
     func appDidBecomeActive() {
         // Only attempt if we're not already connected or connecting
         guard connectionState == .disconnected else {
@@ -521,7 +521,20 @@ class BLEManager: NSObject, ObservableObject {
             }
         }
 
-        // Small delay to let Bluetooth stabilize after app activation
+        // Set up persistent auto-reconnection for known peripheral
+        // This uses centralManager.connect() which persists until the device advertises
+        if autoReconnectEnabled,
+           let identifierString = UserDefaults.standard.string(forKey: BLEConstants.lastConnectedPeripheralKey),
+           let identifier = UUID(uuidString: identifierString) {
+            let peripherals = centralManager.retrievePeripherals(withIdentifiers: [identifier])
+            if let peripheral = peripherals.first {
+                // Cancel any existing auto-reconnect before setting up new one
+                cancelAutoReconnection()
+                requestAutoReconnection(to: peripheral)
+            }
+        }
+
+        // Also do a scan burst as fast-path (catches already-advertising devices faster)
         Task {
             try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s
             await MainActor.run {
@@ -539,10 +552,11 @@ class BLEManager: NSObject, ObservableObject {
         keepAlivePingTimer?.invalidate()
         keepAlivePingTimer = nil
 
-        // Cancel any pending auto-reconnect attempts
+        // Cancel any pending foreground auto-reconnect (scan burst + persistent connect)
         foregroundScanTimer?.invalidate()
         foregroundScanTimer = nil
         isAutoReconnectScan = false
+        cancelAutoReconnection()
 
         // If we're scanning (not connected), stop scanning
         if connectionState == .scanning {
@@ -551,7 +565,7 @@ class BLEManager: NSObject, ObservableObject {
         }
 
         // If connected, disconnect after a short delay to allow any in-progress sync to complete
-        // Request background reconnection so iOS will auto-connect when bottle wakes
+        // Request auto-reconnection so iOS will auto-connect when bottle wakes
         if connectionState.isConnected {
             // Cancel any existing idle timer and set a shorter one for background
             idleDisconnectTimer?.invalidate()
@@ -559,20 +573,20 @@ class BLEManager: NSObject, ObservableObject {
                 Task { @MainActor in
                     guard let self = self else { return }
                     if self.connectionState.isConnected {
-                        self.logger.info("Background timeout - disconnecting with background reconnect request")
-                        self.disconnect(requestBackgroundReconnect: true)
+                        self.logger.info("Background timeout - disconnecting with auto-reconnect request")
+                        self.disconnect(requestAutoReconnect: true)
                     }
                 }
             }
         } else if autoReconnectEnabled {
-            // Plan 035: Already disconnected but have a known device - still request background reconnect
+            // Plan 035: Already disconnected but have a known device - still request auto-reconnect
             // This handles the case where bottle timed out while app was in foreground
             if let identifierString = UserDefaults.standard.string(forKey: BLEConstants.lastConnectedPeripheralKey),
                let identifier = UUID(uuidString: identifierString) {
                 let peripherals = centralManager.retrievePeripherals(withIdentifiers: [identifier])
                 if let peripheral = peripherals.first {
-                    logger.info("Already disconnected - requesting background reconnect for known device")
-                    requestBackgroundReconnection(to: peripheral)
+                    logger.info("Already disconnected - requesting auto-reconnect for known device")
+                    requestAutoReconnection(to: peripheral)
                 }
             }
         }
@@ -585,20 +599,20 @@ class BLEManager: NSObject, ObservableObject {
     }
 
     /// Disconnect from current device
-    /// If requestBackgroundReconnect is true, iOS will auto-reconnect when device advertises
-    func disconnect(requestBackgroundReconnect: Bool = false) {
+    /// If requestAutoReconnect is true, iOS will auto-reconnect when device advertises
+    func disconnect(requestAutoReconnect: Bool = false) {
         guard let peripheral = connectedPeripheral else { return }
 
         // Cancel idle timer if active
         idleDisconnectTimer?.invalidate()
         idleDisconnectTimer = nil
 
-        // Store peripheral for background reconnection if requested
-        if requestBackgroundReconnect && autoReconnectEnabled {
-            pendingBackgroundReconnectPeripheral = peripheral
-            logger.info("Disconnecting from peripheral (will request background reconnect)")
+        // Store peripheral for auto-reconnection if requested
+        if requestAutoReconnect && autoReconnectEnabled {
+            pendingAutoReconnectPeripheral = peripheral
+            logger.info("Disconnecting from peripheral (will request auto-reconnect)")
         } else {
-            pendingBackgroundReconnectPeripheral = nil
+            pendingAutoReconnectPeripheral = nil
             logger.info("Disconnecting from peripheral")
         }
 
@@ -606,15 +620,15 @@ class BLEManager: NSObject, ObservableObject {
     }
 
     /// Request iOS to auto-connect to a peripheral when it becomes available
-    /// This works even when the app is in the background
-    private func requestBackgroundReconnection(to peripheral: CBPeripheral) {
+    /// This works in both foreground and background
+    private func requestAutoReconnection(to peripheral: CBPeripheral) {
         guard autoReconnectEnabled else {
-            logger.info("Skipping background reconnect request: auto-reconnect disabled")
+            logger.info("Skipping auto-reconnect request: auto-reconnect disabled")
             return
         }
 
-        logger.info("Requesting background reconnection to \(peripheral.name ?? "Unknown")")
-        pendingBackgroundReconnectPeripheral = peripheral
+        logger.info("Requesting auto-reconnection to \(peripheral.name ?? "Unknown")")
+        pendingAutoReconnectPeripheral = peripheral
 
         // This tells iOS to connect when the peripheral advertises
         // iOS handles this even when the app is suspended
@@ -628,12 +642,12 @@ class BLEManager: NSObject, ObservableObject {
         connectionState = .disconnected
     }
 
-    /// Cancel any pending background reconnection request
-    func cancelBackgroundReconnection() {
-        if let peripheral = pendingBackgroundReconnectPeripheral {
-            logger.info("Cancelling background reconnection request")
+    /// Cancel any pending auto-reconnection request
+    func cancelAutoReconnection() {
+        if let peripheral = pendingAutoReconnectPeripheral {
+            logger.info("Cancelling auto-reconnection request")
             centralManager.cancelPeripheralConnection(peripheral)
-            pendingBackgroundReconnectPeripheral = nil
+            pendingAutoReconnectPeripheral = nil
         }
     }
 
@@ -835,11 +849,11 @@ extension BLEManager: CBCentralManagerDelegate {
 
     nonisolated func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
         Task { @MainActor in
-            // Check if this is a background reconnection
-            let isBackgroundReconnect = pendingBackgroundReconnectPeripheral?.identifier == peripheral.identifier
-            if isBackgroundReconnect {
-                logger.info("Background reconnection successful: \(peripheral.name ?? "Unknown")")
-                pendingBackgroundReconnectPeripheral = nil
+            // Check if this is an auto-reconnection
+            let isAutoReconnect = pendingAutoReconnectPeripheral?.identifier == peripheral.identifier
+            if isAutoReconnect {
+                logger.info("Auto-reconnection successful: \(peripheral.name ?? "Unknown")")
+                pendingAutoReconnectPeripheral = nil
             } else {
                 logger.info("Connected to peripheral: \(peripheral.name ?? "Unknown")")
             }
@@ -887,19 +901,23 @@ extension BLEManager: CBCentralManagerDelegate {
             lastKnownScaleFactor = 0
             lastKnownTareWeightGrams = 0
 
-            // Check if we should request background reconnection
-            // This is set when disconnect(requestBackgroundReconnect: true) was called
-            if let pendingPeripheral = pendingBackgroundReconnectPeripheral {
-                // Clear the pending flag before requesting (requestBackgroundReconnection will set it again)
-                pendingBackgroundReconnectPeripheral = nil
-                logger.info("Requesting background reconnection after disconnect")
-                requestBackgroundReconnection(to: pendingPeripheral)
+            // Check if we should request auto-reconnection
+            // This is set when disconnect(requestAutoReconnect: true) was called
+            if let pendingPeripheral = pendingAutoReconnectPeripheral {
+                // Clear the pending flag before requesting (requestAutoReconnection will set it again)
+                pendingAutoReconnectPeripheral = nil
+                logger.info("Requesting auto-reconnection after disconnect")
+                requestAutoReconnection(to: pendingPeripheral)
                 return // Don't try foreground reconnect
             }
 
             // If unexpected disconnect while app is active, try to reconnect
-            // Delay slightly to allow bottle to restart advertising
+            // Use persistent connect() plus scan burst as fast-path
             if wasConnected && error != nil && autoReconnectEnabled {
+                // Set up persistent auto-reconnection (catches bottle whenever it advertises)
+                requestAutoReconnection(to: peripheral)
+
+                // Also schedule scan burst as fast-path after a short delay
                 logger.info("Scheduling reconnect attempt in \(self.scanAfterDisconnectDelay)s")
                 Task {
                     try? await Task.sleep(nanoseconds: UInt64(scanAfterDisconnectDelay * 1_000_000_000))
