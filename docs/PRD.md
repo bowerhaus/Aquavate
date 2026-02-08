@@ -382,10 +382,12 @@ For detailed screen specifications, layouts, and UX flows, see [iOS-UX-PRD.md](i
 4. Subscribe to notifications (weight, status)
 5. Initiate sync if pending records
 
-#### Background Operation
+#### Auto-Reconnection (Issue #114)
+- Use `CBCentralManager.connect()` for persistent auto-reconnection in both foreground and background
+- When app becomes active: set up persistent connect request + scan burst as fast-path
+- When app goes to background: cancel foreground reconnect, set up background reconnect after disconnect
+- On unexpected disconnect: set up persistent connect request + delayed scan burst
 - Use CoreBluetooth state restoration for reconnection after app termination
-- Request background reconnection when app goes to background (iOS auto-connects when bottle advertises)
-- Foreground scan burst (5 seconds) when app returns to foreground
 - Extended firmware awake duration (4 min) when unsynced records exist enables opportunistic background sync
 - No continuous background BLE scanning (iOS limitation)
 

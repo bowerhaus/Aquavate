@@ -384,7 +384,8 @@ Sarah's Bluetooth is accidentally turned off. When she opens the app, she sees a
 - Connection stays open for 60 seconds for real-time updates
 - Auto-disconnects after 60s idle (battery conservation)
 - Disconnect after 5s delay when app goes to background (allows in-progress sync to complete)
-- Request iOS background reconnection on disconnect (iOS auto-connects when bottle advertises)
+- Persistent auto-reconnection via `CBCentralManager.connect()` in both foreground and background (Issue #114)
+- When disconnected in foreground, app silently auto-connects when bottle advertises (no manual refresh needed)
 
 **Pull-to-Refresh Alerts:**
 - "Bottle is Asleep" alert if scan times out (~10s) with no devices found
