@@ -96,6 +96,11 @@ void activityStatsRecordWakeStart(WakeReason reason) {
         activityStatsFinalizeBackpackSession(EXIT_MOTION_DETECTED);
     }
 
+    // If timer wake during backpack mode, increment session counter
+    if (reason == WAKE_REASON_TIMER && rtc_activity_buffer.current_session_start != 0) {
+        rtc_activity_buffer.current_timer_wake_count++;
+    }
+
     // Start tracking this wake
     g_current_wake.wake_timestamp = getCurrentUnixTime();
     g_current_wake.wake_millis = millis();

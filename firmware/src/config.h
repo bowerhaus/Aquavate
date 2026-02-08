@@ -133,6 +133,11 @@ extern uint8_t g_daily_intake_display_mode;
 // switch to tap-based wake instead of motion wake to conserve battery
 #define TIME_SINCE_STABLE_THRESHOLD_SEC 180     // 3 minutes without stability triggers backpack mode
 
+// Health-check wake: periodic timer wake in all deep sleep modes
+// Ensures device auto-recovers after battery depletion + recharge
+// Battery impact: ~1mAh/day (negligible vs 400-1000mAh LiPo)
+#define HEALTH_CHECK_WAKE_INTERVAL_SEC  7200    // 2 hours
+
 // Display "Zzzz" indicator before entering deep sleep
 // 0 = No display update before sleep (saves battery, no flash)
 // 1 = Show "Zzzz" indicator before sleep (visual feedback)
