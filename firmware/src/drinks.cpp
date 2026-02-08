@@ -48,8 +48,7 @@ static void saveTimestampOnEvent(const char* event_type) {
         struct timeval tv;
         gettimeofday(&tv, NULL);
         storageSaveLastBootTime(tv.tv_sec);
-        Serial.print("Time: Timestamp saved to NVS on ");
-        Serial.println(event_type);
+        DEBUG_PRINTF(g_debug_drink_tracking, "Time: Timestamp saved to NVS on %s\n", event_type);
     }
 }
 
@@ -118,7 +117,7 @@ static void recalculateDailyTotals() {
     if (!storageLoadBufferMetadata(meta) || meta.record_count == 0) {
         g_cached_daily_total_ml = 0;
         g_cached_drink_count = 0;
-        Serial.println("Drinks: Recalculated total = 0ml (no records)");
+        DEBUG_PRINTLN(g_debug_drink_tracking, "Drinks: Recalculated total = 0ml (no records)");
         return;
     }
 
@@ -142,7 +141,7 @@ static void recalculateDailyTotals() {
     g_cached_daily_total_ml = total_ml;
     g_cached_drink_count = drink_count;
 
-    Serial.printf("Drinks: Recalculated total = %dml (%d drinks)\n", total_ml, drink_count);
+    DEBUG_PRINTF(g_debug_drink_tracking, "Drinks: Recalculated total = %dml (%d drinks)\n", total_ml, drink_count);
 }
 
 // Initialize drink tracking system
@@ -156,13 +155,13 @@ void drinksInit() {
     // Load daily state from NVS (baseline ADC and display threshold)
     if (!storageLoadDailyState(g_daily_state)) {
         // First run or struct size changed - initialize state
-        Serial.println("Initializing new daily state");
+        DEBUG_PRINTLN(g_debug_drink_tracking, "Initializing new daily state");
         memset(&g_daily_state, 0, sizeof(DailyState));
         storageSaveDailyState(g_daily_state);
     } else {
-        Serial.println("Loaded daily state from NVS");
-        Serial.printf("  Baseline ADC: %d\n", g_daily_state.last_recorded_adc);
-        Serial.printf("  Last displayed: %dml\n", g_daily_state.last_displayed_total_ml);
+        DEBUG_PRINTLN(g_debug_drink_tracking, "Loaded daily state from NVS");
+        DEBUG_PRINTF(g_debug_drink_tracking, "  Baseline ADC: %d\n", g_daily_state.last_recorded_adc);
+        DEBUG_PRINTF(g_debug_drink_tracking, "  Last displayed: %dml\n", g_daily_state.last_displayed_total_ml);
     }
 
     // IMPORTANT: Always reset baseline ADC on cold boot
@@ -213,13 +212,13 @@ bool drinksUpdate(int32_t current_adc, const CalibrationData& cal) {
         float stored_baseline_ml = calibrationGetWaterWeight(g_daily_state.last_recorded_adc, cal);
         // Valid range: -100ml to 1000ml (allows for some drift/tare error)
         if (stored_baseline_ml < -100.0f || stored_baseline_ml > 1000.0f) {
-            Serial.printf("Drinks: Invalid baseline detected (%.1fml) - re-establishing\n", stored_baseline_ml);
+            DEBUG_PRINTF(g_debug_drink_tracking, "Drinks: Invalid baseline detected (%.1fml) - re-establishing\n", stored_baseline_ml);
             needs_baseline = true;
         }
     }
 
     if (needs_baseline) {
-        Serial.printf("Drinks: Establishing baseline (ADC=%d, %.1fml)\n",
+        DEBUG_PRINTF(g_debug_drink_tracking, "Drinks: Establishing baseline (ADC=%d, %.1fml)\n",
                       current_adc, current_ml);
         g_daily_state.last_recorded_adc = current_adc;
         storageSaveDailyState(g_daily_state);
@@ -286,7 +285,7 @@ bool drinksUpdate(int32_t current_adc, const CalibrationData& cal) {
         uint16_t display_delta = abs((int)g_cached_daily_total_ml -
                                      (int)g_daily_state.last_displayed_total_ml);
         if (display_delta >= DRINK_DISPLAY_UPDATE_THRESHOLD_ML) {
-            Serial.println("Display update threshold reached - should refresh");
+            DEBUG_PRINTLN(g_debug_drink_tracking, "Display update threshold reached - should refresh");
             g_daily_state.last_displayed_total_ml = g_cached_daily_total_ml;
             storageSaveDailyState(g_daily_state);
         }
@@ -304,7 +303,7 @@ bool drinksUpdate(int32_t current_adc, const CalibrationData& cal) {
         // Save timestamp to NVS on refill event (for time persistence)
         saveTimestampOnEvent("refill");
 
-        Serial.println("Daily total unchanged (refill)");
+        DEBUG_PRINTLN(g_debug_drink_tracking, "Daily total unchanged (refill)");
     }
     // No significant change - update baseline for drift compensation
     // Only update if change is very small to avoid contaminating baseline
@@ -441,7 +440,7 @@ void drinksSaveToRTC() {
 
     rtc_drinks_magic = RTC_MAGIC_DRINKS;  // Mark as valid
 
-    Serial.printf("Drinks: Saved to RTC - baseline ADC=%d (%.0fml)\n",
+    DEBUG_PRINTF(g_debug_drink_tracking, "Drinks: Saved to RTC - baseline ADC=%d (%.0fml)\n",
                   rtc_last_stable_adc, rtc_last_stable_water_ml);
 }
 
@@ -449,14 +448,14 @@ void drinksSaveToRTC() {
 // Returns true if valid state was restored, false if power cycle (magic invalid)
 bool drinksRestoreFromRTC() {
     if (rtc_drinks_magic != RTC_MAGIC_DRINKS) {
-        Serial.println("Drinks: No valid RTC state (power cycle)");
+        DEBUG_PRINTLN(g_debug_drink_tracking, "Drinks: No valid RTC state (power cycle)");
         return false;
     }
 
     // Restore baseline - this prevents false drink detection on wake
     g_daily_state.last_recorded_adc = rtc_last_stable_adc;
 
-    Serial.printf("Drinks: Restored from RTC - baseline ADC=%d (%.0fml)\n",
+    DEBUG_PRINTF(g_debug_drink_tracking, "Drinks: Restored from RTC - baseline ADC=%d (%.0fml)\n",
                   rtc_last_stable_adc, rtc_last_stable_water_ml);
 
     return true;
@@ -471,5 +470,5 @@ float drinksGetBaselineWaterLevel(const CalibrationData& cal) {
 void drinksResetBaseline(int32_t adc) {
     g_daily_state.last_recorded_adc = adc;
     storageSaveDailyState(g_daily_state);
-    Serial.printf("Drinks: Baseline reset to ADC=%d\n", adc);
+    DEBUG_PRINTF(g_debug_drink_tracking, "Drinks: Baseline reset to ADC=%d\n", adc);
 }

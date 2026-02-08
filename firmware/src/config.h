@@ -14,10 +14,10 @@
 // Set IOS_MODE to control build configuration:
 //   IOS_MODE=1: iOS App Mode (Production - default)
 //     - BLE enabled for iOS app communication
-//     - Serial commands disabled (saves ~3.7KB IRAM)
-//     - Standalone calibration disabled (saves ~2.4KB IRAM)
-//     - IRAM usage: ~125KB / 131KB (95.3%)
-//     - Headroom: ~6.1KB
+//     - Serial commands enabled (debug levels, settings via USB)
+//     - Standalone calibration enabled (bottle-driven, iOS mirrors state)
+//     - IRAM usage: ~121KB / 131KB (92.6%)
+//     - Headroom: ~9.7KB
 //
 //   IOS_MODE=0: Standalone USB Mode (Development/Configuration)
 //     - BLE disabled (saves ~45.5KB IRAM)
@@ -26,22 +26,17 @@
 //     - IRAM usage: ~82KB / 131KB (62.4%)
 //     - Headroom: ~49.2KB
 
-#define IOS_MODE    1   // Production: BLE enabled, serial commands disabled
+#define IOS_MODE    1   // Production: BLE + serial commands enabled
 
 // Auto-configure feature flags based on IOS_MODE
 #if IOS_MODE
     #define ENABLE_BLE                      1
-    #define ENABLE_SERIAL_COMMANDS          0
+    #define ENABLE_SERIAL_COMMANDS          1   // Both fit in IRAM (~121KB / 131KB)
     #define ENABLE_STANDALONE_CALIBRATION   1   // Bottle-driven calibration (iOS mirrors state)
 #else
     #define ENABLE_BLE                      0
     #define ENABLE_SERIAL_COMMANDS          1
     #define ENABLE_STANDALONE_CALIBRATION   1   // Keep for USB mode
-#endif
-
-// Sanity check: Verify mutual exclusivity
-#if ENABLE_BLE && ENABLE_SERIAL_COMMANDS
-#error "Cannot enable both ENABLE_BLE and ENABLE_SERIAL_COMMANDS - IRAM overflow! Check IOS_MODE configuration."
 #endif
 
 // ==================== Debug Configuration ====================
@@ -54,14 +49,16 @@
 // Level 4: + Accelerometer raw data (periodic accelerometer readings)
 // Level 9: All debug ON (all categories enabled, room for future expansion)
 
-// Default debug flags (can be overridden at runtime via serial commands)
-#define DEBUG_ENABLED                   1   // 0 = quiet mode, 1 = verbose debug output
-#define DEBUG_WATER_LEVEL               1   // 0 = disable water level messages
-#define DEBUG_ACCELEROMETER             1   // 0 = disable accelerometer debug output
-#define DEBUG_DISPLAY_UPDATES           1   // 0 = disable display update messages
-#define DEBUG_DRINK_TRACKING            1   // 0 = disable drink detection debug
-#define DEBUG_CALIBRATION               1   // 0 = disable calibration debug
-#define DEBUG_BLE                       1   // 0 = disable BLE debug, 1 = enable BLE debug
+// Default debug flags (can be overridden at runtime via serial commands d0-d9)
+// All categories default to OFF for clean boot output (~20 lines)
+// Use d1-d9 serial commands to enable verbose output when needed
+#define DEBUG_ENABLED                   1   // 0 = quiet mode, 1 = debug system active (master switch)
+#define DEBUG_WATER_LEVEL               0   // Level 3+: load cell ADC values, water levels
+#define DEBUG_ACCELEROMETER             0   // Level 4+: accelerometer config steps, orientation
+#define DEBUG_DISPLAY_UPDATES           0   // Level 1+: display state changes
+#define DEBUG_DRINK_TRACKING            0   // Level 1+: drink detection, buffer status
+#define DEBUG_CALIBRATION               0   // Level 2+: storage loaded/saved, calibration details
+#define DEBUG_BLE                       0   // Level 9: BLE init and communication
 
 // Runtime debug control - these extern declarations allow runtime debug control
 // Use these macros in your code instead of #if DEBUG_* for runtime control

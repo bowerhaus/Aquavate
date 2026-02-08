@@ -226,7 +226,7 @@ void testInterruptState() {
 }
 
 void configureADXL343Interrupt() {
-    Serial.println("\n=== ADXL343 Interrupt Configuration ===");
+    DEBUG_PRINTLN(g_debug_accelerometer, "\n=== ADXL343 Interrupt Configuration ===");
 
     // Set interrupt pin mode
     pinMode(PIN_ACCEL_INT, INPUT_PULLDOWN);  // Active-high interrupt
@@ -247,48 +247,48 @@ void configureADXL343Interrupt() {
 
     // Step 1: Configure data format (±2g range)
     writeAccelReg(DATA_FORMAT, 0x00);       // ±2g, 13-bit resolution, right-justified
-    Serial.println("1. Data format: ±2g range");
+    DEBUG_PRINTLN(g_debug_accelerometer, "1. Data format: ±2g range");
 
     // Step 2: Set activity threshold for tilt/motion wake
     // AC-coupled mode detects CHANGES in acceleration (motion)
     // Scale = 62.5 mg/LSB
     writeAccelReg(THRESH_ACT, ACTIVITY_WAKE_THRESHOLD);
-    Serial.printf("2. Activity threshold: 0x%02X (%.1fg)\n", ACTIVITY_WAKE_THRESHOLD, ACTIVITY_WAKE_THRESHOLD * 0.0625f);
+    DEBUG_PRINTF(g_debug_accelerometer, "2. Activity threshold: 0x%02X (%.1fg)\n", ACTIVITY_WAKE_THRESHOLD, ACTIVITY_WAKE_THRESHOLD * 0.0625f);
 
     // Step 3: Set double-tap latency (wait after first tap before window opens)
     // Scale = 1.25 ms/LSB, 100ms = 80 (0x50)
     writeAccelReg(LATENT, TAP_WAKE_LATENT);
-    Serial.printf("3. Tap latency: 0x%02X (%.0fms)\n", TAP_WAKE_LATENT, TAP_WAKE_LATENT * 1.25f);
+    DEBUG_PRINTF(g_debug_accelerometer, "3. Tap latency: 0x%02X (%.0fms)\n", TAP_WAKE_LATENT, TAP_WAKE_LATENT * 1.25f);
 
     // Step 3b: Set double-tap window (time for second tap after latency)
     // Scale = 1.25 ms/LSB, 300ms = 240 (0xF0)
     writeAccelReg(WINDOW, TAP_WAKE_WINDOW);
-    Serial.printf("3b. Tap window: 0x%02X (%.0fms)\n", TAP_WAKE_WINDOW, TAP_WAKE_WINDOW * 1.25f);
+    DEBUG_PRINTF(g_debug_accelerometer, "3b. Tap window: 0x%02X (%.0fms)\n", TAP_WAKE_WINDOW, TAP_WAKE_WINDOW * 1.25f);
 
     // Step 4: Enable all axes for activity detection (AC-coupled)
     // Bits: 7=ACT_acdc(1=AC), 6-4=ACT_X/Y/Z (111=all axes)
     // ACT_INACT_CTL[7:4] = 1111b = 0xF0
     writeAccelReg(ACT_INACT_CTL, 0xF0);     // All axes activity enable (AC-coupled)
-    Serial.println("4. Activity axes: X, Y, Z (AC-coupled)");
+    DEBUG_PRINTLN(g_debug_accelerometer, "4. Activity axes: X, Y, Z (AC-coupled)");
 
     // Step 5: Configure single-tap detection (additional wake method)
     // Tap threshold: 3.0g (same as double-tap in backpack mode)
     // Scale = 62.5 mg/LSB, 3.0g = 48 (0x30)
     writeAccelReg(THRESH_TAP, TAP_WAKE_THRESHOLD);
-    Serial.printf("5. Tap threshold: 0x%02X (%.1fg)\n", TAP_WAKE_THRESHOLD, TAP_WAKE_THRESHOLD * 0.0625f);
+    DEBUG_PRINTF(g_debug_accelerometer, "5. Tap threshold: 0x%02X (%.1fg)\n", TAP_WAKE_THRESHOLD, TAP_WAKE_THRESHOLD * 0.0625f);
 
     // Step 6: Set tap duration (max time above threshold for valid tap)
     // Scale = 625 us/LSB, 10ms = 16 (0x10)
     writeAccelReg(DUR, TAP_WAKE_DURATION);
-    Serial.printf("6. Tap duration: 0x%02X (%.1fms)\n", TAP_WAKE_DURATION, TAP_WAKE_DURATION * 0.625f);
+    DEBUG_PRINTF(g_debug_accelerometer, "6. Tap duration: 0x%02X (%.1fms)\n", TAP_WAKE_DURATION, TAP_WAKE_DURATION * 0.625f);
 
     // Step 7: Enable all axes for tap detection
     writeAccelReg(TAP_AXES, 0x07);          // X, Y, Z participate in tap
-    Serial.println("7. Tap axes: X, Y, Z enabled");
+    DEBUG_PRINTLN(g_debug_accelerometer, "7. Tap axes: X, Y, Z enabled");
 
     // Step 8: Enable measurement mode
     writeAccelReg(POWER_CTL, 0x08);         // Measurement mode (bit 3)
-    Serial.println("8. Power mode: measurement");
+    DEBUG_PRINTLN(g_debug_accelerometer, "8. Power mode: measurement");
 
     // Step 9: Enable activity + single-tap + double-tap interrupts
     // Bit 4 = Activity (0x10)
@@ -296,24 +296,28 @@ void configureADXL343Interrupt() {
     // Bit 6 = Single-tap (0x40)
     // Combined = 0x70
     writeAccelReg(INT_ENABLE, 0x70);        // Activity + single-tap + double-tap interrupts
-    Serial.println("9. Interrupt enable: activity + single-tap + double-tap");
+    DEBUG_PRINTLN(g_debug_accelerometer, "9. Interrupt enable: activity + single-tap + double-tap");
 
     // Step 10: Route all interrupts to INT1 pin
     writeAccelReg(INT_MAP, 0x00);           // All interrupts to INT1
-    Serial.println("10. Interrupt routing: INT1");
+    DEBUG_PRINTLN(g_debug_accelerometer, "10. Interrupt routing: INT1");
 
     // Step 11: Clear any pending interrupts
     uint8_t int_source = readAccelReg(INT_SOURCE);
-    Serial.printf("11. Cleared INT_SOURCE: 0x%02X\n", int_source);
+    DEBUG_PRINTF(g_debug_accelerometer, "11. Cleared INT_SOURCE: 0x%02X\n", int_source);
 
-    Serial.println("\n=== Configuration Complete ===");
-    Serial.printf("Sleep wake: Single-tap (>%.1fg) OR activity (>%.1fg)\n", TAP_WAKE_THRESHOLD * 0.0625f, ACTIVITY_WAKE_THRESHOLD * 0.0625f);
-    Serial.println("Awake: Double-tap detected via INT_SOURCE polling\n");
+    DEBUG_PRINTLN(g_debug_accelerometer, "\n=== Configuration Complete ===");
+    DEBUG_PRINTF(g_debug_accelerometer, "Sleep wake: Single-tap (>%.1fg) OR activity (>%.1fg)\n", TAP_WAKE_THRESHOLD * 0.0625f, ACTIVITY_WAKE_THRESHOLD * 0.0625f);
+    DEBUG_PRINTLN(g_debug_accelerometer, "Awake: Double-tap detected via INT_SOURCE polling\n");
+
+    // Unconditional one-line summary
+    Serial.printf("ADXL343: Interrupts configured (activity >%.1fg, tap >%.1fg)\n",
+                  ACTIVITY_WAKE_THRESHOLD * 0.0625f, TAP_WAKE_THRESHOLD * 0.0625f);
 }
 
 // Configure ADXL343 for double-tap detection (backpack mode wake)
 void configureADXL343TapWake() {
-    Serial.println("\n=== ADXL343 Tap Wake Configuration ===");
+    DEBUG_PRINTLN(g_debug_accelerometer, "\n=== ADXL343 Tap Wake Configuration ===");
 
     // Set interrupt pin mode
     pinMode(PIN_ACCEL_INT, INPUT_PULLDOWN);  // Active-high interrupt
@@ -332,50 +336,54 @@ void configureADXL343TapWake() {
 
     // Step 1: Configure data format (±2g range)
     writeAccelReg(DATA_FORMAT, 0x00);       // ±2g, 13-bit resolution
-    Serial.println("1. Data format: +/-2g range");
+    DEBUG_PRINTLN(g_debug_accelerometer, "1. Data format: +/-2g range");
 
     // Step 2: Set tap threshold
     // Scale = 62.5 mg/LSB, 3.0g = 48 (0x30)
     writeAccelReg(THRESH_TAP, TAP_WAKE_THRESHOLD);
-    Serial.printf("2. Tap threshold: 0x%02X (%.1fg)\n", TAP_WAKE_THRESHOLD, TAP_WAKE_THRESHOLD * 0.0625f);
+    DEBUG_PRINTF(g_debug_accelerometer, "2. Tap threshold: 0x%02X (%.1fg)\n", TAP_WAKE_THRESHOLD, TAP_WAKE_THRESHOLD * 0.0625f);
 
     // Step 3: Set tap duration (max time above threshold for valid tap)
     // Scale = 625 us/LSB, 10ms = 16 (0x10)
     writeAccelReg(DUR, TAP_WAKE_DURATION);
-    Serial.printf("3. Tap duration: 0x%02X (%.1fms)\n", TAP_WAKE_DURATION, TAP_WAKE_DURATION * 0.625f);
+    DEBUG_PRINTF(g_debug_accelerometer, "3. Tap duration: 0x%02X (%.1fms)\n", TAP_WAKE_DURATION, TAP_WAKE_DURATION * 0.625f);
 
     // Step 4: Set latency (wait after first tap before window opens)
     // Scale = 1.25 ms/LSB, 100ms = 80 (0x50)
     writeAccelReg(LATENT, TAP_WAKE_LATENT);
-    Serial.printf("4. Tap latency: 0x%02X (%.0fms)\n", TAP_WAKE_LATENT, TAP_WAKE_LATENT * 1.25f);
+    DEBUG_PRINTF(g_debug_accelerometer, "4. Tap latency: 0x%02X (%.0fms)\n", TAP_WAKE_LATENT, TAP_WAKE_LATENT * 1.25f);
 
     // Step 5: Set window (time for second tap after latency)
     // Scale = 1.25 ms/LSB, 300ms = 240 (0xF0)
     writeAccelReg(WINDOW, TAP_WAKE_WINDOW);
-    Serial.printf("5. Tap window: 0x%02X (%.0fms)\n", TAP_WAKE_WINDOW, TAP_WAKE_WINDOW * 1.25f);
+    DEBUG_PRINTF(g_debug_accelerometer, "5. Tap window: 0x%02X (%.0fms)\n", TAP_WAKE_WINDOW, TAP_WAKE_WINDOW * 1.25f);
 
     // Step 6: Enable all tap axes (X, Y, Z participate)
     writeAccelReg(TAP_AXES, 0x07);          // All three axes
-    Serial.println("6. Tap axes: X, Y, Z enabled");
+    DEBUG_PRINTLN(g_debug_accelerometer, "6. Tap axes: X, Y, Z enabled");
 
     // Step 7: Enable measurement mode
     writeAccelReg(POWER_CTL, 0x08);         // Measurement mode (bit 3)
-    Serial.println("7. Power mode: measurement");
+    DEBUG_PRINTLN(g_debug_accelerometer, "7. Power mode: measurement");
 
     // Step 8: Enable double-tap interrupt only (bit 5)
     writeAccelReg(INT_ENABLE, 0x20);        // Double-tap interrupt
-    Serial.println("8. Interrupt enable: double-tap");
+    DEBUG_PRINTLN(g_debug_accelerometer, "8. Interrupt enable: double-tap");
 
     // Step 9: Route double-tap to INT1 pin (bit 5 = 0 for INT1)
     writeAccelReg(INT_MAP, 0x00);           // All interrupts to INT1
-    Serial.println("9. Interrupt routing: INT1");
+    DEBUG_PRINTLN(g_debug_accelerometer, "9. Interrupt routing: INT1");
 
     // Step 10: Read INT_SOURCE to clear any pending interrupts
     uint8_t int_source = readAccelReg(INT_SOURCE);
-    Serial.printf("10. Cleared INT_SOURCE: 0x%02X\n", int_source);
+    DEBUG_PRINTF(g_debug_accelerometer, "10. Cleared INT_SOURCE: 0x%02X\n", int_source);
 
-    Serial.println("\n=== Tap Wake Configuration Complete ===");
-    Serial.println("Wake condition: Double-tap (firm tap, wait 100ms, tap again within 300ms)\n");
+    DEBUG_PRINTLN(g_debug_accelerometer, "\n=== Tap Wake Configuration Complete ===");
+    DEBUG_PRINTLN(g_debug_accelerometer, "Wake condition: Double-tap (firm tap, wait 100ms, tap again within 300ms)\n");
+
+    // Unconditional one-line summary
+    Serial.printf("ADXL343: Tap wake configured (threshold >%.1fg, double-tap)\n",
+                  TAP_WAKE_THRESHOLD * 0.0625f);
 }
 
 // Save extended sleep state to RTC memory
@@ -708,27 +716,16 @@ void setup() {
         rtc_tap_wake_enabled = false;
     }
 
-    Serial.print("Aquavate v");
-    Serial.print(AQUAVATE_VERSION_MAJOR);
-    Serial.print(".");
-    Serial.print(AQUAVATE_VERSION_MINOR);
-    Serial.print(".");
-    Serial.println(AQUAVATE_VERSION_PATCH);
-    Serial.println("=================================");
-
 #if defined(BOARD_ADAFRUIT_FEATHER)
-    Serial.println("Board: Adafruit ESP32 Feather V2");
-    Serial.println("Display: 2.13\" E-Paper FeatherWing");
+    Serial.printf("Aquavate v%d.%d.%d | Adafruit ESP32 Feather V2\n",
+                  AQUAVATE_VERSION_MAJOR, AQUAVATE_VERSION_MINOR, AQUAVATE_VERSION_PATCH);
 #elif defined(BOARD_SPARKFUN_QWIIC)
-    Serial.println("Board: SparkFun ESP32-C6 Qwiic Pocket");
-    Serial.println("Display: Waveshare 1.54\" E-Paper");
+    Serial.printf("Aquavate v%d.%d.%d | SparkFun ESP32-C6 Qwiic Pocket\n",
+                  AQUAVATE_VERSION_MAJOR, AQUAVATE_VERSION_MINOR, AQUAVATE_VERSION_PATCH);
 #endif
-
-    Serial.println();
 
     // Initialize E-Paper display
 #if defined(BOARD_ADAFRUIT_FEATHER)
-    Serial.println("Initializing E-Paper display...");
     display.begin();
     display.setRotation(2);  // Rotate 180 degrees
 
@@ -747,59 +744,42 @@ void setup() {
     // Print battery info
     float batteryV = getBatteryVoltage();
     int batteryPct = getBatteryPercent(batteryV);
-    Serial.print("Battery: ");
-    Serial.print(batteryV);
-    Serial.print("V (");
-    Serial.print(batteryPct);
-    Serial.println("%)");
+    Serial.printf("Battery: %.2fV (%d%%)\n", batteryV, batteryPct);
 
-    Serial.println("E-Paper display initialized!");
+    Serial.println("E-Paper: OK");
 #endif
-
-    Serial.println("Initializing...");
 
     // Initialize I2C and NAU7802
     Wire.begin();
-    Serial.println("Initializing NAU7802...");
     if (nau.begin()) {
-        Serial.println("NAU7802 found!");
         nau.setLDO(NAU7802_3V3);
         nau.setGain(NAU7802_GAIN_128);
         nau.setRate(NAU7802_RATE_10SPS);
         nauReady = true;
+        Serial.println("NAU7802: OK");
     } else {
-        Serial.println("NAU7802 not found!");
+        Serial.println("NAU7802: FAILED");
     }
 
     // Initialize ADXL343 accelerometer
-    Serial.println("Initializing ADXL343...");
     if (adxl.begin(I2C_ADDR_ADXL343)) {
-        Serial.println("ADXL343 found!");
         adxl.setRange(ADXL343_RANGE_2_G);
         adxl.setDataRate(ADXL343_DATARATE_12_5_HZ);  // Closest to 10 Hz
         adxlReady = true;
 
         // If we woke from EXT0, read current accelerometer state and clear interrupt
         if (wakeup_reason == ESP_SLEEP_WAKEUP_EXT0) {
-            Serial.println("Checking accelerometer state after wake...");
+            DEBUG_PRINTLN(g_debug_accelerometer, "Checking accelerometer state after wake...");
             int16_t x, y, z;
             adxl.getXYZ(x, y, z);
             float x_g = x / 256.0f;
             float y_g = y / 256.0f;
             float z_g = z / 256.0f;
-            Serial.print("  Current orientation: X=");
-            Serial.print(x_g, 2);
-            Serial.print("g Y=");
-            Serial.print(y_g, 2);
-            Serial.print("g Z=");
-            Serial.print(z_g, 2);
-            Serial.println("g");
+            DEBUG_PRINTF(g_debug_accelerometer, "  Current orientation: X=%.2fg Y=%.2fg Z=%.2fg\n", x_g, y_g, z_g);
 
             // Read INT_SOURCE to clear the interrupt (ADXL343 auto-clears, but read for diagnostics)
             uint8_t int_source = readAccelReg(0x30);  // INT_SOURCE register
-            Serial.print("  INT_SOURCE: 0x");
-            Serial.print(int_source, HEX);
-            Serial.println(" (cleared)");
+            DEBUG_PRINTF(g_debug_accelerometer, "  INT_SOURCE: 0x%02X (cleared)\n", int_source);
         }
 
         // Configure interrupt for wake-on-tilt (or restore after tap wake)
@@ -807,21 +787,19 @@ void setup() {
 
         // Clear tap wake flag after restoring motion detection
         if (rtc_tap_wake_enabled) {
-            Serial.println("Restored motion detection after tap wake");
+            DEBUG_PRINTLN(g_debug_accelerometer, "Restored motion detection after tap wake");
             rtc_tap_wake_enabled = false;
         }
     } else {
-        Serial.println("ADXL343 not found!");
+        Serial.println("ADXL343: FAILED");
         rtc_tap_wake_enabled = false;  // Clear flag even if accel failed
     }
 
     // Initialize DS3231 RTC
-    Serial.println("Initializing DS3231 RTC...");
     if (!rtc.begin()) {
-        Serial.println("DS3231 not detected - using ESP32 internal RTC");
+        Serial.println("DS3231: not detected (using ESP32 RTC)");
         g_rtc_ds3231_present = false;
     } else {
-        Serial.println("DS3231 detected");
         g_rtc_ds3231_present = true;
 
         // Sync ESP32 RTC from DS3231 on every boot/wake
@@ -833,17 +811,13 @@ void setup() {
         settimeofday(&tv, NULL);
         g_time_valid = true;  // DS3231 is always valid (battery-backed)
 
-        Serial.printf("ESP32 RTC synced from DS3231: %04d-%02d-%02d %02d:%02d:%02d\n",
+        Serial.printf("DS3231: OK (synced %04d-%02d-%02d %02d:%02d:%02d)\n",
                       now.year(), now.month(), now.day(),
                       now.hour(), now.minute(), now.second());
     }
 
-    // Initialize calibration system
-    Serial.println("Initializing calibration system...");
-
-    // Initialize storage (NVS for calibration/settings)
+    // Initialize calibration system and storage (NVS for calibration/settings)
     if (storageInit()) {
-        Serial.println("NVS storage initialized");
 
         // Initialize LittleFS for drink record storage
         if (!storageInitDrinkFS()) {
@@ -854,16 +828,9 @@ void setup() {
         g_calibrated = storageLoadCalibration(g_calibration);
 
         if (g_calibrated) {
-            Serial.println("Calibration loaded from NVS:");
-            Serial.print("  Scale factor: ");
-            Serial.print(g_calibration.scale_factor);
-            Serial.println(" ADC/g");
-            Serial.print("  Empty ADC: ");
-            Serial.println(g_calibration.empty_bottle_adc);
-            Serial.print("  Full ADC: ");
-            Serial.println(g_calibration.full_bottle_adc);
+            Serial.printf("Calibration: valid (scale=%.2f)\n", g_calibration.scale_factor);
         } else {
-            Serial.println("No valid calibration found - calibration required");
+            Serial.println("Calibration: not found - calibration required");
         }
 
         // Load timezone and time_valid from NVS
@@ -873,40 +840,29 @@ void setup() {
         // DS3231 overrides NVS time_valid - battery-backed time is always valid
         if (g_rtc_ds3231_present) {
             g_time_valid = true;
-            Serial.println("Time valid: true (DS3231 battery-backed)");
+            DEBUG_PRINTLN(g_debug_calibration, "Time valid: true (DS3231 battery-backed)");
         }
 
         // Load display mode from NVS
         g_daily_intake_display_mode = storageLoadDisplayMode();
-        const char* mode_name = (g_daily_intake_display_mode == 0) ? "Human figure" : "Tumbler grid";
-        Serial.print("Display mode loaded: ");
-        Serial.print(g_daily_intake_display_mode);
-        Serial.print(" (");
-        Serial.print(mode_name);
-        Serial.println(")");
+        DEBUG_PRINTF(g_debug_calibration, "Display mode loaded: %d (%s)\n",
+                     g_daily_intake_display_mode,
+                     (g_daily_intake_display_mode == 0) ? "Human figure" : "Tumbler grid");
 
         // Load sleep timeout from NVS
         uint32_t sleep_timeout_seconds = storageLoadSleepTimeout();
         g_sleep_timeout_ms = sleep_timeout_seconds * 1000;
         if (sleep_timeout_seconds == 0) {
-            Serial.println("Sleep timeout: DISABLED (debug mode)");
+            DEBUG_PRINTLN(g_debug_calibration, "Sleep timeout: DISABLED (debug mode)");
         } else {
-            Serial.print("Sleep timeout: ");
-            Serial.print(sleep_timeout_seconds);
-            Serial.println(" seconds");
+            DEBUG_PRINTF(g_debug_calibration, "Sleep timeout: %u seconds\n", sleep_timeout_seconds);
         }
 
         // Load extended sleep threshold from NVS (tap-to-wake replaced timer wake)
         g_time_since_stable_threshold_sec = storageLoadExtendedSleepThreshold();
-        Serial.print("Extended sleep threshold: ");
-        Serial.print(g_time_since_stable_threshold_sec);
-        Serial.println(" seconds");
+        DEBUG_PRINTF(g_debug_calibration, "Extended sleep threshold: %u seconds\n", g_time_since_stable_threshold_sec);
 
         if (g_time_valid) {
-            Serial.println("Time configuration loaded:");
-            Serial.print("  Timezone offset: ");
-            Serial.println(g_timezone_offset);
-
             // Only restore from NVS on cold boot (not wake from deep sleep)
             // On wake from deep sleep, ESP32 RTC continues running and has correct time
             if (wakeup_reason == ESP_SLEEP_WAKEUP_UNDEFINED) {
@@ -919,26 +875,24 @@ void setup() {
                         tv.tv_sec = last_boot_time;
                         tv.tv_usec = 0;
                         settimeofday(&tv, NULL);
-                        Serial.println("  RTC restored from NVS (cold boot)");
-                        Serial.println("  WARNING: Time may be inaccurate (ESP32 internal RTC drift)");
+                        DEBUG_PRINTLN(g_debug_calibration, "  RTC restored from NVS (cold boot)");
+                        Serial.println("WARNING: Time may be inaccurate (ESP32 internal RTC drift)");
                     }
                 } else {
-                    Serial.println("  RTC synced from DS3231 (cold boot)");
+                    DEBUG_PRINTLN(g_debug_calibration, "  RTC synced from DS3231 (cold boot)");
                 }
             } else {
-                // Wake from deep sleep - RTC time is still valid, don't overwrite
-                Serial.println("  RTC time preserved (wake from deep sleep)");
+                DEBUG_PRINTLN(g_debug_calibration, "  RTC time preserved (wake from deep sleep)");
             }
 
-            // Show current time
+            // Show current time as single summary line
             char time_str[64];
             formatTimeForDisplay(time_str, sizeof(time_str));
-            Serial.print("  Current time: ");
-            Serial.println(time_str);
+            Serial.printf("Time: %s (UTC%+d, %s)\n", time_str, g_timezone_offset,
+                          g_rtc_ds3231_present ? "DS3231" : "ESP32");
         } else {
             Serial.println("WARNING: Time not set!");
             Serial.println("Use SET_DATETIME command to set time");
-            Serial.println("Example: SET_DATETIME 2026-01-13 14:30:00 -5");
         }
     } else {
         Serial.println("Storage initialization failed");
@@ -948,19 +902,19 @@ void setup() {
 #if ENABLE_SERIAL_COMMANDS
     serialCommandsInit();
     serialCommandsSetTimeCallback(onTimeSet);
-    Serial.println("Serial command handler initialized");
+    DEBUG_PRINTLN(g_debug_calibration, "Serial command handler initialized");
 #endif
 
     // Initialize gesture detection
     if (adxlReady) {
         gesturesInit(adxl);
-        Serial.println("Gesture detection initialized");
+        DEBUG_PRINTLN(g_debug_calibration, "Gesture detection initialized");
     }
 
     // Initialize weight measurement
     if (nauReady) {
         weightInit(nau);
-        Serial.println("Weight measurement initialized");
+        DEBUG_PRINTLN(g_debug_calibration, "Weight measurement initialized");
     }
 
     // Handle timer wake (rollover or extended sleep)
@@ -1010,12 +964,12 @@ void setup() {
     // Initialize calibration state machine
 #if ENABLE_STANDALONE_CALIBRATION
     calibrationInit();
-    Serial.println("Calibration state machine initialized");
+    DEBUG_PRINTLN(g_debug_calibration, "Calibration state machine initialized");
 
     // Initialize calibration UI
 #if defined(BOARD_ADAFRUIT_FEATHER)
     uiCalibrationInit(display);
-    Serial.println("Calibration UI initialized");
+    DEBUG_PRINTLN(g_debug_calibration, "Calibration UI initialized");
 
     // Show calibration status on display if not calibrated
     if (!g_calibrated) {
@@ -1039,17 +993,17 @@ void setup() {
     // Initialize drink tracking system (only if time is valid)
     if (g_time_valid) {
         drinksInit();
-        Serial.println("Drink tracking system initialized");
+        DEBUG_PRINTLN(g_debug_drink_tracking, "Drink tracking system initialized");
 
         // Dump buffer metadata for diagnostics
         CircularBufferMetadata meta;
         if (storageLoadBufferMetadata(meta)) {
-            Serial.println("\n=== DRINK BUFFER STATUS (LittleFS) ===");
-            Serial.printf("Record count: %d / %d (max)\n", meta.record_count, DRINK_MAX_RECORDS);
-            Serial.printf("Write index: %d\n", meta.write_index);
-            Serial.printf("Total writes: %u\n", meta.total_writes);
-            Serial.printf("Next record ID: %u\n", meta.next_record_id);
-            Serial.println("======================================\n");
+            DEBUG_PRINTF(g_debug_drink_tracking, "\n=== DRINK BUFFER STATUS (LittleFS) ===\n");
+            DEBUG_PRINTF(g_debug_drink_tracking, "Record count: %d / %d (max)\n", meta.record_count, DRINK_MAX_RECORDS);
+            DEBUG_PRINTF(g_debug_drink_tracking, "Write index: %d\n", meta.write_index);
+            DEBUG_PRINTF(g_debug_drink_tracking, "Total writes: %u\n", meta.total_writes);
+            DEBUG_PRINTF(g_debug_drink_tracking, "Next record ID: %u\n", meta.next_record_id);
+            DEBUG_PRINTF(g_debug_drink_tracking, "======================================\n\n");
         }
     } else {
         Serial.println("WARNING: Drink tracking not initialized - time not set");
@@ -1067,11 +1021,11 @@ void setup() {
         bool activity_restored = activityStatsRestoreFromRTC();
 
         if (display_restored && drinks_restored) {
-            Serial.println("State restored from RTC memory (wake from sleep)");
+            DEBUG_PRINTLN(g_debug_display, "State restored from RTC memory (wake from sleep)");
             // Mark display as initialized to prevent unnecessary updates
             displayMarkInitialized();
         } else {
-            Serial.println("No valid RTC state (power cycle) - will force display update");
+            DEBUG_PRINTLN(g_debug_display, "No valid RTC state (power cycle) - will force display update");
         }
 
         // Record wake event for activity tracking
@@ -1080,7 +1034,7 @@ void setup() {
 
             // If returning from backpack mode via tap wake, immediately refresh display
             if (g_force_display_clear_sleep && nauReady) {
-                Serial.println("Tap wake: Immediately refreshing display after exiting backpack mode");
+                DEBUG_PRINTLN(g_debug_display, "Tap wake: Immediately refreshing display after exiting backpack mode");
                 g_force_display_clear_sleep = false;
 
                 // Get current water level and daily total
@@ -1118,7 +1072,7 @@ void setup() {
             }
         }
     } else {
-        Serial.println("Display state tracking initialized (power on/reset)");
+        DEBUG_PRINTLN(g_debug_display, "Display state tracking initialized (power on/reset)");
         // Initialize fresh activity buffer on power cycle
         activityStatsInit();
         activityStatsRecordWakeStart(WAKE_REASON_POWER_ON);
@@ -1128,7 +1082,6 @@ void setup() {
 #endif
 
     // Initialize NVS (required by ESP-IDF BLE)
-    Serial.println("Initializing NVS flash...");
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         Serial.println("NVS: Erasing and reinitializing...");
@@ -1136,36 +1089,31 @@ void setup() {
         ret = nvs_flash_init();
     }
     ESP_ERROR_CHECK(ret);
-    Serial.println("NVS initialized!");
 
     // Initialize BLE service (conditional)
 #if ENABLE_BLE
-    Serial.println("Initializing BLE service...");
     if (bleInit()) {
-        Serial.println("BLE service initialized!");
-
         // Sync daily goal from BLE config to display
         displaySetDailyGoal(bleGetDailyGoalMl());
 
         // Start advertising on motion wake (not timer wake)
         if (wakeup_reason == ESP_SLEEP_WAKEUP_EXT0) {
-            Serial.println("Motion wake detected - starting BLE advertising");
+            Serial.println("BLE initialized (advertising)");
             bleStartAdvertising();
         } else if (wakeup_reason == ESP_SLEEP_WAKEUP_UNDEFINED) {
-            Serial.println("Power on/reset - starting BLE advertising");
+            Serial.println("BLE initialized (advertising)");
             bleStartAdvertising();
         } else {
-            Serial.println("Timer wake - BLE advertising NOT started (power conservation)");
+            Serial.println("BLE initialized (not advertising - timer wake)");
         }
     } else {
-        Serial.println("BLE initialization failed!");
+        Serial.println("BLE: FAILED");
     }
 
     // Snapshot unsynced count at wake time
     // Only extend timeout if NEW drinks recorded during this wake session
     g_unsynced_at_wake = storageGetUnsyncedCount();
-    Serial.print("Unsynced records at wake: ");
-    Serial.println(g_unsynced_at_wake);
+    Serial.printf("Unsynced records: %d\n", g_unsynced_at_wake);
 #endif
 
     // Handle daily rollover wake (4am) - refresh display and return to sleep
@@ -1214,10 +1162,7 @@ void setup() {
         // Will not return from deep sleep
     }
 
-    Serial.println("Setup complete!");
-    Serial.print("Activity timeout: ");
-    Serial.print(ACTIVITY_TIMEOUT_MS / 1000);
-    Serial.println(" seconds...");
+    Serial.printf("Setup complete! Activity timeout: %ds\n", ACTIVITY_TIMEOUT_MS / 1000);
 }
 
 void loop() {
@@ -1809,7 +1754,7 @@ void loop() {
     // This check is OUTSIDE the gesture block so display updates even when bottle isn't upright
 #if defined(BOARD_ADAFRUIT_FEATHER)
     if (g_calibrated && cal_state == CAL_IDLE && displayCheckGoalChanged()) {
-        Serial.println("Display: Goal changed via BLE - forcing update");
+        DEBUG_PRINTLN(g_debug_display, "Display: Goal changed via BLE - forcing update");
         DisplayState last_state = displayGetState();
 
         // Get current time
@@ -1865,22 +1810,15 @@ void loop() {
     }
 #endif
 
-    // Debug output (only print periodically to reduce serial spam)
-    if (g_debug_enabled && g_debug_accelerometer) {
-        static unsigned long last_debug_print = 0;
-        if (adxlReady && (millis() - last_debug_print >= 1000)) {
-            last_debug_print = millis();
+    // Status line: gesture + mode + countdowns (always shown, every 3s)
+    // Silenced by d0 (g_debug_enabled = false)
+    if (g_debug_enabled) {
+        static unsigned long last_status_print = 0;
+        if (adxlReady && (millis() - last_status_print >= 3000)) {
+            last_status_print = millis();
 
-            float x, y, z;
-            gesturesGetAccel(x, y, z);
-            Serial.print("Accel X: ");
-            Serial.print(x, 2);
-            Serial.print("g  Y: ");
-            Serial.print(y, 2);
-            Serial.print("g  Z: ");
-            Serial.print(z, 2);
-            Serial.print("g  Gesture: ");
-
+            // Gesture name
+            Serial.print("Gesture: ");
             switch (gesture) {
                 case GESTURE_INVERTED_HOLD: Serial.print("INVERTED_HOLD"); break;
                 case GESTURE_UPRIGHT_STABLE: Serial.print("UPRIGHT_STABLE"); break;
@@ -1889,9 +1827,6 @@ void loop() {
                 case GESTURE_DOUBLE_TAP: Serial.print("DOUBLE_TAP"); break;
                 default: Serial.print("NONE"); break;
             }
-
-            Serial.print("  Cal State: ");
-            Serial.print(calibrationGetStateName(cal_state));
 
             // Show mode and both timer countdowns
             // Modes: NORM=normal 30s, SYNC=waiting for NEW unsynced drinks 4min, EXT=backpack/timer wake
@@ -1942,6 +1877,19 @@ void loop() {
             Serial.print("s");
 
             Serial.println();
+        }
+    }
+
+    // Verbose accelerometer debug (only at d4+)
+    if (g_debug_enabled && g_debug_accelerometer) {
+        static unsigned long last_accel_print = 0;
+        if (adxlReady && (millis() - last_accel_print >= 3000)) {
+            last_accel_print = millis();
+
+            float x, y, z;
+            gesturesGetAccel(x, y, z);
+            Serial.printf("Accel X: %.2fg  Y: %.2fg  Z: %.2fg  Cal State: %s\n",
+                          x, y, z, calibrationGetStateName(cal_state));
         }
     }
 
