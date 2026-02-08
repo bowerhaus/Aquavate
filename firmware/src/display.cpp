@@ -737,7 +737,7 @@ void displayTapWakeFeedback() {
 
     // "waking" in large text
     g_display_ptr->setTextSize(3);
-    const char* text = "waking";
+    const char* text = "waking up";
     int text_width = strlen(text) * 18;  // 18px per char at textSize=3
     int text_x = (250 - text_width) / 2;
     g_display_ptr->setCursor(text_x, 40);

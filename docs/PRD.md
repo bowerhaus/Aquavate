@@ -142,8 +142,7 @@ After cutting, verify LED no longer illuminates when board is powered.
 ### 2. Measurement Logic
 
 #### Wake Triggers
-- **Single-tap wake (normal sleep):** ADXL343 single-tap interrupt (>3.0g threshold, <10ms duration) - firm tap wakes device
-- **Motion wake (normal sleep):** ADXL343 activity interrupt (>1.5g threshold, AC-coupled) - tilt or pick-up wakes device
+- **Motion wake (normal sleep):** ADXL343 activity interrupt (>1.5g threshold, AC-coupled) - tilt, pick-up, or tap wakes device. A single tap exceeds the 1.5g activity threshold so a dedicated single-tap interrupt is not needed.
 - **Rollover wake:** Timer-based wake at midnight daily reset to refresh display with 0ml daily total
   - Ensures display shows correct daily total even if bottle sleeps through rollover
   - Returns to sleep immediately after display refresh (no BLE advertising)

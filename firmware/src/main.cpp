@@ -271,8 +271,7 @@ void configureADXL343Interrupt() {
     writeAccelReg(ACT_INACT_CTL, 0xF0);     // All axes activity enable (AC-coupled)
     DEBUG_PRINTLN(g_debug_accelerometer, "4. Activity axes: X, Y, Z (AC-coupled)");
 
-    // Step 5: Configure single-tap detection (additional wake method)
-    // Tap threshold: 3.0g (same as double-tap in backpack mode)
+    // Step 5: Configure tap threshold (used by double-tap detection for backpack mode)
     // Scale = 62.5 mg/LSB, 3.0g = 48 (0x30)
     writeAccelReg(THRESH_TAP, TAP_WAKE_THRESHOLD);
     DEBUG_PRINTF(g_debug_accelerometer, "5. Tap threshold: 0x%02X (%.1fg)\n", TAP_WAKE_THRESHOLD, TAP_WAKE_THRESHOLD * 0.0625f);
@@ -290,13 +289,12 @@ void configureADXL343Interrupt() {
     writeAccelReg(POWER_CTL, 0x08);         // Measurement mode (bit 3)
     DEBUG_PRINTLN(g_debug_accelerometer, "8. Power mode: measurement");
 
-    // Step 9: Enable activity + single-tap + double-tap interrupts
-    // Bit 4 = Activity (0x10)
-    // Bit 5 = Double-tap (0x20)
-    // Bit 6 = Single-tap (0x40)
-    // Combined = 0x70
-    writeAccelReg(INT_ENABLE, 0x70);        // Activity + single-tap + double-tap interrupts
-    DEBUG_PRINTLN(g_debug_accelerometer, "9. Interrupt enable: activity + single-tap + double-tap");
+    // Step 9: Enable activity + double-tap interrupts
+    // Bit 4 = Activity (0x10) - wake from normal sleep
+    // Bit 5 = Double-tap (0x20) - manual backpack mode entry while awake
+    // Note: Single-tap (0x40) removed - redundant with activity (1.5g < 3.0g tap threshold)
+    writeAccelReg(INT_ENABLE, 0x30);        // Activity + double-tap interrupts
+    DEBUG_PRINTLN(g_debug_accelerometer, "9. Interrupt enable: activity + double-tap");
 
     // Step 10: Route all interrupts to INT1 pin
     writeAccelReg(INT_MAP, 0x00);           // All interrupts to INT1
@@ -307,11 +305,11 @@ void configureADXL343Interrupt() {
     DEBUG_PRINTF(g_debug_accelerometer, "11. Cleared INT_SOURCE: 0x%02X\n", int_source);
 
     DEBUG_PRINTLN(g_debug_accelerometer, "\n=== Configuration Complete ===");
-    DEBUG_PRINTF(g_debug_accelerometer, "Sleep wake: Single-tap (>%.1fg) OR activity (>%.1fg)\n", TAP_WAKE_THRESHOLD * 0.0625f, ACTIVITY_WAKE_THRESHOLD * 0.0625f);
+    DEBUG_PRINTF(g_debug_accelerometer, "Sleep wake: Activity (>%.1fg)\n", ACTIVITY_WAKE_THRESHOLD * 0.0625f);
     DEBUG_PRINTLN(g_debug_accelerometer, "Awake: Double-tap detected via INT_SOURCE polling\n");
 
     // Unconditional one-line summary
-    Serial.printf("ADXL343: Interrupts configured (activity >%.1fg, tap >%.1fg)\n",
+    Serial.printf("ADXL343: Interrupts configured (activity >%.1fg, double-tap >%.1fg)\n",
                   ACTIVITY_WAKE_THRESHOLD * 0.0625f, TAP_WAKE_THRESHOLD * 0.0625f);
 }
 
