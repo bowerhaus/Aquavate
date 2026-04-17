@@ -146,6 +146,18 @@ cd firmware
 
 **Note:** The user will handle firmware uploads and device restarts manually. Do not attempt to upload firmware or wait for upload confirmation - just build and inform the user when ready.
 
+### Firmware Unit Tests (no hardware required)
+```bash
+cd firmware
+~/.platformio/penv/bin/platformio test -e native
+```
+
+- Tests run on the Mac via the host compiler — no board, no USB cable needed
+- Three test suites: `test_calibration` (scale-factor math), `test_weight` (outlier removal), `test_drinks` (timezone reset, drink detection, daily totals)
+- **When to run:** if your changes touch `calibration.cpp`, `weight.cpp`, or `drinks.cpp`, run these before opening a PR
+- Tests live in `firmware/test/test_*/` — see those files for what's covered
+- Hardware-dependent code (display, BLE, deep sleep, RTC) is tested manually on device only
+
 ### Git Commits and Pull Requests
 
 **IMPORTANT:** Never create git commits or pull requests unless the user explicitly asks you to. Always wait for an explicit instruction like "commit this" or "create a PR" before running any git commit or PR creation commands.
@@ -157,6 +169,18 @@ xcodebuild -scheme Aquavate -destination 'platform=iOS Simulator,name=iPhone 17'
 ```
 
 **Important:** Always use `iPhone 17` as the simulator name for test builds. Other common simulator names (e.g., iPhone 16) are not available on this system.
+
+### iOS Unit Tests (no hardware required)
+```bash
+cd ios/Aquavate
+xcodebuild test -scheme Aquavate -destination 'platform=iOS Simulator,name=iPhone 17'
+```
+
+**IMPORTANT:** iOS tests are slow and expensive — run them **at most once per session**, only immediately before opening a PR. Never run them for verification loops, counting output, or repeated checks. Do NOT re-run just to confirm pass/fail count.
+
+- Tests cover pure business logic only — BLE/CoreBluetooth, HealthKit, and UI are tested manually on device
+- Tests live in `ios/Aquavate/AquavateTests/` — see those files for what's covered
+- **When to run:** if your changes touch `HydrationReminderService.swift`, run these before opening a PR
 
 ## Reference Documentation
 

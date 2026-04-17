@@ -139,4 +139,11 @@ float drinksGetBaselineWaterLevel(const CalibrationData& cal);
  */
 void drinksResetBaseline(int32_t adc);
 
+#ifdef UNIT_TEST
+// Inject a custom time source so tests can control getCurrentUnixTime()
+void setTestTimeProvider(uint32_t (*fn)());
+// Reset all static state between tests
+void testResetDrinkState();
+#endif
+
 #endif // DRINKS_H

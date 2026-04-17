@@ -1,13 +1,13 @@
 # Aquavate - Active Development Progress
 
-**Last Updated:** 2026-04-17 (Session 40)
-**Current Branch:** `master`
+**Last Updated:** 2026-04-17 (Session 42)
+**Current Branch:** `introduce-unit-tests` → PR open
 
 ---
 
 ## Current Task
 
-No active task. Ready for next issue.
+**None — PR open for Plan 078.**
 
 ---
 
@@ -22,6 +22,7 @@ Resume from PROGRESS.md
 
 ## Recently Completed
 
+- **Introduce Unit Tests** - [Plan 078](Plans/078-introduce-unit-tests.md) ✅ COMPLETE — Added minimum viable unit tests to firmware and iOS app. Firmware: PlatformIO `[env:native]` with Unity framework; host stubs for Arduino.h/NVS/RTC_DATA_ATTR; injectable `getCurrentUnixTime()`; 3 test suites (`test_calibration`, `test_weight`, `test_drinks`) — 30/30 green. iOS: XCTest target `AquavateTests`; injectable `now: () -> Date` on `HydrationReminderService`; `HydrationReminderServiceTests.swift` covering pace, deficit, urgency, throttle reset — 16/16 green. CLAUDE.md and AGENTS.md updated with test run instructions and pre-PR checklist.
 - **Fix Timezone / Daily Reset & BLE Sync Corruption (Issue #120)** - [Plan 077](Plans/077-fix-timezone-daily-reset.md) ✅ COMPLETE — Daily reset was firing at UTC midnight (1am BST instead of midnight BST), and a race condition could corrupt BLE sync data during the UTC/BST gap. Fix: iOS now sends timezone offset (hours) alongside UTC timestamp in SET_TIME (5→6 bytes); firmware stores it and uses it only for reset boundary math; all record timestamps remain true UTC. `getCurrentUnixTime()` returns pure UTC; `getTodayResetTimestamp()` and `getSecondsUntilRollover()` compute local midnight as UTC via signed arithmetic. Added `volatile g_ble_sync_in_progress` guard (set at sync START, cleared at COMPLETE/error/disconnect) to prevent daily reset mid-sync. E-paper sleep display and rollover wake check now use local time. 6 files changed (4 firmware, 2 iOS). Deploy: flash firmware first, then iOS — 6-byte SET_TIME is not backward compatible.
 - **Fix App Crash in Sleep Mode Analysis (Issue #105)** - [Plan 076](Plans/076-fix-sleep-mode-analysis-crash.md) ✅ COMPLETE — CoreData `timerWakeCount` (Int16) overflowed when receiving UInt16 from firmware (max 65,535 vs 32,767). Widened `CDBackpackSession.timerWakeCount` and `CDMotionWakeEvent.durationSec` from Integer 16 to Integer 32 in CoreData model v2 (lightweight migration). Updated Int16→Int32 conversions in PersistenceController, ActivityStatsView enum, and BackupModels. Also fixed activity stats sync to merge instead of clear-and-replace, preserving historical data across firmware updates. 6 iOS files changed.
 - **Low Battery Lockout (Issue #68)** - [Plan 075](Plans/075-low-battery-lockout.md) ✅ COMPLETE — Two-tier battery warning: iOS early warning at 25% (BLE flag + push notification + red badge), firmware lockout at 20% (full-screen "charge me", timer-only deep sleep with 15-min health checks). Recovery at 25% with hysteresis. Threshold runtime-configurable via `SET BATTERY LOCKOUT THRESHOLD` serial command, persisted in NVS. 9 firmware files + 4 iOS files changed. PRD and IOS-UX-PRD updated.

@@ -11,6 +11,13 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		19A42E552F9252FF0040A36C /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 19879E3B2F14429500ED8F60 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 19879E422F14429500ED8F60;
+			remoteInfo = Aquavate;
+		};
 		19FD2D4A2F225FFE00F96E9E /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 19879E3B2F14429500ED8F60 /* Project object */;
@@ -36,6 +43,7 @@
 
 /* Begin PBXFileReference section */
 		19879E432F14429500ED8F60 /* Aquavate.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Aquavate.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		19A42E512F9252FF0040A36C /* AquavateTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AquavateTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		19FD2D422F225FFC00F96E9E /* AquavateWatch Watch App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "AquavateWatch Watch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -59,6 +67,11 @@
 			path = Aquavate;
 			sourceTree = "<group>";
 		};
+		19A42E522F9252FF0040A36C /* AquavateTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = AquavateTests;
+			sourceTree = "<group>";
+		};
 		19FD2D432F225FFC00F96E9E /* AquavateWatch Watch App */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = "AquavateWatch Watch App";
@@ -68,6 +81,13 @@
 
 /* Begin PBXFrameworksBuildPhase section */
 		19879E402F14429500ED8F60 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		19A42E4E2F9252FF0040A36C /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -89,6 +109,7 @@
 			children = (
 				19879E452F14429500ED8F60 /* Aquavate */,
 				19FD2D432F225FFC00F96E9E /* AquavateWatch Watch App */,
+				19A42E522F9252FF0040A36C /* AquavateTests */,
 				19879E442F14429500ED8F60 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -98,6 +119,7 @@
 			children = (
 				19879E432F14429500ED8F60 /* Aquavate.app */,
 				19FD2D422F225FFC00F96E9E /* AquavateWatch Watch App.app */,
+				19A42E512F9252FF0040A36C /* AquavateTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -128,6 +150,29 @@
 			productName = Aquavate;
 			productReference = 19879E432F14429500ED8F60 /* Aquavate.app */;
 			productType = "com.apple.product-type.application";
+		};
+		19A42E502F9252FF0040A36C /* AquavateTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 19A42E572F9252FF0040A36C /* Build configuration list for PBXNativeTarget "AquavateTests" */;
+			buildPhases = (
+				19A42E4D2F9252FF0040A36C /* Sources */,
+				19A42E4E2F9252FF0040A36C /* Frameworks */,
+				19A42E4F2F9252FF0040A36C /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				19A42E562F9252FF0040A36C /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				19A42E522F9252FF0040A36C /* AquavateTests */,
+			);
+			name = AquavateTests;
+			packageProductDependencies = (
+			);
+			productName = AquavateTests;
+			productReference = 19A42E512F9252FF0040A36C /* AquavateTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
 		};
 		19FD2D412F225FFC00F96E9E /* AquavateWatch Watch App */ = {
 			isa = PBXNativeTarget;
@@ -164,6 +209,10 @@
 					19879E422F14429500ED8F60 = {
 						CreatedOnToolsVersion = 16.2;
 					};
+					19A42E502F9252FF0040A36C = {
+						CreatedOnToolsVersion = 26.2;
+						TestTargetID = 19879E422F14429500ED8F60;
+					};
 					19FD2D412F225FFC00F96E9E = {
 						CreatedOnToolsVersion = 26.2;
 					};
@@ -185,12 +234,20 @@
 			targets = (
 				19879E422F14429500ED8F60 /* Aquavate */,
 				19FD2D412F225FFC00F96E9E /* AquavateWatch Watch App */,
+				19A42E502F9252FF0040A36C /* AquavateTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		19879E412F14429500ED8F60 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		19A42E4F2F9252FF0040A36C /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -214,6 +271,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		19A42E4D2F9252FF0040A36C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		19FD2D3E2F225FFC00F96E9E /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -224,6 +288,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		19A42E562F9252FF0040A36C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 19879E422F14429500ED8F60 /* Aquavate */;
+			targetProxy = 19A42E552F9252FF0040A36C /* PBXContainerItemProxy */;
+		};
 		19FD2D4B2F225FFE00F96E9E /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 19FD2D412F225FFC00F96E9E /* AquavateWatch Watch App */;
@@ -421,6 +490,50 @@
 			};
 			name = Release;
 		};
+		19A42E582F9252FF0040A36C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = S7K2GRB2RN;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.bowerhaus.Aquavate.AquavateTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Aquavate.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Aquavate";
+			};
+			name = Debug;
+		};
+		19A42E592F9252FF0040A36C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = S7K2GRB2RN;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.bowerhaus.Aquavate.AquavateTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Aquavate.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Aquavate";
+			};
+			name = Release;
+		};
 		19FD2D4E2F225FFE00F96E9E /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -504,6 +617,15 @@
 			buildConfigurations = (
 				19879E522F14429B00ED8F60 /* Debug */,
 				19879E532F14429B00ED8F60 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		19A42E572F9252FF0040A36C /* Build configuration list for PBXNativeTarget "AquavateTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				19A42E582F9252FF0040A36C /* Debug */,
+				19A42E592F9252FF0040A36C /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

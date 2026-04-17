@@ -110,6 +110,13 @@ static int removeOutliers(int32_t* samples, int count, float std_devs, int32_t& 
     return filtered_count;
 }
 
+#ifdef UNIT_TEST
+// Expose static removeOutliers() for direct unit testing
+int removeOutliersTest(int32_t* samples, int count, float std_devs, int32_t& new_mean) {
+    return removeOutliers(samples, count, std_devs, new_mean);
+}
+#endif
+
 WeightMeasurement weightMeasureStable() {
     return weightMeasureStable(weightGetDefaultConfig());
 }

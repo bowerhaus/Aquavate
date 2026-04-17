@@ -59,6 +59,9 @@ class HydrationReminderService: ObservableObject {
 
     weak var notificationManager: NotificationManager?
 
+    // Injectable clock — override in tests for deterministic time
+    var now: () -> Date = { Date() }
+
     // MARK: - Private Properties
 
     private var evaluationTimer: Timer?
@@ -110,10 +113,10 @@ class HydrationReminderService: ObservableObject {
     /// Calculate expected intake based on current time of day
     /// - Returns: Expected ml consumed by now to be on pace
     func calculateExpectedIntake() -> Int {
-        let now = Date()
+        let currentTime = now()
         let calendar = Calendar.current
-        let hour = calendar.component(.hour, from: now)
-        let minute = calendar.component(.minute, from: now)
+        let hour = calendar.component(.hour, from: currentTime)
+        let minute = calendar.component(.minute, from: currentTime)
 
         // Before active hours: expect 0
         if hour < Self.activeHoursStart { return 0 }
