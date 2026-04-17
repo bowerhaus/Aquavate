@@ -29,7 +29,12 @@
 #define IOS_MODE    1   // Production: BLE + serial commands enabled
 
 // Auto-configure feature flags based on IOS_MODE
-#if IOS_MODE
+#ifdef UNIT_TEST
+    // Native test build — hardware features disabled
+    #define ENABLE_BLE                      0
+    #define ENABLE_SERIAL_COMMANDS          0
+    #define ENABLE_STANDALONE_CALIBRATION   0
+#elif IOS_MODE
     #define ENABLE_BLE                      1
     #define ENABLE_SERIAL_COMMANDS          1   // Both fit in IRAM (~121KB / 131KB)
     #define ENABLE_STANDALONE_CALIBRATION   1   // Bottle-driven calibration (iOS mirrors state)

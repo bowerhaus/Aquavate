@@ -44,4 +44,9 @@ bool weightIsReady();
 // Get default weight measurement config
 WeightConfig weightGetDefaultConfig();
 
+#ifdef UNIT_TEST
+// Expose internal outlier removal for unit testing
+int removeOutliersTest(int32_t* samples, int count, float std_devs, int32_t& new_mean);
+#endif
+
 #endif // WEIGHT_H

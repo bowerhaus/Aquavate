@@ -57,6 +57,26 @@ pio device monitor         # Serial monitor
 
 **Status:** Skeleton only - CoreBluetooth, CoreData, and UI implementation pending.
 
+### Before Opening a Firmware PR
+
+1. **If your changes touch `calibration.cpp`, `weight.cpp`, or `drinks.cpp`**, run the unit tests:
+   ```bash
+   cd firmware && ~/.platformio/penv/bin/platformio test -e native
+   ```
+   All tests must pass. No hardware required — runs on Mac in seconds.
+2. **Build** for Adafruit Feather and verify no compile errors.
+3. **Flash and manual-test** the changed behaviour on device.
+
+### Before Opening an iOS PR
+
+1. **If your changes touch `HydrationReminderService.swift`**, run the unit tests:
+   ```bash
+   cd ios/Aquavate && xcodebuild test -scheme Aquavate -destination 'platform=iOS Simulator,name=iPhone 17'
+   ```
+   All tests must pass.
+2. **Build** and verify no compile errors.
+3. **Manual-test** the changed behaviour on simulator or device.
+
 ### Documentation Updates
 
 When completing work:

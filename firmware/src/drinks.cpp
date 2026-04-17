@@ -34,7 +34,15 @@ RTC_DATA_ATTR int32_t rtc_last_stable_adc = 0;
 RTC_DATA_ATTR float rtc_last_stable_water_ml = 0.0f;
 
 // Helper: Get current UTC Unix timestamp
+#ifdef UNIT_TEST
+static uint32_t (*s_test_time_fn)() = nullptr;
+void setTestTimeProvider(uint32_t (*fn)()) { s_test_time_fn = fn; }
+#endif
+
 uint32_t getCurrentUnixTime() {
+#ifdef UNIT_TEST
+    if (s_test_time_fn) return s_test_time_fn();
+#endif
     struct timeval tv;
     gettimeofday(&tv, NULL);
     return (uint32_t)tv.tv_sec;  // true UTC; callers add g_timezone_offset as needed
@@ -484,3 +492,16 @@ void drinksResetBaseline(int32_t adc) {
     storageSaveDailyState(g_daily_state);
     DEBUG_PRINTF(g_debug_drink_tracking, "Drinks: Baseline reset to ADC=%d\n", adc);
 }
+
+#ifdef UNIT_TEST
+// Reset all static state so each test starts clean
+void testResetDrinkState() {
+    g_drinks_initialized      = false;
+    g_cached_daily_total_ml   = 0;
+    g_cached_drink_count      = 0;
+    memset(&g_daily_state, 0, sizeof(DailyState));
+    rtc_drinks_magic          = 0;
+    rtc_last_stable_adc       = 0;
+    rtc_last_stable_water_ml  = 0.0f;
+}
+#endif
