@@ -1670,9 +1670,10 @@ extension BLEManager: CBPeripheralDelegate {
         }
 
         let currentTimestamp = UInt32(Date().timeIntervalSince1970)
-        let data = BLECommand.setTime(timestamp: currentTimestamp)
+        let tzOffsetHours = Int8(TimeZone.current.secondsFromGMT() / 3600)
+        let data = BLECommand.setTime(timestamp: currentTimestamp, tzOffsetHours: tzOffsetHours)
         peripheral.writeValue(data, for: characteristic, type: .withResponse)
-        logger.info("Sent SET_TIME command with timestamp: \(currentTimestamp)")
+        logger.info("Sent SET_TIME: timestamp=\(currentTimestamp), tz=\(tzOffsetHours)h")
     }
 
     /// Auto-sync time on connection if device time is invalid

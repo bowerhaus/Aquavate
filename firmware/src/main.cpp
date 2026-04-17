@@ -98,6 +98,10 @@ int8_t g_timezone_offset = 0;  // UTC offset in hours
 bool g_time_valid = false;     // Has time been set?
 bool g_rtc_ds3231_present = false;  // DS3231 RTC detected (future)
 
+#if ENABLE_BLE
+extern bool g_ble_sync_in_progress;  // Defined in ble_service.cpp
+#endif
+
 // Shake to empty gesture state (shake-while-inverted)
 bool g_cancel_drink_pending = false;  // Set when shake gesture detected, cleared on upright stable
 
@@ -968,18 +972,23 @@ void setup() {
         if (rtc_rollover_wake_pending) {
             rtc_rollover_wake_pending = false;  // Clear flag
 
-            // Verify we're near 4am (within 10 minutes after rollover time)
+            // Verify we're near 4am local time (within 10 minutes after rollover time)
             if (g_time_valid) {
-                uint32_t current_time = getCurrentUnixTime();
-                time_t current_t = current_time;
+                uint32_t current_utc = getCurrentUnixTime();
+                time_t local_t = current_utc + (g_timezone_offset * 3600);
                 struct tm current_tm;
-                gmtime_r(&current_t, &current_tm);
+                gmtime_r(&local_t, &current_tm);
 
-                // Check if within 10 minutes after 4am
-                if (current_tm.tm_hour == DRINK_DAILY_RESET_HOUR && current_tm.tm_min <= 10) {
+                // Check if within 10 minutes after local 4am; skip if BLE sync mid-flight
+#if ENABLE_BLE
+                bool sync_active = g_ble_sync_in_progress;
+#else
+                bool sync_active = false;
+#endif
+                if (!sync_active && current_tm.tm_hour == DRINK_DAILY_RESET_HOUR && current_tm.tm_min <= 10) {
                     is_rollover_wake = true;
                     Serial.println("=== DAILY ROLLOVER WAKE ===");
-                    Serial.printf("Time: %02d:%02d - Refreshing display with reset daily total\n",
+                    Serial.printf("Time: %02d:%02d local - Refreshing display with reset daily total\n",
                                   current_tm.tm_hour, current_tm.tm_min);
                 }
             }
@@ -1185,10 +1194,10 @@ void setup() {
         uint8_t time_hour = DRINK_DAILY_RESET_HOUR;
         uint8_t time_minute = 0;
         if (g_time_valid) {
-            uint32_t current_time = getCurrentUnixTime();
-            time_t current_t = current_time;
+            uint32_t current_utc = getCurrentUnixTime();
+            time_t local_t = current_utc + (g_timezone_offset * 3600);
             struct tm current_tm;
-            gmtime_r(&current_t, &current_tm);
+            gmtime_r(&local_t, &current_tm);
             time_hour = current_tm.tm_hour;
             time_minute = current_tm.tm_min;
         }

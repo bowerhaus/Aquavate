@@ -33,12 +33,11 @@ RTC_DATA_ATTR uint32_t rtc_drinks_magic = 0;
 RTC_DATA_ATTR int32_t rtc_last_stable_adc = 0;
 RTC_DATA_ATTR float rtc_last_stable_water_ml = 0.0f;
 
-// Helper: Get current Unix timestamp with timezone offset
+// Helper: Get current UTC Unix timestamp
 uint32_t getCurrentUnixTime() {
     struct timeval tv;
     gettimeofday(&tv, NULL);
-    // Apply timezone offset (convert hours to seconds)
-    return tv.tv_sec + (g_timezone_offset * 3600);
+    return (uint32_t)tv.tv_sec;  // true UTC; callers add g_timezone_offset as needed
 }
 
 // Helper: Save timestamp to NVS on drink/refill events (for time persistence)
@@ -52,29 +51,33 @@ static void saveTimestampOnEvent(const char* event_type) {
     }
 }
 
-// Helper: Calculate today's 4am boundary timestamp
+// Helper: Calculate today's 4am boundary as a UTC timestamp using stored timezone offset
 static uint32_t getTodayResetTimestamp() {
-    uint32_t current_time = getCurrentUnixTime();
-    time_t current_t = current_time;
-    struct tm current_tm;
-    gmtime_r(&current_t, &current_tm);
+    uint32_t current_utc = getCurrentUnixTime();
+    // Shift to local time for boundary math (signed arithmetic avoids uint32 wrap hazard)
+    time_t local_t = (time_t)current_utc + (g_timezone_offset * 3600);
+    struct tm local_tm;
+    gmtime_r(&local_t, &local_tm);  // gives local time fields (offset already applied)
 
-    // Calculate timestamp for 4am today
-    struct tm reset_tm = current_tm;
+    // Compute local 4am as a "fake UTC" via mktime (ESP32 runs UTC so mktime ≈ timegm)
+    struct tm reset_tm = local_tm;
     reset_tm.tm_hour = DRINK_DAILY_RESET_HOUR;
     reset_tm.tm_min = 0;
     reset_tm.tm_sec = 0;
-    uint32_t today_reset_timestamp = (uint32_t)mktime(&reset_tm);
+    uint32_t local_reset = (uint32_t)mktime(&reset_tm);
 
-    // If we're before 4am today, use yesterday's 4am as the reset boundary
-    if (current_tm.tm_hour < DRINK_DAILY_RESET_HOUR) {
-        today_reset_timestamp -= 24 * 3600;  // Subtract 24 hours
+    // Convert back to true UTC
+    uint32_t reset_utc = (uint32_t)((time_t)local_reset - (g_timezone_offset * 3600));
+
+    // If local time is before 4am, use yesterday's local 4am (= go back 24h in UTC)
+    if (local_tm.tm_hour < DRINK_DAILY_RESET_HOUR) {
+        reset_utc -= 24 * 3600;
     }
 
-    return today_reset_timestamp;
+    return reset_utc;
 }
 
-// Calculate seconds until next 4am rollover
+// Calculate seconds until next 4am local-time rollover
 // Used for timer wake scheduling in deep sleep
 // Returns 0 if time is not valid
 uint32_t getSecondsUntilRollover() {
@@ -82,26 +85,29 @@ uint32_t getSecondsUntilRollover() {
         return 0;  // No timer if time not set
     }
 
-    uint32_t current_time = getCurrentUnixTime();
-    time_t current_t = current_time;
-    struct tm current_tm;
-    gmtime_r(&current_t, &current_tm);
+    uint32_t current_utc = getCurrentUnixTime();
+    // Shift to local time for boundary comparison (signed arithmetic avoids uint32 wrap hazard)
+    time_t local_t = (time_t)current_utc + (g_timezone_offset * 3600);
+    struct tm local_tm;
+    gmtime_r(&local_t, &local_tm);  // local time fields
 
-    // Calculate timestamp for next 4am
-    struct tm next_reset_tm = current_tm;
+    // Compute next local 4am as a "fake UTC" via mktime (ESP32 runs UTC so mktime ≈ timegm)
+    struct tm next_reset_tm = local_tm;
     next_reset_tm.tm_hour = DRINK_DAILY_RESET_HOUR;
     next_reset_tm.tm_min = 0;
     next_reset_tm.tm_sec = 0;
-    uint32_t next_reset_timestamp = (uint32_t)mktime(&next_reset_tm);
+    uint32_t next_reset_local = (uint32_t)mktime(&next_reset_tm);
 
-    // If we're at or past 4am today, target tomorrow's 4am
-    if (current_tm.tm_hour >= DRINK_DAILY_RESET_HOUR) {
-        next_reset_timestamp += 24 * 3600;  // Add 24 hours
+    // Convert back to true UTC
+    uint32_t next_reset_utc = (uint32_t)((time_t)next_reset_local - (g_timezone_offset * 3600));
+
+    // If local time is at or past 4am, target tomorrow's local 4am
+    if (local_tm.tm_hour >= DRINK_DAILY_RESET_HOUR) {
+        next_reset_utc += 24 * 3600;
     }
 
-    // Calculate seconds until rollover
-    if (next_reset_timestamp > current_time) {
-        return next_reset_timestamp - current_time;
+    if (next_reset_utc > current_utc) {
+        return next_reset_utc - current_utc;
     }
 
     return 0;  // Safety fallback

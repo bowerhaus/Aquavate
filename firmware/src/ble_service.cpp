@@ -95,6 +95,9 @@ static volatile int32_t g_cal_last_adc = 0;         // Last measured raw ADC val
 static volatile bool g_ble_calibration_start_requested = false;   // iOS requested calibration start
 static volatile bool g_ble_calibration_cancel_requested = false;  // iOS requested calibration cancel
 
+// Sync-in-progress guard — prevents daily reset firing mid-sync (read by main.cpp)
+volatile bool g_ble_sync_in_progress = false;
+
 // Forward declaration for sync complete notification
 static void bleNotifyCurrentStateUpdate();
 
@@ -178,14 +181,14 @@ class CommandCallbacks : public NimBLECharacteristicCallbacks {
         // Get written data
         std::string value = pCharacteristic->getValue();
 
-        // Check for SET_TIME command (5 bytes)
+        // Check for SET_TIME command (6 bytes)
         // Note: SET_TIME is housekeeping, not user interaction — don't reset activity timeout
         if (value.length() == sizeof(BLE_SetTimeCommand) && value[0] == BLE_CMD_SET_TIME) {
             g_ble_data_activity = false;  // Undo the activity flag set above
             BLE_SetTimeCommand timeCmd;
             memcpy(&timeCmd, value.data(), sizeof(BLE_SetTimeCommand));
 
-            BLE_DEBUG_F("Command: SET_TIME, timestamp=%u", timeCmd.timestamp);
+            BLE_DEBUG_F("Command: SET_TIME, timestamp=%u, tz=%+dh", timeCmd.timestamp, timeCmd.tz_offset_hours);
 
             // Set the ESP32 RTC
             struct timeval tv;
@@ -198,6 +201,12 @@ class CommandCallbacks : public NimBLECharacteristicCallbacks {
                 // Mark time as valid
                 g_time_valid = true;
                 storageSaveTimeValid(true);
+
+                // Store timezone offset sent by iOS
+                extern int8_t g_timezone_offset;
+                g_timezone_offset = timeCmd.tz_offset_hours;
+                storageSaveTimezone(g_timezone_offset);
+                Serial.printf("[BLE] SET_TIME: tz=%+dh\n", g_timezone_offset);
 
                 // Initialize drink tracking if not already initialized
                 if (!drinksIsInitialized()) {
@@ -447,6 +456,7 @@ class SyncControlCallbacks : public NimBLECharacteristicCallbacks {
 
                 if (syncBuffer == nullptr) {
                     BLE_DEBUG("ERROR: Failed to allocate sync buffer");
+                    g_ble_sync_in_progress = false;
                     syncControl.status = 0; // IDLE
                     syncControl.count = 0;
                     pCharacteristic->setValue((uint8_t*)&syncControl, sizeof(syncControl));
@@ -458,6 +468,7 @@ class SyncControlCallbacks : public NimBLECharacteristicCallbacks {
                     BLE_DEBUG("ERROR: Failed to load unsynced records");
                     delete[] syncBuffer;
                     syncBuffer = nullptr;
+                    g_ble_sync_in_progress = false;
                     syncControl.status = 0; // IDLE
                     syncControl.count = 0;
                     pCharacteristic->setValue((uint8_t*)&syncControl, sizeof(syncControl));
@@ -470,6 +481,7 @@ class SyncControlCallbacks : public NimBLECharacteristicCallbacks {
                 syncControl.chunk_size = (request.chunk_size > 0 && request.chunk_size <= 20)
                                         ? request.chunk_size : 20;
                 syncControl.status = 1; // IN_PROGRESS
+                g_ble_sync_in_progress = true;
                 syncCurrentChunk = 0;
 
                 BLE_DEBUG_F("Sync started: %d records, chunk_size=%d",
@@ -507,6 +519,7 @@ class SyncControlCallbacks : public NimBLECharacteristicCallbacks {
                     syncBufferSize = 0;
 
                     // Update state
+                    g_ble_sync_in_progress = false;
                     syncControl.status = 2; // COMPLETE
                     pCharacteristic->setValue((uint8_t*)&syncControl, sizeof(syncControl));
 
@@ -587,6 +600,9 @@ class AquavateServerCallbacks : public NimBLEServerCallbacks {
             g_cal_measuring = false;
             g_cal_result_ready = false;
         }
+
+        // Clear sync guard so daily reset isn't permanently blocked
+        g_ble_sync_in_progress = false;
 
         // Restart advertising for next connection
         // Note: Main loop will handle advertising timeout logic
