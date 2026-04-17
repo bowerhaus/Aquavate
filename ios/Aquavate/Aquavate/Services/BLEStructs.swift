@@ -413,16 +413,15 @@ struct BLECommand {
         return data
     }
 
-    /// Create SET_TIME command (0x10) with Unix timestamp
-    /// Note: param2 is only 16 bits, so we need to pack timestamp differently
-    /// The firmware expects the full 32-bit timestamp, so we'll use a different approach
-    static func setTime(timestamp: UInt32) -> Data {
-        // For time sync, we send 5 bytes: command + 4-byte timestamp
-        var data = Data(count: 5)
+    /// Create SET_TIME command (0x10) with UTC Unix timestamp and timezone offset
+    /// Sends 6 bytes: command + 4-byte UTC timestamp + 1-byte signed tz offset (hours)
+    static func setTime(timestamp: UInt32, tzOffsetHours: Int8) -> Data {
+        var data = Data(count: 6)
         data.withUnsafeMutableBytes { ptr in
             guard let baseAddress = ptr.baseAddress else { return }
             baseAddress.storeBytes(of: UInt8(0x10), as: UInt8.self)
             baseAddress.storeBytes(of: timestamp, toByteOffset: 1, as: UInt32.self)
+            baseAddress.storeBytes(of: tzOffsetHours, toByteOffset: 5, as: Int8.self)
         }
         return data
     }

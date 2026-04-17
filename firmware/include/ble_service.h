@@ -132,10 +132,11 @@ struct __attribute__((packed)) BLE_DeviceSettings {
 // Device Settings flags
 #define DEVICE_SETTINGS_FLAG_SHAKE_EMPTY_ENABLED    0x01  // Bit 0: Shake-to-empty gesture enabled
 
-// Set Time Command (5 bytes) - different from standard 4-byte command
+// Set Time Command (6 bytes) - different from standard 4-byte command
 struct __attribute__((packed)) BLE_SetTimeCommand {
-    uint8_t  command;       // Always 0x10
-    uint32_t timestamp;     // Unix timestamp (seconds since 1970)
+    uint8_t  command;           // Always 0x10
+    uint32_t timestamp;         // UTC Unix timestamp (seconds since 1970)
+    int8_t   tz_offset_hours;   // Local timezone offset in whole hours (e.g. +1 for BST)
 };
 
 // Activity Stats Summary (12 bytes) - first response to GET_ACTIVITY_SUMMARY
