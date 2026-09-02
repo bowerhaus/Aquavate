@@ -1319,7 +1319,7 @@ extension BLEManager: CBPeripheralDelegate {
                 let totalChunks = data.dropFirst(2).prefix(2).withUnsafeBytes { $0.load(as: UInt16.self) }
                 let recordCount = data[4]
                 logger.error("Partial parse: chunkIdx=\(chunkIdx), totalChunks=\(totalChunks), recordCount=\(recordCount)")
-                logger.error("Expected data size: \(6 + Int(recordCount) * 10) bytes, got \(data.count)")
+                logger.error("Expected data size: \(BLEDrinkDataChunk.headerSize + Int(recordCount) * BLEDrinkRecord.size) bytes, got \(data.count)")
             }
             handleSyncFailure("Invalid drink data chunk")
             return
@@ -1338,7 +1338,9 @@ extension BLEManager: CBPeripheralDelegate {
             // First chunk - initialize sync
             syncBuffer.removeAll()
             expectedTotalChunks = chunk.totalChunks
-            totalRecordsToSync = Int(chunk.totalChunks) * Int(BLEDrinkDataChunk.maxRecordsPerChunk)
+            // Estimate from the first chunk's size - the firmware may have
+            // clamped the requested chunk size down to fit the negotiated MTU
+            totalRecordsToSync = Int(chunk.totalChunks) * Int(chunk.recordCount)
         } else if chunk.chunkIndex != lastChunkIndex + 1 {
             // Out of order chunk
             logger.warning("Out of order chunk: expected \(self.lastChunkIndex + 1), got \(chunk.chunkIndex)")
@@ -1400,8 +1402,29 @@ extension BLEManager: CBPeripheralDelegate {
         currentBottleId = PersistenceController.shared.getOrCreateDefaultBottle().id
 
         // Send START command to firmware
-        let startControl = BLESyncControl.startCommand(count: UInt16(unsyncedCount))
+        let startControl = BLESyncControl.startCommand(count: UInt16(unsyncedCount),
+                                                       chunkSize: maxRecordsPerChunk())
         writeSyncControl(startControl)
+    }
+
+    /// Records that fit in a single notification at the negotiated MTU
+    ///
+    /// A notification carries at most MTU-3 bytes and is silently truncated
+    /// above that, which would make the chunk unparseable. CoreBluetooth does
+    /// not expose the MTU directly, but `maximumWriteValueLength(.withoutResponse)`
+    /// is the same MTU-3 budget. Current firmware clamps this too; asking for a
+    /// safe size also keeps older firmware from over-filling a chunk.
+    private func maxRecordsPerChunk() -> UInt16 {
+        guard let peripheral = connectedPeripheral else {
+            return UInt16(BLEDrinkDataChunk.safeRecordsPerChunk)
+        }
+
+        let payload = peripheral.maximumWriteValueLength(for: .withoutResponse) - BLEDrinkDataChunk.headerSize
+        let records = payload / BLEDrinkRecord.size
+        let clamped = min(max(records, 1), BLEDrinkDataChunk.maxRecordsPerChunk)
+
+        logger.debug("Sync chunk size: \(clamped) records (write budget \(peripheral.maximumWriteValueLength(for: .withoutResponse)) bytes)")
+        return UInt16(clamped)
     }
 
     /// Send ACK for received chunk

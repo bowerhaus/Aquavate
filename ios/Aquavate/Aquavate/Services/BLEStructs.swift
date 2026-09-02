@@ -201,7 +201,12 @@ struct BLESyncControl {
     }
 
     /// Create a START command
-    static func startCommand(count: UInt16, chunkSize: UInt16 = 20) -> BLESyncControl {
+    ///
+    /// The default chunk size is capped so a full chunk fits in one ATT
+    /// notification: iOS negotiates an MTU of 185, giving a 182-byte payload,
+    /// and 6 + 12 * 14 = 174 bytes. Asking for more risks a truncated chunk
+    /// that fails to parse. Firmware clamps this to the negotiated MTU too.
+    static func startCommand(count: UInt16, chunkSize: UInt16 = 12) -> BLESyncControl {
         BLESyncControl(
             startIndex: 0,
             count: count,
@@ -272,7 +277,7 @@ struct BLEDrinkRecord {
     }
 }
 
-// MARK: - Drink Data Chunk (variable size, max 206 bytes)
+// MARK: - Drink Data Chunk (variable size, max 286 bytes)
 
 /// Chunk of drink records for bulk transfer
 /// Matches firmware's BLE_DrinkDataChunk struct
@@ -285,8 +290,13 @@ struct BLEDrinkDataChunk {
     /// Header size (6 bytes: chunk_index + total_chunks + record_count + reserved)
     static let headerSize = 6
 
-    /// Maximum records per chunk
+    /// Maximum records per chunk the firmware will ever put in one chunk
     static let maxRecordsPerChunk = 20
+
+    /// Records that fit in one notification at iOS's usual 185-byte MTU
+    /// (182-byte payload): 6 + 12 * 14 = 174 bytes. Used when the negotiated
+    /// MTU is not known.
+    static let safeRecordsPerChunk = 12
 
     /// Parse from raw BLE data
     static func parse(from data: Data) -> BLEDrinkDataChunk? {

@@ -243,7 +243,10 @@ typedef struct {
 
 #### Sync Protocol
 1. iOS connects, reads Sync Status for pending record count
-2. iOS reads Drink History in chunks (20 records per read)
+2. iOS reads Drink History in chunks — records per chunk is bounded by the
+   negotiated ATT MTU (a chunk must fit in MTU-3 bytes; 12 records at the
+   MTU of 185 iOS negotiates). The firmware clamps the app's request; see
+   [Plan 080](../Plans/080-ble-sync-mtu-truncation.md)
 3. iOS writes acknowledgment to Sync Status after processing
 4. Puck marks acknowledged records as synced
 
