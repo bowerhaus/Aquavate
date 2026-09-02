@@ -66,6 +66,9 @@ static BLE_DeviceSettings deviceSettings = {
     .reserved2 = 0
 };
 
+// Connection handle of the current client (for MTU lookup during sync)
+static uint16_t syncConnHandle = BLE_HS_CONN_HANDLE_NONE;
+
 // Sync Control state
 static BLE_SyncControl syncControl = {0};
 static DrinkRecord* syncBuffer = nullptr;  // Buffer for unsynced records
@@ -115,6 +118,7 @@ extern uint8_t rtc_low_battery_threshold;
 void bleLoadBottleConfig();
 void bleSaveBottleConfig();
 void bleSyncSendNextChunk();
+static uint16_t bleMaxRecordsPerChunk();
 void bleSendActivitySummary();
 void bleSendMotionEventChunk(uint8_t chunkIndex);
 void bleSendBackpackSessionChunk(uint8_t chunkIndex);
@@ -478,8 +482,15 @@ class SyncControlCallbacks : public NimBLECharacteristicCallbacks {
                 // Setup sync state
                 syncControl.start_index = 0;
                 syncControl.count = syncBufferSize;
-                syncControl.chunk_size = (request.chunk_size > 0 && request.chunk_size <= 20)
-                                        ? request.chunk_size : 20;
+                // Clamp to what actually fits in one notification at the
+                // negotiated MTU - an oversized chunk is silently truncated by
+                // the stack and the app rejects it as a malformed chunk
+                syncControl.chunk_size = (request.chunk_size > 0)
+                                        ? request.chunk_size
+                                        : BLE_DRINK_RECORDS_PER_CHUNK;
+                if (syncControl.chunk_size > bleMaxRecordsPerChunk()) {
+                    syncControl.chunk_size = bleMaxRecordsPerChunk();
+                }
                 syncControl.status = 1; // IN_PROGRESS
                 g_ble_sync_in_progress = true;
                 syncCurrentChunk = 0;
@@ -579,6 +590,17 @@ class DeviceSettingsCallbacks : public NimBLECharacteristicCallbacks {
 
 // Server callbacks
 class AquavateServerCallbacks : public NimBLEServerCallbacks {
+    void onConnect(NimBLEServer* pServer, ble_gap_conn_desc* desc) {
+        syncConnHandle = desc->conn_handle;
+        BLE_DEBUG_F("Connection handle %d, MTU %d",
+                   syncConnHandle, pServer->getPeerMTU(syncConnHandle));
+    }
+
+    void onMTUChange(uint16_t MTU, ble_gap_conn_desc* desc) {
+        BLE_DEBUG_F("MTU negotiated: %d (max %d records/chunk)",
+                   MTU, bleMaxRecordsPerChunk());
+    }
+
     void onConnect(NimBLEServer* pServer) {
         BLE_DEBUG("Client connected");
         isConnected = true;
@@ -592,6 +614,7 @@ class AquavateServerCallbacks : public NimBLEServerCallbacks {
     void onDisconnect(NimBLEServer* pServer) {
         BLE_DEBUG("Client disconnected");
         isConnected = false;
+        syncConnHandle = BLE_HS_CONN_HANDLE_NONE;
 
         // Clear calibration mode if disconnected mid-calibration
         if (g_cal_mode) {
@@ -686,6 +709,31 @@ String bleGetDeviceSuffix() {
     return String(suffix);
 }
 
+// Largest drink-record chunk that fits in a single notification.
+// An ATT notification carries at most MTU-3 bytes; anything longer is truncated
+// by the stack, so the app would see a header claiming more records than the
+// payload holds.
+static uint16_t bleMaxRecordsPerChunk() {
+    uint16_t mtu = 0;
+    if (pServer != nullptr && syncConnHandle != BLE_HS_CONN_HANDLE_NONE) {
+        mtu = pServer->getPeerMTU(syncConnHandle);
+    }
+    if (mtu < BLE_ATT_MTU_DFLT) {
+        mtu = BLE_ATT_MTU_DFLT;  // Not yet negotiated - assume the minimum
+    }
+
+    uint16_t payload = mtu - 3 - BLE_DRINK_CHUNK_HEADER_SIZE;
+    uint16_t max_records = payload / sizeof(BLE_DrinkRecord);
+
+    if (max_records < 1) {
+        max_records = 1;
+    }
+    if (max_records > BLE_DRINK_RECORDS_PER_CHUNK) {
+        max_records = BLE_DRINK_RECORDS_PER_CHUNK;
+    }
+    return max_records;
+}
+
 // Send next chunk of drink data (Phase 3D)
 void bleSyncSendNextChunk() {
     if (syncBuffer == nullptr || syncBufferSize == 0) {
@@ -733,8 +781,9 @@ void bleSyncSendNextChunk() {
         dst.flags = src.flags;
     }
 
-    // Calculate chunk size: header (6 bytes) + records (14 bytes each)
-    size_t chunk_size = 6 + (records_in_chunk * sizeof(BLE_DrinkRecord));
+    // Calculate chunk size: header + records
+    size_t chunk_size = BLE_DRINK_CHUNK_HEADER_SIZE +
+                        (records_in_chunk * sizeof(BLE_DrinkRecord));
 
     // Send notification
     pDrinkDataChar->setValue((uint8_t*)&chunk, chunk_size);

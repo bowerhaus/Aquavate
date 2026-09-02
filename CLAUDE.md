@@ -166,6 +166,19 @@ If the display degrades, start with `EPD PATTERN`, then follow the ordered
 playbook in Plan 079 → "If the display degrades again". It also lists the levers
 already swept with no effect, so the same ground isn't covered twice.
 
+### BLE Wire Protocol
+
+The structs in [firmware/include/ble_service.h](firmware/include/ble_service.h)
+are the wire format — `ios/Aquavate/Aquavate/Services/BLEStructs.swift` mirrors
+them byte for byte. `static_assert`s in the header pin every struct size; if you
+change one, the app's parser changes with it.
+
+**One rule when touching drink sync:** never hard-code records-per-chunk. A
+notification is truncated above MTU-3 bytes with no error, and the app then
+rejects the chunk as malformed. Both ends derive the limit —
+`bleMaxRecordsPerChunk()` in [ble_service.cpp](firmware/src/ble_service.cpp),
+`maxRecordsPerChunk()` in BLEManager.swift. See [Plan 080](Plans/080-ble-sync-mtu-truncation.md).
+
 ### Firmware Build Commands
 ```bash
 cd firmware
@@ -211,7 +224,7 @@ xcodebuild test -scheme Aquavate -destination 'platform=iOS Simulator,name=iPhon
 
 - Tests cover pure business logic only — BLE/CoreBluetooth, HealthKit, and UI are tested manually on device
 - Tests live in `ios/Aquavate/AquavateTests/` — see those files for what's covered
-- **When to run:** if your changes touch `HydrationReminderService.swift`, run these before opening a PR
+- **When to run:** if your changes touch `HydrationReminderService.swift` or the BLE wire structs in `BLEStructs.swift`, run these before opening a PR
 
 ## Reference Documentation
 
@@ -231,6 +244,7 @@ Read these documents for progressive disclosure - CLAUDE.md keeps context light,
 | [Plans/010-deep-sleep-reinstatement.md](Plans/010-deep-sleep-reinstatement.md) | Deep sleep power management | Understanding normal sleep mode and wake-on-tilt |
 | [Plans/011-extended-deep-sleep-backpack-mode.md](Plans/011-extended-deep-sleep-backpack-mode.md) | Extended deep sleep | Understanding dual sleep modes and backpack scenario |
 | [Plans/079-epaper-fading-fix.md](Plans/079-epaper-fading-fix.md) | E-paper driver corrections + display diagnostics | **Any display fading/speckle/contrast problem** — has the recurrence playbook and the list of levers already ruled out |
+| [Plans/080-ble-sync-mtu-truncation.md](Plans/080-ble-sync-mtu-truncation.md) | BLE sync chunk sizing vs ATT MTU | **Any change to the BLE wire structs or sync chunking** — why chunk size is derived from the MTU, not a constant |
 | [Plans/001-hardware-research.md](Plans/001-hardware-research.md) | Component selection rationale | Understanding hardware limitations or evaluating alternatives |
 | [Plans/002-bom-adafruit-feather.md](Plans/002-bom-adafruit-feather.md) | UK parts list (Adafruit) | Bill of materials for Feather configuration |
 | [Plans/003-bom-sparkfun-qwiic.md](Plans/003-bom-sparkfun-qwiic.md) | UK parts list (SparkFun) | Bill of materials for Qwiic configuration |

@@ -1,80 +1,72 @@
 # Aquavate - Active Development Progress
 
-**Last Updated:** 2026-09-02 (Session 44)
-**Current Branch:** `epaper-fading-fix` (branched from `master`)
+**Last Updated:** 2026-09-02 (Session 45)
+**Current Branch:** `fix-ble-sync-mtu-truncation` (branched from `master`)
 
 ---
 
 ## Current Task
 
-**None — branch `epaper-fading-fix` is complete and ready for PR.**
+**None — branch `fix-ble-sync-mtu-truncation` is complete and ready for PR.**
 
 Changes are unstaged (user stages manually). PR description must include
-`Closes #124`.
+`Closes #126`.
 
 ### What was done
 
-**Fix E-Paper Display Fading (Issue #124)** — [Plan 079](Plans/079-epaper-fading-fix.md)
+**Fix BLE Sync Chunk Truncation (Issue #126)** — [Plan 080](Plans/080-ble-sync-mtu-truncation.md)
 
-Corrected how the SSD1680 panel is driven, in a new `AquavateEPD` subclass
-([firmware/include/aquavate_epd.h](firmware/include/aquavate_epd.h)) plus one
-declaration change in main.cpp — the whole thing reverts in a single step:
+Sync aborted with `Invalid drink data chunk` whenever more than ~12 records were
+pending. A full chunk is 6 + 20 x 14 = 286 bytes, but an ATT notification carries
+at most MTU-3 — 182 at the MTU of 185 iOS negotiates. NimBLE truncated it
+silently, so the app saw a header claiming 20 records with only ~182 bytes behind
+it and rejected the chunk.
 
-- **`0xF4` → `0xF7`** — the panel is no longer left DC-biased between refreshes.
-  Adafruit's value omits the disable-analog/disable-clock bits, so ±15/20 V
-  stayed on the panel for hours overnight and days in backpack mode.
-- **VSH2 `0x00` → `0xA8`** — Adafruit sends an out-of-range source voltage.
-- **`0x18 0x80`** — select the internal temperature sensor (POR default is an
-  external one that isn't fitted).
-- **Blind refresh wait 1500 → 2500 ms**, runtime-tunable.
-- **Refresh instrumentation** — `rtc_refresh_count` + `displayRefreshPanel()`.
-  All 16 refresh call sites route through the helper; keep it that way or the
-  tally silently undercounts.
-- **`EPD *` serial diagnostics** — `PATTERN`, `TEST`, `WAIT`, `TEMP`, `VCOM`,
-  `LUT`. ~3.5 KB flash, no IRAM, none persisted.
+- **Firmware clamps to the negotiated MTU.** `bleMaxRecordsPerChunk()` derives
+  the limit via `getPeerMTU()`; sync START clamps the app's request down to it
+  (12 records at MTU 185, 17 at 247) and reports the clamped value back.
+- **iOS asks for a size that fits**, derived from
+  `maximumWriteValueLength(.withoutResponse)` — defence in depth, and correct
+  against unclamped firmware.
+- **`static_assert`s** in ble_service.h pin every wire struct size.
+- **`BLEDrinkChunkTests.swift`** — 6 tests; builds chunks byte-for-byte as the
+  firmware packs them, asserts a truncated chunk is rejected not half-parsed.
 
-Build: Flash 61.2%, RAM 11.7%, no IRAM pressure. Native unit tests not run —
-no changes to calibration.cpp / weight.cpp / drinks.cpp.
+Deliberately not done: making the parser tolerate a short payload. That would
+turn a loud failure into silently dropped drink records.
 
-### Outcome — display recovered, panel NOT replaced
+Build: Flash 61.2%, RAM 11.7%, no IRAM change. Native firmware tests 30/30, iOS
+tests pass including the 6 new ones.
 
-Replacement was recommended after every firmware lever was exhausted, then the
-display recovered and the user chose to stop. **Which change fixed it is not
-established** — three live candidates: `0xF7` stopping the idle decay, the many
-`EPD TEST` flush cycles acting as conditioning, or ambient temperature (the
-fridge test showed large real temperature sensitivity). Phase 5's controlled A/B
-never ran.
+### Origin
 
-**If it degrades again, follow the playbook in Plan 079 → "If the display
-degrades again".** It has the ordered steps and, importantly, the table of
-levers already swept with no effect (VCOM at every value, forced temperature
-bins, timing, battery, SRAM) so the same ground isn't covered twice. The one
-lever that did change behaviour was the waveform LUT.
+The record used to be 10 bytes (6 + 20 x 10 = 206 — the source of the stale "max
+206 bytes" comments and the `recordCount * 10` in the iOS error log). It grew to
+14 bytes without the 20-records-per-chunk constant being revisited.
 
-### Recommended next (not done, user's call)
+[Plan 077](Plans/077-fix-timezone-daily-reset.md) fixed a daily-reset race that
+produced the *same* error message. That fix was correct — this is a second,
+independent cause of the same symptom.
 
-1. **Phase 3 — reduce refresh count.** Highest value remaining. A 5 ml threshold
-   against ±10–15 ml sensor accuracy with no hysteresis, checked every 5 s, means
-   noise alone triggers full refreshes on a stationary bottle. Fewer refreshes =
-   less panel wear.
-2. **Scheduled conditioning cycle** — directly indicated if the flush cycles are
-   what recovered the panel.
-3. **Overnight idle-stability test** — the clean pass/fail on whether `0xF7`
-   fixed the decay mechanism.
-4. **Upstream issue** against `adafruit/Adafruit_EPD` (Findings 1–3 affect every
-   user of this panel).
+### Deployment
+
+The clamp is server-side, so **flashing the firmware alone fixes the sync**; an
+already-installed app receives correctly-sized chunks. The iOS changes are not
+required for the fix.
 
 ### Files changed
 
-- `firmware/include/aquavate_epd.h` — **new.** `AquavateEPD`: corrected init
-  (two VCOM variants), `0xF7`, tunable blind wait, forced temperature bin, two
-  experimental waveform LUTs (both annotated with their tested results)
-- `firmware/include/display.h` / `firmware/src/display.cpp` — `rtc_refresh_count`,
-  `displayRefreshPanel()`, 5 call sites
-- `firmware/src/ui_calibration.cpp` — 11 call sites
-- `firmware/src/main.cpp` — 2 call sites, `AquavateEPD` declaration, boot-log
-  refresh count, `epdContrastTest()`, `epdDiagnosticPattern()`, EPD accessors
-- `firmware/src/serial_commands.cpp` — six `EPD *` handlers, dispatch, help
+- `firmware/include/ble_service.h` — chunk-size constants, static_asserts
+- `firmware/src/ble_service.cpp` — `bleMaxRecordsPerChunk()`, START clamp,
+  connection handle + `onMTUChange`
+- `ios/.../Services/BLEStructs.swift` — MTU-safe default chunk size
+- `ios/.../Services/BLEManager.swift` — `maxRecordsPerChunk()`, progress estimate
+- `ios/Aquavate/AquavateTests/BLEDrinkChunkTests.swift` — **new**
+- `CLAUDE.md`, `docs/PRD.md` — BLE wire protocol rules, sync chunk description
+
+### Still to verify on hardware
+
+Sync with >12 pending records after flashing — user to confirm.
 
 ### Notes
 
@@ -93,6 +85,7 @@ Resume from PROGRESS.md
 
 ## Recently Completed
 
+- **Fix BLE Sync Chunk Truncation (Issue #126)** - [Plan 080](Plans/080-ble-sync-mtu-truncation.md) ✅ COMPLETE (pending PR) — Sync aborted with `Invalid drink data chunk` above ~12 pending records. A full drink chunk is 286 bytes (6-byte header + 20 x 14-byte records) but an ATT notification carries only MTU-3 bytes (182 at the MTU of 185 iOS negotiates), so NimBLE truncated it silently and the app rejected a header claiming more records than arrived. The record grew 10→14 bytes without the 20-per-chunk constant being revisited. Fix: firmware derives records-per-chunk from `getPeerMTU()` and clamps the app's request at sync START; iOS independently requests an MTU-safe size from `maximumWriteValueLength(.withoutResponse)`. Hardening: `static_assert`s pin every wire struct size, and `BLEDrinkChunkTests.swift` asserts a truncated chunk is rejected rather than half-parsed. Note: [Plan 077](Plans/077-fix-timezone-daily-reset.md) fixed a daily-reset race with the same error message — this is a second, independent cause. Firmware flash alone fixes it (the clamp is server-side). 6 files changed (1 new).
 - **Fix E-Paper Display Fading (Issue #124)** - [Plan 079](Plans/079-epaper-fading-fix.md) ✅ COMPLETE (pending PR) — Display had degraded to salt-and-pepper speckle reading as grey "fading". Root cause identified as the Adafruit EPD driver leaving the panel DC-biased between refreshes: `display()` never powers down and `_display_update_val = 0xF4` omits the disable-analog/disable-clock bits, so ±15/20 V stayed on the panel for hours overnight and days in backpack mode. New `AquavateEPD` subclass (`firmware/include/aquavate_epd.h`) + one declaration change: `0xF4`→`0xF7` (controller powers itself down as the final waveform step), VSH2 `0x00`→`0xA8` (Adafruit sends an out-of-range source voltage), `0x18 0x80` (internal temp sensor — POR default is an external one that isn't fitted), blind refresh wait 1500→2500 ms. Added `rtc_refresh_count` instrumentation via a `displayRefreshPanel()` helper that all 16 refresh call sites route through, and six `EPD *` serial diagnostics (`PATTERN`/`TEST`/`WAIT`/`TEMP`/`VCOM`/`LUT`). Display recovered; panel NOT replaced. **Attribution unresolved** — `0xF7`, the many `EPD TEST` flush cycles (conditioning), or ambient temperature could each explain it. Swept with no effect: VCOM at every value in both waveform modes, forced temperature bins, timing, battery, SRAM. Not done: Phase 3 refresh-count reduction, conditioning cycle, overnight idle test. 6 files changed (1 new).
 - **Introduce Unit Tests** - [Plan 078](Plans/078-introduce-unit-tests.md) ✅ COMPLETE — Added minimum viable unit tests to firmware and iOS app. Firmware: PlatformIO `[env:native]` with Unity framework; host stubs for Arduino.h/NVS/RTC_DATA_ATTR; injectable `getCurrentUnixTime()`; 3 test suites (`test_calibration`, `test_weight`, `test_drinks`) — 30/30 green. iOS: XCTest target `AquavateTests`; injectable `now: () -> Date` on `HydrationReminderService`; `HydrationReminderServiceTests.swift` covering pace, deficit, urgency, throttle reset — 16/16 green. CLAUDE.md and AGENTS.md updated with test run instructions and pre-PR checklist.
 - **Fix Timezone / Daily Reset & BLE Sync Corruption (Issue #120)** - [Plan 077](Plans/077-fix-timezone-daily-reset.md) ✅ COMPLETE — Daily reset was firing at UTC midnight (1am BST instead of midnight BST), and a race condition could corrupt BLE sync data during the UTC/BST gap. Fix: iOS now sends timezone offset (hours) alongside UTC timestamp in SET_TIME (5→6 bytes); firmware stores it and uses it only for reset boundary math; all record timestamps remain true UTC. `getCurrentUnixTime()` returns pure UTC; `getTodayResetTimestamp()` and `getSecondsUntilRollover()` compute local midnight as UTC via signed arithmetic. Added `volatile g_ble_sync_in_progress` guard (set at sync START, cleared at COMPLETE/error/disconnect) to prevent daily reset mid-sync. E-paper sleep display and rollover wake check now use local time. 6 files changed (4 firmware, 2 iOS). Deploy: flash firmware first, then iOS — 6-byte SET_TIME is not backward compatible.

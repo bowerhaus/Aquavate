@@ -78,14 +78,31 @@ struct __attribute__((packed)) BLE_DrinkRecord {
     uint8_t  flags;             // 0x01=synced, 0x04=deleted
 };
 
-// Drink Data Characteristic (variable, max 206 bytes)
+// Drink Data Characteristic (variable, max 286 bytes)
+// NOTE: a full chunk exceeds the ATT payload (MTU-3), so the records actually
+// sent per chunk are clamped to the negotiated MTU at sync start - see
+// bleMaxRecordsPerChunk() in ble_service.cpp
+#define BLE_DRINK_RECORDS_PER_CHUNK 20
+#define BLE_DRINK_CHUNK_HEADER_SIZE 6
 struct __attribute__((packed)) BLE_DrinkDataChunk {
     uint16_t chunk_index;       // Current chunk number
     uint16_t total_chunks;      // Total chunks in sync
     uint8_t  record_count;      // Records in this chunk (1-20)
     uint8_t  _reserved;         // Padding
-    BLE_DrinkRecord records[20]; // Up to 20 records
+    BLE_DrinkRecord records[BLE_DRINK_RECORDS_PER_CHUNK];
 };
+
+// The wire format is shared with the iOS app (BLEStructs.swift) - these sizes
+// are the protocol. If a struct grows, the app's parser must grow with it, and
+// bleMaxRecordsPerChunk() must still fit a chunk into one ATT notification.
+static_assert(sizeof(BLE_CurrentState) == 14, "BLE_CurrentState must be 14 bytes");
+static_assert(sizeof(BLE_BottleConfig) == 12, "BLE_BottleConfig must be 12 bytes");
+static_assert(sizeof(BLE_SyncControl) == 8, "BLE_SyncControl must be 8 bytes");
+static_assert(sizeof(BLE_DrinkRecord) == 14, "BLE_DrinkRecord must be 14 bytes");
+static_assert(sizeof(BLE_DrinkDataChunk) ==
+                  BLE_DRINK_CHUNK_HEADER_SIZE +
+                      BLE_DRINK_RECORDS_PER_CHUNK * sizeof(BLE_DrinkRecord),
+              "BLE_DrinkDataChunk header size constant is out of date");
 
 // Command Characteristic (4 bytes)
 struct __attribute__((packed)) BLE_Command {

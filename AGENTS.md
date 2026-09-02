@@ -70,7 +70,7 @@ pio device monitor         # Serial monitor
 
 ### Before Opening an iOS PR
 
-1. **If your changes touch `HydrationReminderService.swift`**, run the unit tests:
+1. **If your changes touch `HydrationReminderService.swift` or the BLE wire structs in `BLEStructs.swift`**, run the unit tests:
    ```bash
    cd ios/Aquavate && xcodebuild test -scheme Aquavate -destination 'platform=iOS Simulator,name=iPhone 17'
    ```
