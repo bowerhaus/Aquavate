@@ -127,9 +127,13 @@ uint32_t g_sleep_timeout_ms = ACTIVITY_TIMEOUT_MS;  // Default 30 seconds
 
 #if defined(BOARD_ADAFRUIT_FEATHER)
 #include "Adafruit_ThinkInk.h"
+#include "aquavate_epd.h"
 
 // 2.13" Mono E-Paper display (GDEY0213B74 variant - no 8-pixel shift)
-ThinkInk_213_Mono_GDEY0213B74 display(EPD_DC, EPD_RESET, EPD_CS, SRAM_CS, EPD_BUSY);
+// AquavateEPD subclasses the ThinkInk panel to correct the SSD1680 drive
+// sequence - chiefly leaving the panel unbiased between refreshes (Plan 079).
+// Binds to ThinkInk_213_Mono_GDEY0213B74& parameters unchanged.
+AquavateEPD display(EPD_DC, EPD_RESET, EPD_CS, SRAM_CS, EPD_BUSY);
 
 float getBatteryVoltage() {
     float voltage = analogReadMilliVolts(VBAT_PIN);
@@ -607,7 +611,7 @@ void drawWelcomeScreen() {
     display.drawBitmap(drop_x, drop_y, water_drop_bitmap,
                       WATER_DROP_WIDTH, WATER_DROP_HEIGHT, EPD_BLACK);
 
-    display.display();
+    displayRefreshPanel(&display);
 }
 
 // Helper function to force display refresh (called by serial commands like TARE)
@@ -647,6 +651,110 @@ void forceDisplayRefresh() {
                       time_hour, time_minute, battery_pct, false);
 #endif
 }
+
+// Contrast recovery test (Plan 079 Phase 1). Drives alternating full-black /
+// full-white refreshes to flush residual charge, then restores the main screen.
+// Photograph before and after: if black recovers, some of the fading is
+// reversible ghosting; if it doesn't, the ink itself is degraded.
+//
+// Every refresh is followed by a settle delay. The driver's own blind wait is
+// only 1.5s against a ~2s waveform (no BUSY pin - Finding 4), so back-to-back
+// refreshes issue setup commands while the previous waveform is still running.
+// Uniform black/white tolerates that, but the frame drawn afterwards starts from
+// an indeterminate charge state and develops as mottled grey - which corrupts
+// the very "after" image this test exists to produce.
+#define EPD_TEST_SETTLE_MS 3000
+
+void epdContrastTest(uint16_t cycles) {
+    Serial.printf("EPD TEST: %u black/white cycles (%u refreshes, ~%lu seconds)\n",
+                  cycles, cycles * 2,
+                  (unsigned long)(cycles * 2 * EPD_TEST_SETTLE_MS) / 1000);
+
+    for (uint16_t i = 0; i < cycles; i++) {
+        display.clearBuffer();
+        display.fillRect(0, 0, display.width(), display.height(), EPD_BLACK);
+        displayRefreshPanel(&display);
+        delay(EPD_TEST_SETTLE_MS);
+
+        display.clearBuffer();  // clearBuffer leaves the panel white
+        displayRefreshPanel(&display);
+        delay(EPD_TEST_SETTLE_MS);
+
+        Serial.printf("EPD TEST: cycle %u/%u complete\n", i + 1, cycles);
+    }
+
+    Serial.println("EPD TEST: done - restoring screen");
+    if (nauReady && g_calibrated) {
+        forceDisplayRefresh();
+    } else {
+        drawWelcomeScreen();  // Main screen needs calibration; don't leave it blank
+    }
+}
+
+// Contrast diagnostic pattern (Plan 079 Phase 1, second attempt).
+//
+// A full-screen black frame cannot be judged by eye - with no white in view the
+// panel reads as "solid black" even when it is well short of it. This draws
+// solid black and solid white side by side in ONE frame, so black is assessed
+// against a reference under identical conditions, plus fine detail in both
+// polarities to separate "panel cannot reach black" from "fine detail renders
+// badly".
+//
+// Reading the result:
+//   Black half matches the full-screen flush, text grey  -> detail/render fault
+//   Black half also grey against adjacent white           -> panel really is faded
+//   Fine lines speckled/dropped rather than uniformly grey -> framebuffer/SRAM fault
+void epdDiagnosticPattern() {
+    const int16_t w = display.width();
+    const int16_t h = display.height();
+    const int16_t half = w / 2;
+
+    display.clearBuffer();
+    display.fillRect(0, 0, half, h, EPD_BLACK);  // Left solid black, right stays white
+
+    // Same text both polarities, straddling the boundary
+    display.setTextSize(2);
+    display.setTextColor(EPD_WHITE);
+    display.setCursor(8, 12);
+    display.print("515ml");
+    display.setTextColor(EPD_BLACK);
+    display.setCursor(half + 8, 12);
+    display.print("515ml");
+
+    // 1px line pairs - the finest feature the panel has to resolve
+    for (int16_t i = 0; i < 12; i++) {
+        int16_t y = 45 + (i * 3);
+        if (y >= h - 4) break;
+        display.drawFastHLine(8, y, half - 16, EPD_WHITE);
+        display.drawFastHLine(half + 8, y, half - 16, EPD_BLACK);
+    }
+
+    displayRefreshPanel(&display);
+    Serial.println("EPD PATTERN: drawn - photograph with a white paper reference in frame");
+}
+
+// Phase 4 refresh-delay sweep, driven from serial so no reflash is needed
+uint16_t epdGetRefreshWaitMs() { return display.getRefreshWaitMs(); }
+void epdSetRefreshWaitMs(uint16_t ms) { display.setRefreshWaitMs(ms); }
+
+// Waveform temperature-bin override (fridge test follow-up), also serial-driven
+void epdForceTemperature(int8_t degC) { display.setForcedTemperature(degC); }
+void epdClearForcedTemperature() { display.clearForcedTemperature(); }
+bool epdIsTemperatureForced() { return display.isTemperatureForced(); }
+int8_t epdGetForcedTemperature() { return display.getForcedTemperature(); }
+
+// VCOM override control (Finding 6), serial-driven
+void epdUseOtpVcom() { display.useOtpVcom(); }
+void epdSetVcom(uint8_t val) { display.setVcomOverride(val); }
+bool epdIsVcomOverridden() { return display.isVcomOverridden(); }
+uint8_t epdGetVcom() { return display.getVcomValue(); }
+
+// Experimental RAM LUT (waveform diagnostic), serial-driven
+void epdUseExperimentalLut() { display.useExperimentalLut(); }
+void epdUseStrongLut() { display.useStrongLut(); }
+void epdClearExperimentalLut() { display.clearExperimentalLut(); }
+bool epdIsExperimentalLutActive() { return display.isExperimentalLutActive(); }
+bool epdIsStrongLutActive() { return display.isStrongLutActive(); }
 #endif
 
 void setup() {
@@ -750,7 +858,9 @@ void setup() {
     int batteryPct = getBatteryPercent(batteryV);
     Serial.printf("Battery: %.2fV (%d%%)\n", batteryV, batteryPct);
 
-    Serial.println("E-Paper: OK");
+    // Refresh count is cumulative since the last power cycle (RTC memory), so it
+    // spans deep sleep wakes - this is the refreshes/day figure from Plan 079.
+    Serial.printf("E-Paper: OK (refresh count since power-on: %lu)\n", displayGetRefreshCount());
 
     // === Low Battery Lockout Check (early, before sensor init) ===
     // storageInit() is idempotent - safe to call here and again later
@@ -1038,7 +1148,7 @@ void setup() {
         display.print("Hold bottle inverted");
         display.setCursor(10, 100);
         display.print("for 5 seconds");
-        display.display();
+        displayRefreshPanel(&display);
     }
 #endif
 #endif // ENABLE_STANDALONE_CALIBRATION

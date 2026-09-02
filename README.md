@@ -86,8 +86,9 @@ Pin definitions are automatically selected based on these flags.
 - ✅ RTC memory persistence for display state and drink baseline
 - ✅ USB serial commands for configuration:
   - Time/Timezone: SET DATETIME, SET DATE, SET TIME, SET TZ, GET TIME
-  - Drink Tracking: GET DAILY STATE, GET LAST DRINK, DUMP DRINKS, SET DAILY INTAKE, RESET DAILY INTAKE, CLEAR DRINKS
+  - Drink Tracking: GET DAILY STATE, GET LAST DRINK, DUMP DRINKS, RESET DAILY INTAKE, CLEAR DRINKS
   - Display Settings: SET DISPLAY MODE (0=human, 1=tumblers)
+  - E-Paper Diagnostics: EPD PATTERN, EPD TEST, EPD WAIT, EPD TEMP, EPD VCOM, EPD LUT
   - Power Management: SET SLEEP TIMEOUT, SET EXTENDED SLEEP TIMER, SET EXTENDED SLEEP THRESHOLD
   - System Status: GET STATUS (shows all system settings)
   - Debug Control: 0-4, 9 (debug levels), T (test interrupt state)

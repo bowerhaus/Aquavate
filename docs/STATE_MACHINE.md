@@ -364,10 +364,15 @@ GESTURE STATES (detected throughout Normal Operation and Calibration):
 
 Available in all states except Deep Sleep:
 
-- `SET_TIME <YYYY-MM-DD> <HH:MM:SS> <offset>` - Set RTC time and timezone
-- `GET_TIME` - Show current time
-- `RESET_DAILY` - Reset daily drink counter (testing only)
-- `CLEAR_DRINKS` - Clear all drink records (testing only)
+Commands are space-separated words, not underscored. Full list: send an
+unrecognised command to print the built-in help, or see
+[AGENTS.md](../AGENTS.md#serial-commands-for-testing).
+
+- `SET DATETIME <YYYY-MM-DD> <HH:MM:SS> [tz]` - Set RTC date, time and timezone
+- `GET TIME` - Show current time
+- `RESET DAILY INTAKE` - Reset daily drink counter (testing only)
+- `CLEAR DRINKS` - Clear all drink records (testing only)
+- `EPD PATTERN` - E-paper contrast diagnostic (see [Plan 079](../Plans/079-epaper-fading-fix.md))
 
 ---
 

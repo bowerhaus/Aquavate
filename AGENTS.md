@@ -26,7 +26,8 @@ This is an active hardware + firmware + iOS app project. The firmware standalone
 - [firmware/src/storage_drinks.cpp](firmware/src/storage_drinks.cpp) - NVS circular buffer for drink records
 - [firmware/src/serial_commands.cpp](firmware/src/serial_commands.cpp) - USB serial commands for configuration
 - [firmware/src/display.cpp](firmware/src/display.cpp) - Smart display state tracking and rendering
-- [firmware/include/config.h](firmware/include/config.h) - Pin definitions, calibration constants, debug flags, power settings
+- [firmware/include/aquavate_epd.h](firmware/include/aquavate_epd.h) - `AquavateEPD`: corrected SSD1680 driving (see Plan 079)
+- [firmware/src/config.h](firmware/src/config.h) - Pin definitions, calibration constants, debug flags, power settings
 - [firmware/platformio.ini](firmware/platformio.ini) - Build configurations for both hardware options
 
 **Hardware Configurations:**
@@ -144,17 +145,31 @@ The firmware supports comprehensive serial commands for configuration and testin
 - `GET DAILY STATE` - Show current daily intake
 - `GET LAST DRINK` - Show most recent drink record
 - `DUMP DRINKS` - Display all drink records
-- `SET DAILY INTAKE ml` - Set current daily intake
 - `RESET DAILY INTAKE` - Reset daily counter
 - `CLEAR DRINKS` - Clear all drink records
 
 **Display:**
 - `SET DISPLAY MODE mode` - Switch visualization (0=human, 1=tumblers)
 
+**E-Paper Diagnostics** (see [Plan 079](Plans/079-epaper-fading-fix.md); none persisted):
+- `EPD PATTERN` - Black beside white in one frame + 1px lines; main diagnostic
+- `EPD TEST [cycles]` - Black/white flush cycles (conditioning)
+- `EPD WAIT [ms]` - Blind refresh delay, 500-6000
+- `EPD TEMP [degC|OFF]` - Force waveform temperature bin
+- `EPD VCOM [val|OFF]` - VCOM override value, or factory OTP
+- `EPD LUT [ON|STRONG|OFF]` - RAM waveform: fpc7519 / strengthened / OTP
+
+**Calibration:**
+- `TARE` - Zero the scale at current weight
+
 **Power Management:**
 - `SET SLEEP TIMEOUT sec` - Normal sleep timeout (0=disable, default=30)
 - `SET EXTENDED SLEEP TIMER sec` - Extended sleep wake timer (default=60)
 - `SET EXTENDED SLEEP THRESHOLD sec` - Awake threshold for extended mode (default=120)
+
+**Power/Battery:**
+- `SET BATTERY LOCKOUT THRESHOLD pct` - Low battery lockout (5-95, default=20)
+- `GET BATTERY` - Show low battery lockout status
 
 **System:**
 - `GET STATUS` - Show all system status and settings

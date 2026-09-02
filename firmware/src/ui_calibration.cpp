@@ -59,7 +59,7 @@ void uiCalibrationShowStart() {
     printLeft("empty bottle", 10, 60, 2);
     printLeft("completely", 10, 80, 2);
 
-    g_display->display(); // Full refresh
+    displayRefreshPanel(g_display); // Full refresh
 }
 
 void uiCalibrationShowStarted() {
@@ -74,7 +74,7 @@ void uiCalibrationShowStarted() {
     printCentered("calibration", 35, 3);
     printCentered("started", 70, 3);
 
-    g_display->display(); // Full refresh
+    displayRefreshPanel(g_display); // Full refresh
 }
 
 void uiCalibrationShowEmptyPrompt() {
@@ -90,7 +90,7 @@ void uiCalibrationShowEmptyPrompt() {
     // Center vertically: (122 - 90) / 2 = 16
     drawBottleGraphic(105, 16, 0.0f, true);
 
-    g_display->display(); // Full refresh
+    displayRefreshPanel(g_display); // Full refresh
 }
 
 void uiCalibrationShowFullPrompt() {
@@ -106,7 +106,7 @@ void uiCalibrationShowFullPrompt() {
     // Center vertically: (122 - 90) / 2 = 16
     drawBottleGraphic(105, 16, 1.0f, true);
 
-    g_display->display(); // Full refresh
+    displayRefreshPanel(g_display); // Full refresh
 }
 
 void uiCalibrationShowMeasuringEmpty() {
@@ -124,7 +124,7 @@ void uiCalibrationShowMeasuringEmpty() {
     // Instructions
     printLeft("hold still", 10, 95, 1);
 
-    g_display->display(); // Full refresh
+    displayRefreshPanel(g_display); // Full refresh
 }
 
 void uiCalibrationShowEmptyConfirm(int32_t adc) {
@@ -153,7 +153,7 @@ void uiCalibrationShowFillBottle() {
     printLeft("then place", 10, 80, 2);
     printLeft("upright", 10, 100, 2);
 
-    g_display->display(); // Full refresh
+    displayRefreshPanel(g_display); // Full refresh
 }
 
 void uiCalibrationShowMeasuringFull() {
@@ -171,7 +171,7 @@ void uiCalibrationShowMeasuringFull() {
     // Instructions
     printLeft("hold still", 10, 95, 1);
 
-    g_display->display(); // Full refresh
+    displayRefreshPanel(g_display); // Full refresh
 }
 
 void uiCalibrationShowFullConfirm(int32_t adc) {
@@ -197,7 +197,7 @@ void uiCalibrationShowComplete(float scale_factor) {
     printCentered("calibration", 35, 3);
     printCentered("complete", 70, 3);
 
-    g_display->display(); // Full refresh
+    displayRefreshPanel(g_display); // Full refresh
 }
 
 void uiCalibrationShowError(const char* message) {
@@ -214,7 +214,7 @@ void uiCalibrationShowError(const char* message) {
     printCentered("calibration", 35, 3);
     printCentered("error", 70, 3);
 
-    g_display->display(); // Full refresh
+    displayRefreshPanel(g_display); // Full refresh
 }
 
 void uiCalibrationShowAborted() {
@@ -229,7 +229,7 @@ void uiCalibrationShowAborted() {
     printCentered("calibration", 35, 3);
     printCentered("aborted", 70, 3);
 
-    g_display->display(); // Full refresh
+    displayRefreshPanel(g_display); // Full refresh
 }
 
 void uiCalibrationUpdateForState(CalibrationState state, int32_t adc_value, float scale_factor) {
@@ -329,7 +329,7 @@ void uiShowBottleEmptied(ThinkInk_213_Mono_GDEY0213B74& display) {
     printCenteredBottleEmptied(&display, "bottle", 35, 3);
     printCenteredBottleEmptied(&display, "emptied", 70, 3);
 
-    display.display(); // Full refresh
+    displayRefreshPanel(&display); // Full refresh
 }
 
 #endif // BOARD_ADAFRUIT_FEATHER

@@ -74,7 +74,8 @@ Two prototype configurations are being evaluated:
 - [firmware/src/serial_commands.cpp](firmware/src/serial_commands.cpp) - USB serial commands for configuration (conditionally compiled)
 - [firmware/src/ui_calibration.cpp](firmware/src/ui_calibration.cpp) - E-paper calibration UI screens (conditionally compiled)
 - [firmware/src/display.cpp](firmware/src/display.cpp) - Smart display state tracking and rendering
-- [firmware/include/config.h](firmware/include/config.h) - Debug flags, power management, sensor thresholds, IOS_MODE flag
+- [firmware/src/config.h](firmware/src/config.h) - Debug flags, power management, sensor thresholds, IOS_MODE flag
+- [firmware/include/aquavate_epd.h](firmware/include/aquavate_epd.h) - `AquavateEPD`: corrected SSD1680 driving for the e-paper panel (see Plan 079)
 - [firmware/include/aquavate.h](firmware/include/aquavate.h) - Version info and shared declarations
 - [firmware/platformio.ini](firmware/platformio.ini) - Dual environment config (Adafruit Feather / SparkFun Qwiic)
 
@@ -115,7 +116,7 @@ The current ESP32 Feather V2 has limited IRAM (131KB). BLE + serial commands + a
 - Retry attempts, state transitions
 - Any output that would clutter logs during normal operation
 
-**Usage** (macros defined in [config.h](firmware/include/config.h)):
+**Usage** (macros defined in [config.h](firmware/src/config.h)):
 ```cpp
 #include "config.h"
 
@@ -133,7 +134,37 @@ DEBUG_PRINTF(g_debug_water_level, "Weight: ADC=%d\n", adc);
 - Remove IOS_MODE and all related conditional compilation
 - Remove `#if ENABLE_BLE`, `#if ENABLE_SERIAL_COMMANDS`, `#if ENABLE_STANDALONE_CALIBRATION` blocks
 - Enable all features simultaneously (BLE + serial commands + standalone calibration)
-- Simplify [config.h](firmware/include/config.h), [main.cpp](firmware/src/main.cpp), [ble_service.cpp](firmware/src/ble_service.cpp), [serial_commands.cpp](firmware/src/serial_commands.cpp), [ui_calibration.cpp](firmware/src/ui_calibration.cpp)
+- Simplify [config.h](firmware/src/config.h), [main.cpp](firmware/src/main.cpp), [ble_service.cpp](firmware/src/ble_service.cpp), [serial_commands.cpp](firmware/src/serial_commands.cpp), [ui_calibration.cpp](firmware/src/ui_calibration.cpp)
+
+### E-Paper Display Driving
+
+The panel is driven through `AquavateEPD` ([firmware/include/aquavate_epd.h](firmware/include/aquavate_epd.h)),
+a subclass that corrects the Adafruit EPD driver's SSD1680 register sequence.
+See [Plan 079](Plans/079-epaper-fading-fix.md) for why each fix exists.
+
+**Two rules when touching display code:**
+
+1. **Never call `display.display()` directly** — always go through
+   `displayRefreshPanel(epd)` in [display.cpp](firmware/src/display.cpp), or the
+   `rtc_refresh_count` tally silently undercounts.
+2. **Never pass `display(true)`** — with no BUSY pin that fires `SW_RESET`
+   partway through the waveform and truncates it. `0xF7` already makes the
+   controller power itself down as the final waveform step.
+
+**Diagnostics** (serial, none persisted — all reset on reboot):
+
+```
+EPD PATTERN              # black beside white + 1px lines; main diagnostic
+EPD TEST [cycles]        # black/white flush cycles (conditioning)
+EPD WAIT [ms]            # blind refresh delay, 500-6000
+EPD TEMP [degC|OFF]      # force waveform temperature bin
+EPD VCOM [val|OFF]       # VCOM override value, or factory OTP
+EPD LUT [ON|STRONG|OFF]  # RAM waveform: fpc7519 / strengthened / OTP
+```
+
+If the display degrades, start with `EPD PATTERN`, then follow the ordered
+playbook in Plan 079 → "If the display degrades again". It also lists the levers
+already swept with no effect, so the same ground isn't covered twice.
 
 ### Firmware Build Commands
 ```bash
@@ -199,6 +230,7 @@ Read these documents for progressive disclosure - CLAUDE.md keeps context light,
 | [Plans/009-smart-display-state-tracking.md](Plans/009-smart-display-state-tracking.md) | Display state tracking | Understanding display update logic and optimization |
 | [Plans/010-deep-sleep-reinstatement.md](Plans/010-deep-sleep-reinstatement.md) | Deep sleep power management | Understanding normal sleep mode and wake-on-tilt |
 | [Plans/011-extended-deep-sleep-backpack-mode.md](Plans/011-extended-deep-sleep-backpack-mode.md) | Extended deep sleep | Understanding dual sleep modes and backpack scenario |
+| [Plans/079-epaper-fading-fix.md](Plans/079-epaper-fading-fix.md) | E-paper driver corrections + display diagnostics | **Any display fading/speckle/contrast problem** — has the recurrence playbook and the list of levers already ruled out |
 | [Plans/001-hardware-research.md](Plans/001-hardware-research.md) | Component selection rationale | Understanding hardware limitations or evaluating alternatives |
 | [Plans/002-bom-adafruit-feather.md](Plans/002-bom-adafruit-feather.md) | UK parts list (Adafruit) | Bill of materials for Feather configuration |
 | [Plans/003-bom-sparkfun-qwiic.md](Plans/003-bom-sparkfun-qwiic.md) | UK parts list (SparkFun) | Bill of materials for Qwiic configuration |
