@@ -45,6 +45,7 @@ RTC_DATA_ATTR uint8_t rtc_display_minute = 0;
 RTC_DATA_ATTR uint8_t rtc_display_battery = 0;
 RTC_DATA_ATTR uint32_t rtc_wake_count = 0;
 RTC_DATA_ATTR uint16_t rtc_display_daily_goal = 0;
+RTC_DATA_ATTR uint32_t rtc_refresh_count = 0;  // Panel refreshes since power cycle (Plan 079)
 
 // Bitmap data (moved from main.cpp)
 // Water drop icon bitmap (60x60 pixels)
@@ -504,6 +505,22 @@ void displayInit(ThinkInk_213_Mono_GDEY0213B74& display_ref) {
     DEBUG_PRINTLN(g_debug_display, "Display: Initialized state tracking");
 }
 
+// Every panel refresh in the firmware goes through here so rtc_refresh_count is
+// a complete tally. Panel wear is driven by refresh count, so we need to know
+// whether the display sees 10 or 500 refreshes a day (Plan 079, Finding 5).
+void displayRefreshPanel(ThinkInk_213_Mono_GDEY0213B74* epd) {
+    if (epd == nullptr) return;
+
+    rtc_refresh_count++;
+    epd->display();
+
+    DEBUG_PRINTF(g_debug_display, "Display: Panel refresh #%lu\n", rtc_refresh_count);
+}
+
+uint32_t displayGetRefreshCount() {
+    return rtc_refresh_count;
+}
+
 void displaySetDailyGoal(uint16_t goal_ml) {
     if (goal_ml != g_daily_goal_ml) {
         g_daily_goal_ml = goal_ml;
@@ -672,6 +689,7 @@ bool displayRestoreFromRTC() {
     if (rtc_display_magic != RTC_MAGIC_DISPLAY) {
         DEBUG_PRINTLN(g_debug_display, "Display: No valid RTC state (power cycle) - wake count reset");
         rtc_wake_count = 0;
+        rtc_refresh_count = 0;
         return false;
     }
 
@@ -724,7 +742,7 @@ void displayBackpackMode() {
     g_display_ptr->setCursor((250 - note_width) / 2, 105);
     g_display_ptr->print(note);
 
-    g_display_ptr->display();
+    displayRefreshPanel(g_display_ptr);
 }
 
 // Display full-screen low battery lockout screen (Issue #68)
@@ -768,7 +786,7 @@ void displayLowBattery() {
     g_display_ptr->setCursor((250 - note_width) / 2, 105);
     g_display_ptr->print(note);
 
-    g_display_ptr->display();
+    displayRefreshPanel(g_display_ptr);
 }
 
 // Display immediate feedback when waking from tap (shows "waking" text)
@@ -795,7 +813,7 @@ void displayTapWakeFeedback() {
     g_display_ptr->setCursor(subtext_x, 72);
     g_display_ptr->print(subtext);
 
-    g_display_ptr->display();
+    displayRefreshPanel(g_display_ptr);
 
     DEBUG_PRINTLN(g_debug_display, "Display: Tap wake feedback shown (waking)");
 }
@@ -820,7 +838,7 @@ void displayNVSWarning() {
     g_display_ptr->setCursor((250 - w2) / 2, 70);
     g_display_ptr->print(line2);
 
-    g_display_ptr->display();  // Full refresh
+    displayRefreshPanel(g_display_ptr);  // Full refresh
     delay(3000);               // Show for 3 seconds
 
     // Redraw main screen
@@ -905,6 +923,6 @@ void drawMainScreen() {
         drawGlassGrid(grid_x, grid_y, daily_fill);
     }
 
-    g_display_ptr->display();
+    displayRefreshPanel(g_display_ptr);
 }
 #endif

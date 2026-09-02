@@ -824,6 +824,186 @@ static void handleTare() {
     }
 }
 
+// Handle EPD TEST command (Plan 079 Phase 1)
+// Format: EPD TEST [cycles]   - default 10 black/white cycles
+static void handleEpdTest(char* args) {
+#if defined(BOARD_ADAFRUIT_FEATHER)
+    int cycles = 10;
+
+    if (args != nullptr && *args != '\0') {
+        cycles = atoi(args);
+        if (cycles < 1 || cycles > 50) {
+            Serial.println("ERROR: Cycles must be 1-50");
+            return;
+        }
+    }
+
+    extern void epdContrastTest(uint16_t cycles);
+    epdContrastTest((uint16_t)cycles);
+#else
+    Serial.println("ERROR: EPD TEST requires the Adafruit Feather e-paper board");
+#endif
+}
+
+// Handle EPD PATTERN command (Plan 079 Phase 1)
+// Single isolated refresh: solid black beside solid white, plus fine detail
+static void handleEpdPattern() {
+#if defined(BOARD_ADAFRUIT_FEATHER)
+    extern void epdDiagnosticPattern();
+    epdDiagnosticPattern();
+#else
+    Serial.println("ERROR: EPD PATTERN requires the Adafruit Feather e-paper board");
+#endif
+}
+
+// Handle EPD WAIT command (Plan 079 Phase 4)
+// Format: EPD WAIT [ms]   - no arg reports current value
+// Sweeps the blind post-refresh delay without reflashing. Not persisted.
+static void handleEpdWait(char* args) {
+#if defined(BOARD_ADAFRUIT_FEATHER)
+    extern uint16_t epdGetRefreshWaitMs();
+    extern void epdSetRefreshWaitMs(uint16_t ms);
+
+    if (args == nullptr || *args == '\0') {
+        Serial.printf("EPD refresh wait: %u ms\n", epdGetRefreshWaitMs());
+        return;
+    }
+
+    int ms = atoi(args);
+    if (ms < 500 || ms > 6000) {
+        Serial.println("ERROR: Refresh wait must be 500-6000 ms");
+        return;
+    }
+
+    epdSetRefreshWaitMs((uint16_t)ms);
+    Serial.printf("OK: EPD refresh wait set to %u ms (not persisted)\n",
+                  epdGetRefreshWaitMs());
+#else
+    Serial.println("ERROR: EPD WAIT requires the Adafruit Feather e-paper board");
+#endif
+}
+
+// Handle EPD TEMP command (Plan 079 - waveform temperature-bin override)
+// Format: EPD TEMP <degC>  - force waveform bin (colder = longer, harder drive)
+//         EPD TEMP OFF     - back to internal sensor
+//         EPD TEMP         - report current setting
+static void handleEpdTemp(char* args) {
+#if defined(BOARD_ADAFRUIT_FEATHER)
+    extern void epdForceTemperature(int8_t degC);
+    extern void epdClearForcedTemperature();
+    extern bool epdIsTemperatureForced();
+    extern int8_t epdGetForcedTemperature();
+
+    if (args == nullptr || *args == '\0') {
+        if (epdIsTemperatureForced()) {
+            Serial.printf("EPD temp: forced to %d C\n", epdGetForcedTemperature());
+        } else {
+            Serial.println("EPD temp: internal sensor");
+        }
+        return;
+    }
+
+    if (strcasecmp(args, "OFF") == 0) {
+        epdClearForcedTemperature();
+        Serial.println("OK: EPD temp back to internal sensor");
+        return;
+    }
+
+    int degC = atoi(args);
+    if ((degC == 0 && args[0] != '0' && args[0] != '-') || degC < -25 || degC > 50) {
+        Serial.println("ERROR: Temp must be -25 to 50 C, or OFF");
+        return;
+    }
+
+    epdForceTemperature((int8_t)degC);
+    Serial.printf("OK: EPD waveform forced to %d C bin (not persisted)\n", degC);
+    Serial.println("Run EPD PATTERN to judge the result");
+#else
+    Serial.println("ERROR: EPD TEMP requires the Adafruit Feather e-paper board");
+#endif
+}
+
+// Handle EPD VCOM command (Plan 079 Finding 6)
+// Format: EPD VCOM OFF     - use factory OTP VCOM (drop the init override)
+//         EPD VCOM <val>   - override VCOM register (decimal or 0x hex)
+//         EPD VCOM         - report current setting
+static void handleEpdVcom(char* args) {
+#if defined(BOARD_ADAFRUIT_FEATHER)
+    extern void epdUseOtpVcom();
+    extern void epdSetVcom(uint8_t val);
+    extern bool epdIsVcomOverridden();
+    extern uint8_t epdGetVcom();
+
+    if (args == nullptr || *args == '\0') {
+        if (epdIsVcomOverridden()) {
+            Serial.printf("EPD VCOM: override 0x%02X\n", epdGetVcom());
+        } else {
+            Serial.println("EPD VCOM: factory OTP");
+        }
+        return;
+    }
+
+    if (strcasecmp(args, "OFF") == 0 || strcasecmp(args, "OTP") == 0) {
+        epdUseOtpVcom();
+        Serial.println("OK: EPD using factory OTP VCOM (not persisted)");
+        Serial.println("Run EPD PATTERN to judge the result");
+        return;
+    }
+
+    long val = strtol(args, nullptr, 0);  // handles decimal and 0x-prefixed hex
+    if (val < 0 || val > 0xFF || (val == 0 && args[0] != '0')) {
+        Serial.println("ERROR: VCOM must be 0-255 (or 0x00-0xFF), or OFF");
+        return;
+    }
+
+    epdSetVcom((uint8_t)val);
+    Serial.printf("OK: EPD VCOM override set to 0x%02lX (not persisted)\n", val);
+    Serial.println("Run EPD PATTERN to judge the result");
+#else
+    Serial.println("ERROR: EPD VCOM requires the Adafruit Feather e-paper board");
+#endif
+}
+
+// Handle EPD LUT command (Plan 079 - waveform diagnostic)
+// Format: EPD LUT ON   - use experimental RAM LUT instead of the OTP waveform
+//         EPD LUT OFF  - back to the OTP waveform
+//         EPD LUT      - report
+static void handleEpdLut(char* args) {
+#if defined(BOARD_ADAFRUIT_FEATHER)
+    extern void epdUseExperimentalLut();
+    extern void epdUseStrongLut();
+    extern void epdClearExperimentalLut();
+    extern bool epdIsExperimentalLutActive();
+    extern bool epdIsStrongLutActive();
+
+    if (args == nullptr || *args == '\0') {
+        Serial.printf("EPD LUT: %s\n",
+                      epdIsStrongLutActive()        ? "strong RAM LUT"
+                      : epdIsExperimentalLutActive() ? "fpc7519 RAM LUT"
+                                                     : "OTP waveform");
+        return;
+    }
+
+    if (strcasecmp(args, "ON") == 0) {
+        epdUseExperimentalLut();
+        Serial.println("OK: fpc7519 RAM LUT active (not persisted)");
+        Serial.println("Run EPD PATTERN to judge the result");
+    } else if (strcasecmp(args, "STRONG") == 0) {
+        epdUseStrongLut();
+        Serial.println("OK: strong RAM LUT active (not persisted)");
+        Serial.println("Waveform runs ~2x longer - set EPD WAIT 5000 first");
+        Serial.println("Run EPD PATTERN to judge the result");
+    } else if (strcasecmp(args, "OFF") == 0) {
+        epdClearExperimentalLut();
+        Serial.println("OK: back to OTP waveform");
+    } else {
+        Serial.println("ERROR: Use EPD LUT ON, EPD LUT STRONG, or EPD LUT OFF");
+    }
+#else
+    Serial.println("ERROR: EPD LUT requires the Adafruit Feather e-paper board");
+#endif
+}
+
 // Handle SET LOW BATTERY LOCKOUT command
 // Format: SET LOW BATTERY LOCKOUT percent
 static void handleSetLowBatteryLockout(char* args) {
@@ -1214,6 +1394,36 @@ static void processCommand(char* cmd) {
             handleGetLowBattery();
             return;
         }
+        const char* pattern6c[] = {"EPD", "TEST"};
+        if (matchWordsPrefix(words, word_count, pattern6c, 2)) {
+            handleEpdTest(reconstructArgs(words, word_count, 2, args));
+            return;
+        }
+        const char* pattern6h[] = {"EPD", "LUT"};
+        if (matchWordsPrefix(words, word_count, pattern6h, 2)) {
+            handleEpdLut(reconstructArgs(words, word_count, 2, args));
+            return;
+        }
+        const char* pattern6g[] = {"EPD", "VCOM"};
+        if (matchWordsPrefix(words, word_count, pattern6g, 2)) {
+            handleEpdVcom(reconstructArgs(words, word_count, 2, args));
+            return;
+        }
+        const char* pattern6f[] = {"EPD", "TEMP"};
+        if (matchWordsPrefix(words, word_count, pattern6f, 2)) {
+            handleEpdTemp(reconstructArgs(words, word_count, 2, args));
+            return;
+        }
+        const char* pattern6e[] = {"EPD", "WAIT"};
+        if (matchWordsPrefix(words, word_count, pattern6e, 2)) {
+            handleEpdWait(reconstructArgs(words, word_count, 2, args));
+            return;
+        }
+        const char* pattern6d[] = {"EPD", "PATTERN"};
+        if (matchWordsPrefix(words, word_count, pattern6d, 2)) {
+            handleEpdPattern();
+            return;
+        }
         const char* pattern7[] = {"CLEAR", "DRINKS"};
         if (matchWordsPrefix(words, word_count, pattern7, 2)) {
             handleClearDrinks();
@@ -1314,6 +1524,12 @@ static void processCommand(char* cmd) {
     Serial.println("  CLEAR DRINKS          - Clear all drink records (WARNING: erases data)");
     Serial.println("\nDisplay Settings:");
     Serial.println("  SET DISPLAY MODE mode - Switch intake visualization (0=human, 1=tumblers)");
+    Serial.println("  EPD TEST [cycles]     - Contrast recovery test (default 10 black/white cycles)");
+    Serial.println("  EPD PATTERN           - Contrast diagnostic: black beside white + fine detail");
+    Serial.println("  EPD WAIT [ms]         - Blind refresh delay, 500-6000 (no arg = report)");
+    Serial.println("  EPD TEMP [degC|OFF]   - Force waveform temp bin, -25..50 (no arg = report)");
+    Serial.println("  EPD VCOM [val|OFF]    - VCOM override or factory OTP (no arg = report)");
+    Serial.println("  EPD LUT [ON|STRONG|OFF] - RAM waveform: fpc7519/strong/OTP (no arg = report)");
     Serial.println("\nPower Management:");
     Serial.println("  SET SLEEP TIMEOUT sec         - Normal sleep timeout (0=disable, default=30)");
     Serial.println("  SET EXTENDED SLEEP TIMER sec  - Extended sleep timer wake (default=60)");
